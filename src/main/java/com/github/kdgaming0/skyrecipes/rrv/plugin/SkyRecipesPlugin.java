@@ -1,15 +1,15 @@
 package com.github.kdgaming0.skyrecipes.rrv.plugin;
 
 import cc.cassian.rrv.api.ReliableRecipeViewerPlugin;
-import cc.cassian.rrv.api.recipe.ItemView;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * RRV server-side plugin entrypoint.
  *
- * <p>Registers server recipe providers and reload callbacks.
- * Stub for Milestone 1 — actual recipe registration comes in Milestone 2.
+ * <p>SkyRecipes uses client-only recipes via {@link ItemView#addClientRecipeProvider()},
+ * so this plugin is currently minimal. It can be expanded later if server-side recipe
+ * synchronization is needed.</p>
  */
 public class SkyRecipesPlugin implements ReliableRecipeViewerPlugin {
 
@@ -17,14 +17,6 @@ public class SkyRecipesPlugin implements ReliableRecipeViewerPlugin {
 
     @Override
     public void onIntegrationInitialize() {
-        LOGGER.info("SkyRecipes RRV server plugin initialized");
-
-        ItemView.addServerRecipeProvider(recipeList -> {
-            // Recipe providers will be registered in Milestone 2
-        });
-
-        ItemView.addServerReloadCallback(() -> {
-            LOGGER.info("RRV server reload callback triggered");
-        });
+        LOGGER.info("SkyRecipes RRV server plugin initialized (client-only mode)");
     }
 }
