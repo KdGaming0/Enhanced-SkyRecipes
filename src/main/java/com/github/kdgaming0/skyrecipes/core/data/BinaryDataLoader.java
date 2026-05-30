@@ -78,13 +78,15 @@ public class BinaryDataLoader {
             this.constantsRegistry = unpackConstants(constantsBytes);
 
             long elapsed = System.currentTimeMillis() - startTime;
-            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}",
+            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}",
                 elapsed,
                 itemRegistry.size(),
                 constantsRegistry.getAllParents().size(),
                 constantsRegistry.getAllEssenceCosts().size(),
-                0, // bazaar count not exposed directly
-                0  // museum count not exposed directly
+                constantsRegistry.getBazaarItems().size(),
+                constantsRegistry.getAllMuseumCategories().size(),
+                constantsRegistry.getAllReforges().size(),
+                constantsRegistry.getAllReforgeStones().size()
             );
             return true;
 
@@ -186,6 +188,42 @@ public class BinaryDataLoader {
             list.add(unpacker.unpackString());
         }
         return list;
+    }
+
+    private Map<String, String> unpackStringStringMap(MessageUnpacker unpacker) throws IOException {
+        int size = unpacker.unpackMapHeader();
+        Map<String, String> map = new LinkedHashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            map.put(unpacker.unpackString(), unpacker.unpackString());
+        }
+        return map;
+    }
+
+    private Map<String, Number> unpackStringNumberMap(MessageUnpacker unpacker) throws IOException {
+        int size = unpacker.unpackMapHeader();
+        Map<String, Number> map = new LinkedHashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            String key = unpacker.unpackString();
+            Value v = unpacker.unpackValue();
+            if (v.isIntegerValue()) {
+                map.put(key, v.asIntegerValue().asInt());
+            } else if (v.isFloatValue()) {
+                map.put(key, v.asFloatValue().toDouble());
+            } else if (v.isNumberValue()) {
+                map.put(key, v.asNumberValue().toDouble());
+            }
+        }
+        return map;
+    }
+
+    private Map<String, Map<String, Number>> unpackStringNumberMapMap(MessageUnpacker unpacker) throws IOException {
+        int size = unpacker.unpackMapHeader();
+        Map<String, Map<String, Number>> map = new LinkedHashMap<>(size);
+        for (int i = 0; i < size; i++) {
+            String key = unpacker.unpackString();
+            map.put(key, unpackStringNumberMap(unpacker));
+        }
+        return map;
     }
 
     private NeuRecipe unpackRecipe(MessageUnpacker unpacker) throws IOException {
@@ -308,6 +346,8 @@ public class BinaryDataLoader {
             Map<String, EssenceUpgradeData> essenceCosts = new LinkedHashMap<>();
             Set<String> bazaarItems = new HashSet<>();
             Map<String, String> museumCategories = new LinkedHashMap<>();
+            Map<String, ReforgeData> reforges = new LinkedHashMap<>();
+            Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
 
             for (int i = 0; i < mapSize; i++) {
                 String key = unpacker.unpackString();
@@ -370,10 +410,66 @@ public class BinaryDataLoader {
                             museumCategories.put(unpacker.unpackString(), unpacker.unpackString());
                         }
                     }
+                    case "reforges" -> {
+                        int rsize = unpacker.unpackMapHeader();
+                        for (int j = 0; j < rsize; j++) {
+                            String name = unpacker.unpackString();
+                            int rmapSize = unpacker.unpackMapHeader();
+                            String reforgeName = "";
+                            String itemTypes = "";
+                            List<String> requiredRarities = new ArrayList<>();
+                            Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
+                            Map<String, String> ability = new LinkedHashMap<>();
+                            Map<String, Number> costs = new LinkedHashMap<>();
+                            for (int k = 0; k < rmapSize; k++) {
+                                String rk = unpacker.unpackString();
+                                switch (rk) {
+                                    case "reforgeName" -> reforgeName = unpacker.unpackString();
+                                    case "itemTypes" -> itemTypes = unpacker.unpackString();
+                                    case "requiredRarities" -> requiredRarities = unpackStringList(unpacker);
+                                    case "reforgeStats" -> stats = unpackStringNumberMapMap(unpacker);
+                                    case "reforgeAbility" -> ability = unpackStringStringMap(unpacker);
+                                    case "reforgeCosts" -> costs = unpackStringNumberMap(unpacker);
+                                    default -> unpacker.skipValue();
+                                }
+                            }
+                            reforges.put(name, new ReforgeData(reforgeName, itemTypes, requiredRarities, stats, ability, costs));
+                        }
+                    }
+                    case "reforgeStones" -> {
+                        int rsize = unpacker.unpackMapHeader();
+                        for (int j = 0; j < rsize; j++) {
+                            String name = unpacker.unpackString();
+                            int rmapSize = unpacker.unpackMapHeader();
+                            String internalName = "";
+                            String reforgeName = "";
+                            String reforgeType = "";
+                            String itemTypes = "";
+                            List<String> requiredRarities = new ArrayList<>();
+                            Map<String, String> ability = new LinkedHashMap<>();
+                            Map<String, Number> costs = new LinkedHashMap<>();
+                            Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
+                            for (int k = 0; k < rmapSize; k++) {
+                                String rk = unpacker.unpackString();
+                                switch (rk) {
+                                    case "internalName" -> internalName = unpacker.unpackString();
+                                    case "reforgeName" -> reforgeName = unpacker.unpackString();
+                                    case "reforgeType" -> reforgeType = unpacker.unpackString();
+                                    case "itemTypes" -> itemTypes = unpacker.unpackString();
+                                    case "requiredRarities" -> requiredRarities = unpackStringList(unpacker);
+                                    case "reforgeAbility" -> ability = unpackStringStringMap(unpacker);
+                                    case "reforgeCosts" -> costs = unpackStringNumberMap(unpacker);
+                                    case "reforgeStats" -> stats = unpackStringNumberMapMap(unpacker);
+                                    default -> unpacker.skipValue();
+                                }
+                            }
+                            reforgeStones.put(name, new ReforgeStoneData(internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats));
+                        }
+                    }
                     default -> unpacker.skipValue();
                 }
             }
-            return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories);
+            return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
         }
     }
 }

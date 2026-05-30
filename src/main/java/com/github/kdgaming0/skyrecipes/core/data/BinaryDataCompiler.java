@@ -66,12 +66,14 @@ public class BinaryDataCompiler {
         Map<String, EssenceUpgradeData> essenceCosts = new LinkedHashMap<>();
         Set<String> bazaarItems = new HashSet<>();
         Map<String, String> museumCategories = new LinkedHashMap<>();
+        Map<String, ReforgeData> reforges = new LinkedHashMap<>();
+        Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
 
-        parseZip(zipFile, items, parents, essenceCosts, bazaarItems, museumCategories);
+        parseZip(zipFile, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
 
         LOGGER.info("Parsed {} items", items.size());
-        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries",
-            parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size());
+        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones",
+            parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size());
 
         // Write binary
         Path outputPath = Path.of(outputDirPath, "skyrecipes_data_v" + SCHEMA_VERSION + ".mpk");
@@ -99,7 +101,7 @@ public class BinaryDataCompiler {
             // Write constants section
             ByteArrayOutputStream constantsBaos = new ByteArrayOutputStream();
             try (MessagePacker packer = MessagePack.newDefaultPacker(constantsBaos)) {
-                packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories);
+                packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
             }
             byte[] constantsBytes = constantsBaos.toByteArray();
             bos.write(constantsBytes);
@@ -182,7 +184,9 @@ public class BinaryDataCompiler {
 
     private void parseZip(Path zipFile, List<NeuItem> items, Map<String, List<String>> parents,
                           Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
-                          Map<String, String> museumCategories) throws IOException {
+                          Map<String, String> museumCategories,
+                          Map<String, ReforgeData> reforges,
+                          Map<String, ReforgeStoneData> reforgeStones) throws IOException {
 
         String prefix = null;
 
@@ -215,6 +219,10 @@ public class BinaryDataCompiler {
                         parseBazaarStocks(bytes, bazaarItems);
                     } else if (name.equals(prefix + "constants/museum.json")) {
                         parseMuseum(bytes, museumCategories);
+                    } else if (name.equals(prefix + "constants/reforges.json")) {
+                        parseReforges(bytes, reforges);
+                    } else if (name.equals(prefix + "constants/reforgestones.json")) {
+                        parseReforgeStones(bytes, reforgeStones);
                     }
                 } catch (Exception e) {
                     LOGGER.warn("Failed to parse {}: {}", name, e.getMessage());
@@ -313,6 +321,18 @@ public class BinaryDataCompiler {
                                 JsonUtil.getString(co, "item"),
                                 JsonUtil.getInt(co, "cost", 0)
                             ));
+                        } else if (ce.isJsonPrimitive() && ce.getAsJsonPrimitive().isString()) {
+                            // String format: "SKYBLOCK_COIN:8"
+                            String costStr = ce.getAsString();
+                            int colon = costStr.lastIndexOf(':');
+                            if (colon != -1) {
+                                costs.add(new NeuRecipe.NpcShopRecipe.Cost(
+                                    costStr.substring(0, colon),
+                                    Integer.parseInt(costStr.substring(colon + 1))
+                                ));
+                            } else {
+                                costs.add(new NeuRecipe.NpcShopRecipe.Cost(costStr, 1));
+                            }
                         }
                     }
                 }
@@ -435,6 +455,76 @@ public class BinaryDataCompiler {
                 }
             }
         }
+    }
+
+    private void parseReforges(byte[] bytes, Map<String, ReforgeData> reforges) {
+        JsonObject obj = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
+            if (!e.getValue().isJsonObject()) continue;
+            JsonObject r = e.getValue().getAsJsonObject();
+
+            String reforgeName = JsonUtil.getString(r, "reforgeName", e.getKey());
+            String itemTypes = JsonUtil.getString(r, "itemTypes");
+            List<String> requiredRarities = JsonUtil.getStringList(r, "requiredRarities");
+            Map<String, Map<String, Number>> stats = parseStatsMap(JsonUtil.getObject(r, "reforgeStats"));
+            Map<String, String> ability = parseStringStringMap(JsonUtil.getObject(r, "reforgeAbility"));
+            Map<String, Number> costs = parseStringNumberMap(JsonUtil.getObject(r, "reforgeCosts"));
+
+            reforges.put(e.getKey(), new ReforgeData(reforgeName, itemTypes, requiredRarities, stats, ability, costs));
+        }
+    }
+
+    private void parseReforgeStones(byte[] bytes, Map<String, ReforgeStoneData> reforgeStones) {
+        JsonObject obj = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
+            if (!e.getValue().isJsonObject()) continue;
+            JsonObject r = e.getValue().getAsJsonObject();
+
+            String internalName = JsonUtil.getString(r, "internalName", e.getKey());
+            String reforgeName = JsonUtil.getString(r, "reforgeName");
+            String reforgeType = JsonUtil.getString(r, "reforgeType");
+            String itemTypes = JsonUtil.getString(r, "itemTypes");
+            List<String> requiredRarities = JsonUtil.getStringList(r, "requiredRarities");
+            Map<String, String> ability = parseStringStringMap(JsonUtil.getObject(r, "reforgeAbility"));
+            Map<String, Number> costs = parseStringNumberMap(JsonUtil.getObject(r, "reforgeCosts"));
+            Map<String, Map<String, Number>> stats = parseStatsMap(JsonUtil.getObject(r, "reforgeStats"));
+
+            reforgeStones.put(e.getKey(), new ReforgeStoneData(
+                internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats
+            ));
+        }
+    }
+
+    private Map<String, Map<String, Number>> parseStatsMap(JsonObject obj) {
+        Map<String, Map<String, Number>> result = new LinkedHashMap<>();
+        if (obj == null) return result;
+        for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
+            if (!e.getValue().isJsonObject()) continue;
+            Map<String, Number> stats = new LinkedHashMap<>();
+            for (Map.Entry<String, JsonElement> se : e.getValue().getAsJsonObject().entrySet()) {
+                stats.put(se.getKey(), se.getValue().getAsNumber());
+            }
+            result.put(e.getKey(), stats);
+        }
+        return result;
+    }
+
+    private Map<String, String> parseStringStringMap(JsonObject obj) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (obj == null) return result;
+        for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
+            result.put(e.getKey(), e.getValue().getAsString());
+        }
+        return result;
+    }
+
+    private Map<String, Number> parseStringNumberMap(JsonObject obj) {
+        Map<String, Number> result = new LinkedHashMap<>();
+        if (obj == null) return result;
+        for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
+            result.put(e.getKey(), e.getValue().getAsNumber());
+        }
+        return result;
     }
 
     // ---- MessagePack serialization ----
@@ -579,8 +669,10 @@ public class BinaryDataCompiler {
                                Map<String, List<String>> parents,
                                Map<String, EssenceUpgradeData> essenceCosts,
                                Set<String> bazaarItems,
-                               Map<String, String> museumCategories) throws IOException {
-        packer.packMapHeader(4);
+                               Map<String, String> museumCategories,
+                               Map<String, ReforgeData> reforges,
+                               Map<String, ReforgeStoneData> reforgeStones) throws IOException {
+        packer.packMapHeader(6);
 
         // Parents
         packer.packString("parents");
@@ -633,6 +725,100 @@ public class BinaryDataCompiler {
         for (Map.Entry<String, String> e : museumCategories.entrySet()) {
             packer.packString(e.getKey());
             packer.packString(e.getValue());
+        }
+
+        // Reforges
+        packer.packString("reforges");
+        packer.packMapHeader(reforges.size());
+        for (Map.Entry<String, ReforgeData> e : reforges.entrySet()) {
+            packer.packString(e.getKey());
+            ReforgeData d = e.getValue();
+            int mapSize = 3;
+            if (!d.statsPerRarity().isEmpty()) mapSize++;
+            if (!d.reforgeAbility().isEmpty()) mapSize++;
+            if (!d.reforgeCosts().isEmpty()) mapSize++;
+            packer.packMapHeader(mapSize);
+            packer.packString("reforgeName"); packer.packString(d.reforgeName());
+            packer.packString("itemTypes"); packer.packString(d.itemTypes());
+            packer.packString("requiredRarities");
+            packer.packArrayHeader(d.requiredRarities().size());
+            for (String r : d.requiredRarities()) packer.packString(r);
+            if (!d.statsPerRarity().isEmpty()) {
+                packer.packString("reforgeStats");
+                packer.packMapHeader(d.statsPerRarity().size());
+                for (Map.Entry<String, Map<String, Number>> se : d.statsPerRarity().entrySet()) {
+                    packer.packString(se.getKey());
+                    packer.packMapHeader(se.getValue().size());
+                    for (Map.Entry<String, Number> stat : se.getValue().entrySet()) {
+                        packer.packString(stat.getKey());
+                        packer.packDouble(stat.getValue().doubleValue());
+                    }
+                }
+            }
+            if (!d.reforgeAbility().isEmpty()) {
+                packer.packString("reforgeAbility");
+                packer.packMapHeader(d.reforgeAbility().size());
+                for (Map.Entry<String, String> ae : d.reforgeAbility().entrySet()) {
+                    packer.packString(ae.getKey());
+                    packer.packString(ae.getValue());
+                }
+            }
+            if (!d.reforgeCosts().isEmpty()) {
+                packer.packString("reforgeCosts");
+                packer.packMapHeader(d.reforgeCosts().size());
+                for (Map.Entry<String, Number> ce : d.reforgeCosts().entrySet()) {
+                    packer.packString(ce.getKey());
+                    packer.packInt(ce.getValue().intValue());
+                }
+            }
+        }
+
+        // Reforge stones
+        packer.packString("reforgeStones");
+        packer.packMapHeader(reforgeStones.size());
+        for (Map.Entry<String, ReforgeStoneData> e : reforgeStones.entrySet()) {
+            packer.packString(e.getKey());
+            ReforgeStoneData d = e.getValue();
+            int mapSize = 5;
+            if (!d.reforgeAbility().isEmpty()) mapSize++;
+            if (!d.reforgeCosts().isEmpty()) mapSize++;
+            if (!d.reforgeStats().isEmpty()) mapSize++;
+            packer.packMapHeader(mapSize);
+            packer.packString("internalName"); packer.packString(d.internalName());
+            packer.packString("reforgeName"); packer.packString(d.reforgeName());
+            packer.packString("reforgeType"); packer.packString(d.reforgeType());
+            packer.packString("itemTypes"); packer.packString(d.itemTypes());
+            packer.packString("requiredRarities");
+            packer.packArrayHeader(d.requiredRarities().size());
+            for (String r : d.requiredRarities()) packer.packString(r);
+            if (!d.reforgeAbility().isEmpty()) {
+                packer.packString("reforgeAbility");
+                packer.packMapHeader(d.reforgeAbility().size());
+                for (Map.Entry<String, String> ae : d.reforgeAbility().entrySet()) {
+                    packer.packString(ae.getKey());
+                    packer.packString(ae.getValue());
+                }
+            }
+            if (!d.reforgeCosts().isEmpty()) {
+                packer.packString("reforgeCosts");
+                packer.packMapHeader(d.reforgeCosts().size());
+                for (Map.Entry<String, Number> ce : d.reforgeCosts().entrySet()) {
+                    packer.packString(ce.getKey());
+                    packer.packInt(ce.getValue().intValue());
+                }
+            }
+            if (!d.reforgeStats().isEmpty()) {
+                packer.packString("reforgeStats");
+                packer.packMapHeader(d.reforgeStats().size());
+                for (Map.Entry<String, Map<String, Number>> se : d.reforgeStats().entrySet()) {
+                    packer.packString(se.getKey());
+                    packer.packMapHeader(se.getValue().size());
+                    for (Map.Entry<String, Number> stat : se.getValue().entrySet()) {
+                        packer.packString(stat.getKey());
+                        packer.packDouble(stat.getValue().doubleValue());
+                    }
+                }
+            }
         }
     }
 }

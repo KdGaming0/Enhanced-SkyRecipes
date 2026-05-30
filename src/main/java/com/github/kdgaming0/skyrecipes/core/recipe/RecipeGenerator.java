@@ -2,10 +2,9 @@ package com.github.kdgaming0.skyrecipes.core.recipe;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.CraftingRecipeParser;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.ForgeRecipeParser;
+import com.github.kdgaming0.skyrecipes.core.recipe.parsers.*;
+import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
-import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import net.minecraft.resources.Identifier;
@@ -24,9 +23,11 @@ public final class RecipeGenerator {
     private static final Logger LOGGER = LoggerFactory.getLogger(RecipeGenerator.class);
 
     private final ItemRegistry itemRegistry;
+    private final ConstantsRegistry constantsRegistry;
 
-    public RecipeGenerator(ItemRegistry itemRegistry) {
+    public RecipeGenerator(ItemRegistry itemRegistry, ConstantsRegistry constantsRegistry) {
         this.itemRegistry = itemRegistry;
+        this.constantsRegistry = constantsRegistry;
     }
 
     /**
@@ -48,13 +49,30 @@ public final class RecipeGenerator {
                 }
             }
 
+            // Wiki info recipes
+            if (item.infoType() != null && !item.infoType().isEmpty() && item.info() != null && !item.info().isEmpty()) {
+                List<ReliableClientRecipe> wikiRecipes = WikiInfoRecipeBuilder.build(item);
+                for (ReliableClientRecipe recipe : wikiRecipes) {
+                    recipes.add(recipe);
+                    indexRecipe(recipe, item, List.of(), indexBuilder);
+                }
+            }
+
             // Other recipe types
             if (item.recipes() != null) {
                 for (NeuRecipe recipeData : item.recipes()) {
                     ReliableClientRecipe recipe = switch (recipeData) {
                         case NeuRecipe.ForgeRecipe forge ->
                             ForgeRecipeParser.parse(item, forge, itemRegistry);
-                        default -> null; // Drops, NpcShop, KatGrade, Trade deferred
+                        case NeuRecipe.KatGradeRecipe kat ->
+                            KatUpgradeRecipeParser.parse(item, kat, itemRegistry);
+                        case NeuRecipe.NpcShopRecipe shop ->
+                            NpcShopRecipeParser.parse(item, shop, itemRegistry);
+                        case NeuRecipe.DropsRecipe drops ->
+                            DropsRecipeParser.parse(item, drops, itemRegistry);
+                        case NeuRecipe.TradeRecipe trade ->
+                            TradeRecipeParser.parse(item, trade, itemRegistry);
+                        default -> null;
                     };
 
                     if (recipe != null) {
@@ -65,10 +83,41 @@ public final class RecipeGenerator {
             }
         }
 
-        LOGGER.info("Generated {} recipes ({} result entries, {} ingredient entries)",
-            recipes.size(), indexBuilder.build().resultCount(), indexBuilder.build().ingredientCount());
+        // Essence upgrade recipes (from constants)
+        if (constantsRegistry != null) {
+            List<ReliableClientRecipe> essenceRecipes = EssenceUpgradeGenerator.generateAll(constantsRegistry, itemRegistry);
+            for (ReliableClientRecipe recipe : essenceRecipes) {
+                recipes.add(recipe);
+                // Index by result item internal name
+                if (recipe.getId() != null) {
+                    String resultName = recipe.getId().getPath();
+                    int lastSlash = resultName.lastIndexOf('/');
+                    if (lastSlash != -1) {
+                        resultName = resultName.substring(0, lastSlash);
+                        int firstSlash = resultName.indexOf('/');
+                        if (firstSlash != -1) {
+                            resultName = resultName.substring(firstSlash + 1);
+                        }
+                    }
+                    indexBuilder.addResult(resultName, recipe.getId());
+                }
+            }
 
-        return new RecipeResult(recipes, indexBuilder.build());
+            // Reforge recipes (from constants)
+            List<ReliableClientRecipe> reforgeRecipes = ReforgeRecipeGenerator.generateAll(constantsRegistry, itemRegistry);
+            for (ReliableClientRecipe recipe : reforgeRecipes) {
+                recipes.add(recipe);
+                if (recipe.getId() != null) {
+                    indexBuilder.addResult("reforge", recipe.getId());
+                }
+            }
+        }
+
+        RecipeIndex index = indexBuilder.build();
+        LOGGER.info("Generated {} recipes ({} result entries, {} ingredient entries)",
+            recipes.size(), index.resultCount(), index.ingredientCount());
+
+        return new RecipeResult(recipes, index);
     }
 
     private void indexRecipe(ReliableClientRecipe recipe, NeuItem item,
