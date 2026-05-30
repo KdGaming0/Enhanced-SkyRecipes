@@ -15,16 +15,16 @@
   "icon": "assets/template/icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": [
-      "com.example.TemplateMod"
+    "client": [
+      "com.github.kdgaming0.skyrecipes.SkyRecipes"
     ]
   },
   "mixins": [
-    "template.mixins.json"
+    "skyrecipes.mixins.json"
   ],
-  "accessWidener": "template.ct",
+  "accessWidener": "skyrecipes.ct",
   "depends": {
-    "fabricloader": ">=0.17",
+    "fabricloader": ">=${loader_version}",
     "minecraft": "${minecraft}"
   }
 }

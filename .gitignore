@@ -38,3 +38,10 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# AI
+
+AGENTS.md
+IMPLEMENTATION_LOG.md
+NotEnoughUpdates-REPO-master.zip
+SkyRecipes_Architecture_Report.md
