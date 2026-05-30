@@ -1,9 +1,13 @@
 package com.github.kdgaming0.skyrecipes;
 
+import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.client.gui.CategoryFilterOverlay;
 import com.github.kdgaming0.skyrecipes.core.data.BinaryDataLoader;
 import com.github.kdgaming0.skyrecipes.core.data.DataUpdateChecker;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
+import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
+import eu.midnightdust.lib.config.MidnightConfig;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -12,6 +16,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
 public class SkyRecipes implements ClientModInitializer {
 
@@ -23,10 +29,14 @@ public class SkyRecipes implements ClientModInitializer {
     private static ItemRegistry itemRegistry;
     private static ConstantsRegistry constantsRegistry;
     private static BinaryDataLoader dataLoader;
+    private static SearchAutocomplete searchAutocomplete;
 
     @Override
     public void onInitializeClient() {
         LOGGER.info("SkyRecipes v{} for Minecraft {} initializing...", VERSION, MINECRAFT);
+
+        // Initialise MidnightLib configuration
+        MidnightConfig.init(MOD_ID, SkyRecipesConfig.class);
 
         // Load binary data
         dataLoader = new BinaryDataLoader();
@@ -53,6 +63,9 @@ public class SkyRecipes implements ClientModInitializer {
         }
 
         LOGGER.info("SkyRecipes initialization complete.");
+
+        // Initialise category filter overlay (no-op if RRV not present)
+        new CategoryFilterOverlay();
     }
 
     private boolean loadBinaryData() {
@@ -75,5 +88,23 @@ public class SkyRecipes implements ClientModInitializer {
 
     public static ConstantsRegistry getConstantsRegistry() {
         return constantsRegistry;
+    }
+
+    public static SearchAutocomplete getSearchAutocomplete() {
+        return searchAutocomplete;
+    }
+
+    /**
+     * Build the search autocomplete index once data is loaded.
+     * Called from the RRV client plugin after aliases are prepared.
+     */
+    public static void buildSearchAutocomplete(Map<String, String> aliases, List<String> pageNames) {
+        if (itemRegistry == null) {
+            LOGGER.warn("Cannot build search autocomplete: ItemRegistry not loaded");
+            return;
+        }
+        searchAutocomplete = new SearchAutocomplete(itemRegistry, aliases, pageNames);
+        LOGGER.info("Search autocomplete index built with {} entries",
+                itemRegistry.getAllItems().size() + aliases.size() + pageNames.size());
     }
 }

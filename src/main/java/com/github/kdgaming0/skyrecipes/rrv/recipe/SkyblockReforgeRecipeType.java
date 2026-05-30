@@ -24,7 +24,7 @@ public class SkyblockReforgeRecipeType implements ReliableClientRecipeType {
 
     @Override
     public int getDisplayHeight() {
-        return 40;
+        return 60;
     }
 
     @Override

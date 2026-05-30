@@ -2,9 +2,15 @@ package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
+import cc.cassian.rrv.api.recipe.ReliableClientRecipe.RecipePosition;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
+import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
+import com.github.kdgaming0.skyrecipes.core.render.MobPreviewController;
+import com.github.kdgaming0.skyrecipes.core.render.MobPreviewRenderer;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -15,9 +21,13 @@ public class SkyblockDropsClientRecipe implements ReliableClientRecipe {
     private final Identifier id;
     private final List<DropEntry> drops;
 
+    private LivingEntity mobEntity;
+    private final String mobId;
+
     public SkyblockDropsClientRecipe(Identifier id, List<DropEntry> drops) {
         this.id = id;
         this.drops = drops;
+        this.mobId = drops.isEmpty() ? "" : drops.get(0).internalName();
     }
 
     @Override
@@ -62,6 +72,31 @@ public class SkyblockDropsClientRecipe implements ReliableClientRecipe {
 
     public List<DropEntry> getDrops() {
         return drops;
+    }
+
+    @Override
+    public void initRecipe() {
+        if (mobEntity == null) {
+            mobEntity = MobPreviewController.createEntity(mobId);
+        }
+    }
+
+    @Override
+    public void fadeRecipe() {
+        if (mobEntity != null) {
+            MobPreviewController.disposeEntity(mobEntity);
+            mobEntity = null;
+        }
+    }
+
+    @Override
+    public void renderRecipe(RecipeViewScreen screen, RecipePosition pos,
+                             GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
+        if (mobEntity != null) {
+            int x = pos.left() + pos.width() - 30;
+            int y = pos.top() + pos.height() / 2;
+            MobPreviewRenderer.render(graphics, mobEntity, x, y, 28.0f, MobPreviewRenderer.getRotationAngle());
+        }
     }
 
     public record DropEntry(ItemStack stack, String internalName, String chance) {}
