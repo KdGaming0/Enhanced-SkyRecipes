@@ -77,7 +77,10 @@ dependencies {
     modImplementation("net.azureaaron:hm-api:${property("deps.hm_api_version")}")
     include("net.azureaaron:hm-api:${property("deps.hm_api_version")}")
 
-    implementation("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
+    modCompileOnly("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
+    modRuntimeOnly("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
+
+    implementation("org.msgpack:msgpack-core:0.9.8")
 
     modRuntimeOnly("me.djtheredstoner:DevAuth-fabric:1.2.2")
     modRuntimeOnly("maven.modrinth:modmenu:${property("deps.modmenu_version")}")
@@ -141,5 +144,33 @@ tasks {
         from(loomx.modJar.map { it.archiveFile }, loomx.modSourcesJar.map { it.archiveFile })
         into(rootProject.layout.buildDirectory.file("libs/${project.property("mod.version")}"))
         dependsOn("build")
+    }
+
+    // Build-time task: compile NEU repo data into binary .mpk
+    register<JavaExec>("compileNeuData") {
+        group = "build"
+        description = "Downloads NEU repo and compiles it into a binary .mpk file"
+
+        classpath = sourceSets.main.get().runtimeClasspath
+        mainClass = "com.github.kdgaming0.skyrecipes.core.data.BinaryDataCompiler"
+
+        // Output directory for generated binary
+        val outputDir = layout.buildDirectory.dir("generated/skyrecipes/data").get().asFile
+        outputDir.mkdirs()
+        args(outputDir.absolutePath)
+
+        // Cache directory for NEU repo ZIP
+        val cacheDir = gradle.gradleUserHomeDir.resolve("skyrecipes-cache")
+        cacheDir.mkdirs()
+        systemProperty("skyrecipes.cacheDir", cacheDir.absolutePath)
+
+        dependsOn("compileJava")
+    }
+
+    jar {
+        from(layout.buildDirectory.dir("generated/skyrecipes/data")) {
+            into("assets/skyrecipes/data")
+        }
+        dependsOn("compileNeuData")
     }
 }
