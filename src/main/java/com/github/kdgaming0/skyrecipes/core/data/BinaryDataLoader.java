@@ -11,29 +11,120 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Runtime loader that reads the compiled binary .mpk file from the mod JAR
+ * Runtime loader that reads the compiled binary .mpk file from disk
  * and deserializes it into registries.
+ *
+ * <p>Supports memory-mapped file access for fast loading.</p>
  */
 public class BinaryDataLoader {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
 
-    private static final byte[] EXPECTED_MAGIC = new byte[] { 'S', 'K', 'Y', '1' };
-    private static final int EXPECTED_SCHEMA = 1;
+    private static final byte[] EXPECTED_MAGIC = new byte[] { 'S', 'K', 'Y', '2' };
+    public static final int EXPECTED_SCHEMA = 2;
 
+    private ByteBuffer fileBuffer;
     private ItemRegistry itemRegistry;
     private ConstantsRegistry constantsRegistry;
 
+    /**
+     * Load binary data from a file path.
+     *
+     * @param path path to the .mpk file
+     * @return true if loaded successfully
+     */
+    public boolean load(Path path) {
+        long startTime = System.currentTimeMillis();
+        try {
+            close(); // release any previous mapping
+
+            this.fileBuffer = MmapUtil.mapFile(path);
+
+            if (fileBuffer.remaining() < 64) {
+                LOGGER.error("Binary file too small ({} bytes). Expected at least 64 bytes.", fileBuffer.remaining());
+                return false;
+            }
+
+            // Read header
+            byte[] magic = new byte[4];
+            fileBuffer.get(magic);
+            if (!Arrays.equals(magic, EXPECTED_MAGIC)) {
+                LOGGER.error("Invalid binary magic bytes. Expected SKY2.");
+                return false;
+            }
+
+            int schemaVersion = fileBuffer.getInt();
+            long buildTimestamp = fileBuffer.getLong();
+            int itemCount = fileBuffer.getInt();
+            int sectionCount = fileBuffer.getInt();
+            long commitHash = fileBuffer.getLong();
+            long itemsOffset = fileBuffer.getLong();
+            long itemsLength = fileBuffer.getLong();
+            long constantsOffset = fileBuffer.getLong();
+            long constantsLength = fileBuffer.getLong();
+
+            if (schemaVersion != EXPECTED_SCHEMA) {
+                LOGGER.error("Binary schema version mismatch: expected {}, got {}. Data may be stale or incompatible.",
+                    EXPECTED_SCHEMA, schemaVersion);
+                return false;
+            }
+
+            long fileSize = fileBuffer.capacity();
+            if (itemsOffset + itemsLength > fileSize || constantsOffset + constantsLength > fileSize) {
+                LOGGER.error("Binary section offsets exceed file size. File may be truncated.");
+                return false;
+            }
+
+            LOGGER.info("Loading binary: schema={}, items={}, sections={}, built={}",
+                schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
+
+            // Read items section
+            ByteBuffer itemsSlice = fileBuffer.duplicate();
+            itemsSlice.position((int) itemsOffset);
+            itemsSlice.limit((int) (itemsOffset + itemsLength));
+            List<NeuItem> items = unpackItems(itemsSlice, itemCount);
+            this.itemRegistry = new ItemRegistry(items);
+
+            // Read constants section
+            ByteBuffer constantsSlice = fileBuffer.duplicate();
+            constantsSlice.position((int) constantsOffset);
+            constantsSlice.limit((int) (constantsOffset + constantsLength));
+            this.constantsRegistry = unpackConstants(constantsSlice);
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}",
+                elapsed,
+                itemRegistry.size(),
+                constantsRegistry.getAllParents().size(),
+                constantsRegistry.getAllEssenceCosts().size(),
+                constantsRegistry.getBazaarItems().size(),
+                constantsRegistry.getAllMuseumCategories().size(),
+                constantsRegistry.getAllReforges().size(),
+                constantsRegistry.getAllReforgeStones().size()
+            );
+            return true;
+
+        } catch (IOException e) {
+            LOGGER.error("Failed to load binary data", e);
+            return false;
+        }
+    }
+
+    /**
+     * Legacy load from InputStream. Reads entire stream into memory.
+     */
     public boolean load(InputStream input) {
         long startTime = System.currentTimeMillis();
         try {
             // Read header
             byte[] magic = new byte[4];
             if (input.read(magic) != 4 || !Arrays.equals(magic, EXPECTED_MAGIC)) {
-                LOGGER.error("Invalid binary magic bytes. Expected SKY1.");
+                LOGGER.error("Invalid binary magic bytes. Expected SKY2.");
                 return false;
             }
 
@@ -48,7 +139,7 @@ public class BinaryDataLoader {
             long constantsLength = readLong(input);
 
             if (schemaVersion != EXPECTED_SCHEMA) {
-                LOGGER.error("Binary schema version mismatch: expected {}, got {}. Data may be stale or incompatible.",
+                LOGGER.error("Binary schema version mismatch: expected {}, got {}.",
                     EXPECTED_SCHEMA, schemaVersion);
                 return false;
             }
@@ -56,8 +147,7 @@ public class BinaryDataLoader {
             LOGGER.info("Loading binary: schema={}, items={}, sections={}, built={}",
                 schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
 
-            // Read items section
-            skip(input, itemsOffset - 64); // 64 = header size already read
+            skip(input, itemsOffset - 64);
             byte[] itemsBytes = new byte[(int) itemsLength];
             if (input.read(itemsBytes) != itemsLength) {
                 LOGGER.error("Failed to read full items section");
@@ -67,7 +157,6 @@ public class BinaryDataLoader {
             List<NeuItem> items = unpackItems(itemsBytes, itemCount);
             this.itemRegistry = new ItemRegistry(items);
 
-            // Read constants section
             skip(input, constantsOffset - itemsOffset - itemsLength);
             byte[] constantsBytes = new byte[(int) constantsLength];
             if (input.read(constantsBytes) != constantsLength) {
@@ -96,6 +185,18 @@ public class BinaryDataLoader {
         }
     }
 
+    /**
+     * Release resources. Unmaps the file if memory-mapped.
+     */
+    public void close() {
+        if (fileBuffer != null) {
+            MmapUtil.unmap(fileBuffer);
+            fileBuffer = null;
+        }
+        itemRegistry = null;
+        constantsRegistry = null;
+    }
+
     public ItemRegistry getItemRegistry() {
         return itemRegistry;
     }
@@ -104,7 +205,7 @@ public class BinaryDataLoader {
         return constantsRegistry;
     }
 
-    // ---- Header reading helpers ----
+    // ---- Header reading helpers (legacy InputStream) ----
 
     private int readInt(InputStream in) throws IOException {
         return (in.read() << 24) | (in.read() << 16) | (in.read() << 8) | in.read();
@@ -130,53 +231,63 @@ public class BinaryDataLoader {
     // ---- MessagePack deserialization ----
 
     private List<NeuItem> unpackItems(byte[] data, int expectedCount) throws IOException {
-        List<NeuItem> items = new ArrayList<>(expectedCount);
         try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(data)) {
-            int count = unpacker.unpackArrayHeader();
-            for (int i = 0; i < count; i++) {
-                int mapSize = unpacker.unpackMapHeader();
-                String internalName = "";
-                String itemId = "";
-                String displayName = "";
-                String nbtTag = "";
-                List<String> lore = Collections.emptyList();
-                int damage = 0;
-                String clickCommand = "";
-                String craftText = "";
-                String infoType = "";
-                List<String> info = Collections.emptyList();
-                NeuRecipe recipe = null;
-                List<NeuRecipe> recipes = null;
-                String slayerReq = null;
-                boolean vanilla = false;
+            return unpackItemsInternal(unpacker, expectedCount);
+        }
+    }
 
-                for (int j = 0; j < mapSize; j++) {
-                    String key = unpacker.unpackString();
-                    switch (key) {
-                        case "internalName" -> internalName = unpacker.unpackString();
-                        case "itemId" -> itemId = unpacker.unpackString();
-                        case "displayName" -> displayName = unpacker.unpackString();
-                        case "nbtTag" -> nbtTag = unpacker.unpackString();
-                        case "lore" -> lore = unpackStringList(unpacker);
-                        case "damage" -> damage = unpacker.unpackInt();
-                        case "clickCommand" -> clickCommand = unpacker.unpackString();
-                        case "craftText" -> craftText = unpacker.unpackString();
-                        case "infoType" -> infoType = unpacker.unpackString();
-                        case "info" -> info = unpackStringList(unpacker);
-                        case "recipe" -> recipe = unpackRecipe(unpacker);
-                        case "recipes" -> recipes = unpackRecipeList(unpacker);
-                        case "slayerReq" -> {
-                            if (!unpacker.tryUnpackNil()) {
-                                slayerReq = unpacker.unpackString();
-                            }
+    private List<NeuItem> unpackItems(ByteBuffer buffer, int expectedCount) throws IOException {
+        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(buffer)) {
+            return unpackItemsInternal(unpacker, expectedCount);
+        }
+    }
+
+    private List<NeuItem> unpackItemsInternal(MessageUnpacker unpacker, int expectedCount) throws IOException {
+        List<NeuItem> items = new ArrayList<>(expectedCount);
+        int count = unpacker.unpackArrayHeader();
+        for (int i = 0; i < count; i++) {
+            int mapSize = unpacker.unpackMapHeader();
+            String internalName = "";
+            String itemId = "";
+            String displayName = "";
+            String nbtTag = "";
+            List<String> lore = Collections.emptyList();
+            int damage = 0;
+            String clickCommand = "";
+            String craftText = "";
+            String infoType = "";
+            List<String> info = Collections.emptyList();
+            NeuRecipe recipe = null;
+            List<NeuRecipe> recipes = null;
+            String slayerReq = null;
+            boolean vanilla = false;
+
+            for (int j = 0; j < mapSize; j++) {
+                String key = unpacker.unpackString();
+                switch (key) {
+                    case "internalName" -> internalName = unpacker.unpackString();
+                    case "itemId" -> itemId = unpacker.unpackString();
+                    case "displayName" -> displayName = unpacker.unpackString();
+                    case "nbtTag" -> nbtTag = unpacker.unpackString();
+                    case "lore" -> lore = unpackStringList(unpacker);
+                    case "damage" -> damage = unpacker.unpackInt();
+                    case "clickCommand" -> clickCommand = unpacker.unpackString();
+                    case "craftText" -> craftText = unpacker.unpackString();
+                    case "infoType" -> infoType = unpacker.unpackString();
+                    case "info" -> info = unpackStringList(unpacker);
+                    case "recipe" -> recipe = unpackRecipe(unpacker);
+                    case "recipes" -> recipes = unpackRecipeList(unpacker);
+                    case "slayerReq" -> {
+                        if (!unpacker.tryUnpackNil()) {
+                            slayerReq = unpacker.unpackString();
                         }
-                        case "vanilla" -> vanilla = unpacker.unpackBoolean();
-                        default -> unpacker.skipValue();
                     }
+                    case "vanilla" -> vanilla = unpacker.unpackBoolean();
+                    default -> unpacker.skipValue();
                 }
-                items.add(new NeuItem(internalName, itemId, displayName, nbtTag, lore, damage,
-                    clickCommand, craftText, infoType, info, recipe, recipes, slayerReq, vanilla));
             }
+            items.add(new NeuItem(internalName, itemId, displayName, nbtTag, lore, damage,
+                clickCommand, craftText, infoType, info, recipe, recipes, slayerReq, vanilla));
         }
         return items;
     }
@@ -341,135 +452,147 @@ public class BinaryDataLoader {
 
     private ConstantsRegistry unpackConstants(byte[] data) throws IOException {
         try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(data)) {
-            int mapSize = unpacker.unpackMapHeader();
-            Map<String, List<String>> parents = new LinkedHashMap<>();
-            Map<String, EssenceUpgradeData> essenceCosts = new LinkedHashMap<>();
-            Set<String> bazaarItems = new HashSet<>();
-            Map<String, String> museumCategories = new LinkedHashMap<>();
-            Map<String, ReforgeData> reforges = new LinkedHashMap<>();
-            Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
-
-            for (int i = 0; i < mapSize; i++) {
-                String key = unpacker.unpackString();
-                switch (key) {
-                    case "parents" -> {
-                        int psize = unpacker.unpackMapHeader();
-                        for (int j = 0; j < psize; j++) {
-                            String parent = unpacker.unpackString();
-                            int csize = unpacker.unpackArrayHeader();
-                            List<String> children = new ArrayList<>(csize);
-                            for (int k = 0; k < csize; k++) {
-                                children.add(unpacker.unpackString());
-                            }
-                            parents.put(parent, children);
-                        }
-                    }
-                    case "essenceCosts" -> {
-                        int esize = unpacker.unpackMapHeader();
-                        for (int j = 0; j < esize; j++) {
-                            String itemName = unpacker.unpackString();
-                            int imapSize = unpacker.unpackMapHeader();
-                            String essenceType = "";
-                            Map<Integer, Integer> costs = new LinkedHashMap<>();
-                            Map<Integer, List<String>> extraItems = new LinkedHashMap<>();
-                            for (int k = 0; k < imapSize; k++) {
-                                String ik = unpacker.unpackString();
-                                if (ik.equals("type")) {
-                                    essenceType = unpacker.unpackString();
-                                } else if (ik.equals("items")) {
-                                    int xsize = unpacker.unpackMapHeader();
-                                    for (int m = 0; m < xsize; m++) {
-                                        int tier = Integer.parseInt(unpacker.unpackString());
-                                        int asize = unpacker.unpackArrayHeader();
-                                        List<String> reqs = new ArrayList<>(asize);
-                                        for (int n = 0; n < asize; n++) {
-                                            reqs.add(unpacker.unpackString());
-                                        }
-                                        extraItems.put(tier, reqs);
-                                    }
-                                } else {
-                                    try {
-                                        costs.put(Integer.parseInt(ik), unpacker.unpackInt());
-                                    } catch (NumberFormatException e) {
-                                        unpacker.skipValue();
-                                    }
-                                }
-                            }
-                            essenceCosts.put(itemName, new EssenceUpgradeData(essenceType, costs, extraItems));
-                        }
-                    }
-                    case "bazaarItems" -> {
-                        int bsize = unpacker.unpackArrayHeader();
-                        for (int j = 0; j < bsize; j++) {
-                            bazaarItems.add(unpacker.unpackString());
-                        }
-                    }
-                    case "museum" -> {
-                        int msize = unpacker.unpackMapHeader();
-                        for (int j = 0; j < msize; j++) {
-                            museumCategories.put(unpacker.unpackString(), unpacker.unpackString());
-                        }
-                    }
-                    case "reforges" -> {
-                        int rsize = unpacker.unpackMapHeader();
-                        for (int j = 0; j < rsize; j++) {
-                            String name = unpacker.unpackString();
-                            int rmapSize = unpacker.unpackMapHeader();
-                            String reforgeName = "";
-                            String itemTypes = "";
-                            List<String> requiredRarities = new ArrayList<>();
-                            Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
-                            Map<String, String> ability = new LinkedHashMap<>();
-                            Map<String, Number> costs = new LinkedHashMap<>();
-                            for (int k = 0; k < rmapSize; k++) {
-                                String rk = unpacker.unpackString();
-                                switch (rk) {
-                                    case "reforgeName" -> reforgeName = unpacker.unpackString();
-                                    case "itemTypes" -> itemTypes = unpacker.unpackString();
-                                    case "requiredRarities" -> requiredRarities = unpackStringList(unpacker);
-                                    case "reforgeStats" -> stats = unpackStringNumberMapMap(unpacker);
-                                    case "reforgeAbility" -> ability = unpackStringStringMap(unpacker);
-                                    case "reforgeCosts" -> costs = unpackStringNumberMap(unpacker);
-                                    default -> unpacker.skipValue();
-                                }
-                            }
-                            reforges.put(name, new ReforgeData(reforgeName, itemTypes, requiredRarities, stats, ability, costs));
-                        }
-                    }
-                    case "reforgeStones" -> {
-                        int rsize = unpacker.unpackMapHeader();
-                        for (int j = 0; j < rsize; j++) {
-                            String name = unpacker.unpackString();
-                            int rmapSize = unpacker.unpackMapHeader();
-                            String internalName = "";
-                            String reforgeName = "";
-                            String reforgeType = "";
-                            String itemTypes = "";
-                            List<String> requiredRarities = new ArrayList<>();
-                            Map<String, String> ability = new LinkedHashMap<>();
-                            Map<String, Number> costs = new LinkedHashMap<>();
-                            Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
-                            for (int k = 0; k < rmapSize; k++) {
-                                String rk = unpacker.unpackString();
-                                switch (rk) {
-                                    case "internalName" -> internalName = unpacker.unpackString();
-                                    case "reforgeName" -> reforgeName = unpacker.unpackString();
-                                    case "reforgeType" -> reforgeType = unpacker.unpackString();
-                                    case "itemTypes" -> itemTypes = unpacker.unpackString();
-                                    case "requiredRarities" -> requiredRarities = unpackStringList(unpacker);
-                                    case "reforgeAbility" -> ability = unpackStringStringMap(unpacker);
-                                    case "reforgeCosts" -> costs = unpackStringNumberMap(unpacker);
-                                    case "reforgeStats" -> stats = unpackStringNumberMapMap(unpacker);
-                                    default -> unpacker.skipValue();
-                                }
-                            }
-                            reforgeStones.put(name, new ReforgeStoneData(internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats));
-                        }
-                    }
-                    default -> unpacker.skipValue();
-                }
-            }
-            return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
+            return unpackConstantsInternal(unpacker);
         }
+    }
+
+    private ConstantsRegistry unpackConstants(ByteBuffer buffer) throws IOException {
+        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(buffer)) {
+            return unpackConstantsInternal(unpacker);
+        }
+    }
+
+    private ConstantsRegistry unpackConstantsInternal(MessageUnpacker unpacker) throws IOException {
+        int mapSize = unpacker.unpackMapHeader();
+        Map<String, List<String>> parents = new LinkedHashMap<>();
+        Map<String, EssenceUpgradeData> essenceCosts = new LinkedHashMap<>();
+        Set<String> bazaarItems = new HashSet<>();
+        Map<String, String> museumCategories = new LinkedHashMap<>();
+        Map<String, ReforgeData> reforges = new LinkedHashMap<>();
+        Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
+
+        for (int i = 0; i < mapSize; i++) {
+            String key = unpacker.unpackString();
+            switch (key) {
+                case "parents" -> {
+                    int psize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < psize; j++) {
+                        String parent = unpacker.unpackString();
+                        int csize = unpacker.unpackArrayHeader();
+                        List<String> children = new ArrayList<>(csize);
+                        for (int k = 0; k < csize; k++) {
+                            children.add(unpacker.unpackString());
+                        }
+                        parents.put(parent, children);
+                    }
+                }
+                case "essenceCosts" -> {
+                    int esize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < esize; j++) {
+                        String itemName = unpacker.unpackString();
+                        int imapSize = unpacker.unpackMapHeader();
+                        String essenceType = "";
+                        Map<Integer, Integer> costs = new LinkedHashMap<>();
+                        Map<Integer, List<String>> extraItems = new LinkedHashMap<>();
+                        for (int k = 0; k < imapSize; k++) {
+                            String ik = unpacker.unpackString();
+                            if (ik.equals("type")) {
+                                essenceType = unpacker.unpackString();
+                            } else if (ik.equals("items")) {
+                                int xsize = unpacker.unpackMapHeader();
+                                for (int m = 0; m < xsize; m++) {
+                                    int tier = Integer.parseInt(unpacker.unpackString());
+                                    int asize = unpacker.unpackArrayHeader();
+                                    List<String> reqs = new ArrayList<>(asize);
+                                    for (int n = 0; n < asize; n++) {
+                                        reqs.add(unpacker.unpackString());
+                                    }
+                                    extraItems.put(tier, reqs);
+                                }
+                            } else {
+                                try {
+                                    costs.put(Integer.parseInt(ik), unpacker.unpackInt());
+                                } catch (NumberFormatException e) {
+                                    unpacker.skipValue();
+                                }
+                            }
+                        }
+                        essenceCosts.put(itemName, new EssenceUpgradeData(essenceType, costs, extraItems));
+                    }
+                }
+                case "bazaarItems" -> {
+                    int bsize = unpacker.unpackArrayHeader();
+                    for (int j = 0; j < bsize; j++) {
+                        bazaarItems.add(unpacker.unpackString());
+                    }
+                }
+                case "museum" -> {
+                    int msize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < msize; j++) {
+                        museumCategories.put(unpacker.unpackString(), unpacker.unpackString());
+                    }
+                }
+                case "reforges" -> {
+                    int rsize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < rsize; j++) {
+                        String name = unpacker.unpackString();
+                        int rmapSize = unpacker.unpackMapHeader();
+                        String reforgeName = "";
+                        String itemTypes = "";
+                        List<String> requiredRarities = new ArrayList<>();
+                        Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
+                        Map<String, String> ability = new LinkedHashMap<>();
+                        Map<String, Number> costs = new LinkedHashMap<>();
+                        for (int k = 0; k < rmapSize; k++) {
+                            String rk = unpacker.unpackString();
+                            switch (rk) {
+                                case "reforgeName" -> reforgeName = unpacker.unpackString();
+                                case "itemTypes" -> itemTypes = unpacker.unpackString();
+                                case "requiredRarities" -> requiredRarities = unpackStringList(unpacker);
+                                case "reforgeStats" -> stats = unpackStringNumberMapMap(unpacker);
+                                case "reforgeAbility" -> ability = unpackStringStringMap(unpacker);
+                                case "reforgeCosts" -> costs = unpackStringNumberMap(unpacker);
+                                default -> unpacker.skipValue();
+                            }
+                        }
+                        reforges.put(name, new ReforgeData(reforgeName, itemTypes, requiredRarities, stats, ability, costs));
+                    }
+                }
+                case "reforgeStones" -> {
+                    int rsize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < rsize; j++) {
+                        String name = unpacker.unpackString();
+                        int rmapSize = unpacker.unpackMapHeader();
+                        String internalName = "";
+                        String reforgeName = "";
+                        String reforgeType = "";
+                        String itemTypes = "";
+                        List<String> requiredRarities = new ArrayList<>();
+                        Map<String, String> ability = new LinkedHashMap<>();
+                        Map<String, Number> costs = new LinkedHashMap<>();
+                        Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
+                        for (int k = 0; k < rmapSize; k++) {
+                            String rk = unpacker.unpackString();
+                            switch (rk) {
+                                case "internalName" -> internalName = unpacker.unpackString();
+                                case "reforgeName" -> reforgeName = unpacker.unpackString();
+                                case "reforgeType" -> reforgeType = unpacker.unpackString();
+                                case "itemTypes" -> itemTypes = unpacker.unpackString();
+                                case "requiredRarities" -> requiredRarities = unpackStringList(unpacker);
+                                case "reforgeAbility" -> ability = unpackStringStringMap(unpacker);
+                                case "reforgeCosts" -> costs = unpackStringNumberMap(unpacker);
+                                case "reforgeStats" -> stats = unpackStringNumberMapMap(unpacker);
+                                default -> unpacker.skipValue();
+                            }
+                        }
+                        reforgeStones.put(name, new ReforgeStoneData(
+                            internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats
+                        ));
+                    }
+                }
+                default -> unpacker.skipValue();
+            }
+        }
+        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
     }
 }

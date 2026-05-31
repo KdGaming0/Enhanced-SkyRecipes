@@ -146,31 +146,8 @@ tasks {
         dependsOn("build")
     }
 
-    // Build-time task: compile NEU repo data into binary .mpk
-    register<JavaExec>("compileNeuData") {
-        group = "build"
-        description = "Downloads NEU repo and compiles it into a binary .mpk file"
-
-        classpath = sourceSets.main.get().runtimeClasspath
-        mainClass = "com.github.kdgaming0.skyrecipes.core.data.BinaryDataCompiler"
-
-        // Output directory for generated binary
-        val outputDir = layout.buildDirectory.dir("generated/skyrecipes/data").get().asFile
-        outputDir.mkdirs()
-        args(outputDir.absolutePath)
-
-        // Cache directory for NEU repo ZIP
-        val cacheDir = gradle.gradleUserHomeDir.resolve("skyrecipes-cache")
-        cacheDir.mkdirs()
-        systemProperty("skyrecipes.cacheDir", cacheDir.absolutePath)
-
-        dependsOn("compileJava")
-    }
-
     jar {
-        from(layout.buildDirectory.dir("generated/skyrecipes/data")) {
-            into("assets/skyrecipes/data")
-        }
-        dependsOn("compileNeuData")
+        // Binary data is no longer bundled in the JAR.
+        // BinaryDataCompiler remains in the classpath for runtime use.
     }
 }

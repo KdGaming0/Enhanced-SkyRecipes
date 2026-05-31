@@ -30,7 +30,21 @@ public final class JsonUtil {
         if (element == null || element.isJsonNull()) {
             return defaultValue;
         }
-        return element.getAsInt();
+        if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+            // Handle string representations of floats like "20.0"
+            String str = element.getAsString();
+            try {
+                return (int) Double.parseDouble(str);
+            } catch (NumberFormatException e) {
+                return defaultValue;
+            }
+        }
+        try {
+            return element.getAsInt();
+        } catch (NumberFormatException e) {
+            // Fallback for numbers stored as floats in JSON
+            return (int) element.getAsDouble();
+        }
     }
 
     public static boolean getBoolean(JsonObject obj, String key, boolean defaultValue) {

@@ -43,7 +43,7 @@ public final class SlotRefParser {
         String countStr = raw.substring(colonIndex + 1);
         int count;
         try {
-            count = Integer.parseInt(countStr);
+            count = (int) Double.parseDouble(countStr);
         } catch (NumberFormatException e) {
             count = 1;
         }

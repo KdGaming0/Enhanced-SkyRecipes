@@ -37,42 +37,55 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     public void onIntegrationInitialize() {
         LOGGER.info("SkyRecipes RRV client plugin initializing...");
 
-        registerRecipes();
-        registerStackSensitives();
-        registerAliases();
-        buildSearchAutocomplete();
+        // Register recipe provider early. If data is not ready, returns empty list.
+        ItemView.addClientRecipeProvider(recipeList -> {
+            if (SkyRecipes.isDataReady()) {
+                recipeList.addAll(generateFilteredRecipes());
+            }
+        });
 
-        // Re-register on client reload (e.g., world change, resource reload)
+        // Register reload callback for world changes / resource reloads
         ItemView.addClientReloadCallback(() -> {
-            registerRecipes();
+            if (SkyRecipes.isDataReady()) {
+                registerStackSensitives();
+                registerAliases();
+                SkyRecipes.buildSearchAutocomplete();
+            }
+        });
+
+        // If data is already ready at plugin init time, register immediately
+        if (SkyRecipes.isDataReady()) {
             registerStackSensitives();
             registerAliases();
+            SkyRecipes.buildSearchAutocomplete();
+        }
+
+        // Register for deferred data arrival (cold start or background update)
+        SkyRecipes.addDataReadyListener(result -> {
+            LOGGER.info("Data became ready — triggering RRV recipe rebuild.");
+            registerStackSensitives();
+            registerAliases();
+            SkyRecipes.buildSearchAutocomplete();
+            triggerRrvRebuild();
         });
 
         LOGGER.info("SkyRecipes RRV client plugin initialized");
     }
 
-    private void registerRecipes() {
+    private List<ReliableClientRecipe> generateFilteredRecipes() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) {
-            LOGGER.warn("ItemRegistry not available, skipping recipe registration");
-            return;
+            return Collections.emptyList();
         }
 
         try {
             ConstantsRegistry constants = SkyRecipes.getConstantsRegistry();
             RecipeGenerator generator = new RecipeGenerator(registry, constants);
             var result = generator.generate();
-            List<ReliableClientRecipe> filtered = filterRecipesByConfig(result.recipes());
-
-            ItemView.addClientRecipeProvider(recipeList -> {
-                recipeList.addAll(filtered);
-            });
-
-            LOGGER.info("Registered {} SkyBlock recipes with RRV ({} filtered by config)",
-                    filtered.size(), result.recipes().size() - filtered.size());
+            return filterRecipesByConfig(result.recipes());
         } catch (Exception e) {
-            LOGGER.error("Failed to generate and register recipes", e);
+            LOGGER.error("Failed to generate recipes", e);
+            return Collections.emptyList();
         }
     }
 
@@ -101,7 +114,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             try {
                 ItemStack stack = ItemStackBuilder.build(item);
                 if (!stack.isEmpty() && stack.getItem() != Items.BARRIER) {
-                    ClientRecipeCache.INSTANCE.addStackSensitive(new ItemView.StackSensitive(stack));
+                    ItemView.addStackSensitive(stack);
                     registered++;
                 } else {
                     skipped++;
@@ -156,18 +169,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         ALIASES = Collections.unmodifiableMap(map);
     }
 
-    private void buildSearchAutocomplete() {
-        ItemRegistry registry = SkyRecipes.getItemRegistry();
-        if (registry == null) return;
-
-        List<String> pageNames = List.of(
-                "Crafting", "Forge", "Drops", "NPC Shop", "NPC Info",
-                "Kat Upgrade", "Trade", "Wiki Info", "Essence Upgrade",
-                "Reforge", "Garden Mutation"
-        );
-        SkyRecipes.buildSearchAutocomplete(ALIASES, pageNames);
-    }
-
     private void registerAliases() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) return;
@@ -183,6 +184,22 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                     LOGGER.debug("Failed to register alias for {}", entry.getValue());
                 }
             });
+        }
+    }
+
+    /**
+     * Trigger RRV to rebuild its client recipe cache.
+     * <p>This uses an internal RRV API because the stable API does not expose
+     * a public mechanism to force cache rebuild after the initial world join on Fabric.
+     * If this fails, recipes will still appear on the next world join.
+     */
+    private void triggerRrvRebuild() {
+        try {
+            ClientRecipeCache.INSTANCE.buildRecipeCache(true);
+            LOGGER.info("Triggered RRV client recipe cache rebuild.");
+        } catch (Exception e) {
+            LOGGER.warn("Failed to trigger RRV cache rebuild via internal API. " +
+                "Recipes may not appear until next world join.", e);
         }
     }
 }

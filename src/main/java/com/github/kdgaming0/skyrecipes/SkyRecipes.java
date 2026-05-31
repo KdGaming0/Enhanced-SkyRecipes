@@ -2,22 +2,22 @@ package com.github.kdgaming0.skyrecipes;
 
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.client.gui.CategoryFilterOverlay;
-import com.github.kdgaming0.skyrecipes.core.data.BinaryDataLoader;
-import com.github.kdgaming0.skyrecipes.core.data.DataUpdateChecker;
+import com.github.kdgaming0.skyrecipes.core.data.DataLoadResult;
+import com.github.kdgaming0.skyrecipes.core.data.RuntimeDataManager;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
 import eu.midnightdust.lib.config.MidnightConfig;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientEntityEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 public class SkyRecipes implements ClientModInitializer {
 
@@ -26,10 +26,9 @@ public class SkyRecipes implements ClientModInitializer {
     public static final String VERSION = /*$ mod_version*/ "0.1.0";
     public static final String MINECRAFT = /*$ minecraft*/ "26.1.1";
 
-    private static ItemRegistry itemRegistry;
-    private static ConstantsRegistry constantsRegistry;
-    private static BinaryDataLoader dataLoader;
+    private static RuntimeDataManager dataManager;
     private static SearchAutocomplete searchAutocomplete;
+    private static final List<Consumer<DataLoadResult>> dataReadyListeners = new CopyOnWriteArrayList<>();
 
     @Override
     public void onInitializeClient() {
@@ -38,29 +37,37 @@ public class SkyRecipes implements ClientModInitializer {
         // Initialise MidnightLib configuration
         MidnightConfig.init(MOD_ID, SkyRecipesConfig.class);
 
-        // Load binary data
-        dataLoader = new BinaryDataLoader();
-        boolean loaded = loadBinaryData();
+        // Set up data directories
+        Path dataDir = FabricLoader.getInstance().getGameDir().resolve("skyblockdata");
+        Path cacheDir = FabricLoader.getInstance().getGameDir().resolve("skyrecipes/cache");
 
-        if (loaded) {
-            itemRegistry = dataLoader.getItemRegistry();
-            constantsRegistry = dataLoader.getConstantsRegistry();
+        // Initialise runtime data manager
+        dataManager = new RuntimeDataManager(dataDir, cacheDir);
 
-            // Schedule background update check (30s after first entity load = world join)
-            Path cacheDir = FabricLoader.getInstance().getGameDir().resolve("skyrecipes/cache");
-            DataUpdateChecker updateChecker = new DataUpdateChecker(0L, cacheDir);
-            final boolean[] triggered = { false };
-            ClientEntityEvents.ENTITY_LOAD.register((entity, world) -> {
-                if (!triggered[0]) {
-                    triggered[0] = true;
-                    updateChecker.scheduleCheck(30000);
-                }
-            });
+        // Try warm start (non-blocking)
+        boolean warmLoaded = dataManager.initializeWarm();
+
+        if (warmLoaded) {
+            LOGGER.info("SkyRecipes warm start successful.");
+            buildSearchAutocomplete();
         } else {
-            LOGGER.warn("SkyRecipes data failed to load. Mod will operate in degraded mode.");
-            itemRegistry = null;
-            constantsRegistry = null;
+            LOGGER.info("SkyRecipes cold start — data will download and compile in background.");
+            dataManager.initializeCold();
         }
+
+        // Register callback for when data becomes ready (cold start completion)
+        dataManager.whenReady(result -> {
+            buildSearchAutocomplete();
+            notifyDataReady(result);
+            LOGGER.info("SkyRecipes data is now ready.");
+        });
+
+        // Register shutdown hook to clean up resources
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (dataManager != null) {
+                dataManager.shutdown();
+            }
+        }, "SkyRecipes-Shutdown"));
 
         LOGGER.info("SkyRecipes initialization complete.");
 
@@ -68,26 +75,47 @@ public class SkyRecipes implements ClientModInitializer {
         new CategoryFilterOverlay();
     }
 
-    private boolean loadBinaryData() {
-        String resourcePath = "assets/skyrecipes/data/skyrecipes_data_v1.mpk";
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
-            if (in == null) {
-                LOGGER.error("Binary data not found in JAR: {}", resourcePath);
-                return false;
-            }
-            return dataLoader.load(in);
-        } catch (Exception e) {
-            LOGGER.error("Failed to load binary data", e);
-            return false;
-        }
+    public static boolean isDataReady() {
+        return dataManager != null && dataManager.getState() == RuntimeDataManager.State.READY;
     }
 
     public static ItemRegistry getItemRegistry() {
-        return itemRegistry;
+        return dataManager != null ? dataManager.getItemRegistry() : null;
     }
 
     public static ConstantsRegistry getConstantsRegistry() {
-        return constantsRegistry;
+        return dataManager != null ? dataManager.getConstantsRegistry() : null;
+    }
+
+    public static RuntimeDataManager getDataManager() {
+        return dataManager;
+    }
+
+    /**
+     * Register a listener that will be called when data becomes ready.
+     * If data is already ready, the listener is called immediately.
+     * This is safe to call before {@link #onInitializeClient()} completes.
+     */
+    public static void addDataReadyListener(Consumer<DataLoadResult> listener) {
+        dataReadyListeners.add(listener);
+        if (isDataReady() && dataManager != null) {
+            listener.accept(new DataLoadResult(
+                dataManager.getItemRegistry(),
+                dataManager.getConstantsRegistry(),
+                dataManager.getDataPath(),
+                dataManager.getCurrentMetadata()
+            ));
+        }
+    }
+
+    private static void notifyDataReady(DataLoadResult result) {
+        for (Consumer<DataLoadResult> listener : dataReadyListeners) {
+            try {
+                listener.accept(result);
+            } catch (Exception e) {
+                LOGGER.error("Data ready listener threw exception", e);
+            }
+        }
     }
 
     public static SearchAutocomplete getSearchAutocomplete() {
@@ -96,15 +124,23 @@ public class SkyRecipes implements ClientModInitializer {
 
     /**
      * Build the search autocomplete index once data is loaded.
-     * Called from the RRV client plugin after aliases are prepared.
+     * Called internally and from the RRV client plugin after aliases are prepared.
      */
-    public static void buildSearchAutocomplete(Map<String, String> aliases, List<String> pageNames) {
-        if (itemRegistry == null) {
+    public static void buildSearchAutocomplete() {
+        ItemRegistry registry = getItemRegistry();
+        if (registry == null) {
             LOGGER.warn("Cannot build search autocomplete: ItemRegistry not loaded");
             return;
         }
-        searchAutocomplete = new SearchAutocomplete(itemRegistry, aliases, pageNames);
+
+        Map<String, String> aliases = com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin.ALIASES;
+        List<String> pageNames = List.of(
+            "Crafting", "Forge", "Drops", "NPC Shop", "NPC Info",
+            "Kat Upgrade", "Trade", "Wiki Info", "Essence Upgrade",
+            "Reforge", "Garden Mutation"
+        );
+        searchAutocomplete = new SearchAutocomplete(registry, aliases, pageNames);
         LOGGER.info("Search autocomplete index built with {} entries",
-                itemRegistry.getAllItems().size() + aliases.size() + pageNames.size());
+            registry.getAllItems().size() + aliases.size() + pageNames.size());
     }
 }
