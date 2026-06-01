@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.render;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.util.LegacyItemIdMapper;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
@@ -58,9 +59,10 @@ public final class ItemStackBuilder {
     public static ItemStack build(NeuItem item, int count) {
         if (count < 1) count = 1;
 
-        Item itemType = resolveItem(item.itemId());
+        String mappedId = LegacyItemIdMapper.map(item.itemId(), item.damage());
+        Item itemType = resolveItem(mappedId);
         if (itemType == null) {
-            LOGGER.warn("Unknown item id '{}' for {}", item.itemId(), item.internalName());
+            LOGGER.warn("Unknown item id '{}' (mapped from '{}') for {}", mappedId, item.itemId(), item.internalName());
             itemType = Items.BARRIER;
         }
 
@@ -78,13 +80,74 @@ public final class ItemStackBuilder {
         }
 
         try {
-            CompoundTag tag = TagParser.parseCompoundFully(nbtString);
+            String normalizedNbt = preprocessNeuSnbt(nbtString);
+            CompoundTag tag = TagParser.parseCompoundFully(normalizedNbt);
             applyComponents(stack, tag, item);
         } catch (Exception e) {
             LOGGER.warn("Failed to parse NBT for {}: {}", item.internalName(), e.getMessage());
         }
 
         return stack;
+    }
+
+    /**
+     * Preprocess NEU SNBT strings to remove numeric list indices.
+     *
+     * <p>NEU uses a legacy/pre-1.20 SNBT format where list elements are prefixed
+     * with numeric indices: {@code [0:"...", 1:"..."]}. Modern Minecraft's
+     * {@link TagParser} cannot parse this format. This method strips the indices
+     * to produce standard SNBT: {@code ["...", "..."]}.</p>
+     */
+    private static String preprocessNeuSnbt(String snbt) {
+        if (snbt == null || snbt.isEmpty()) {
+            return snbt;
+        }
+        StringBuilder result = new StringBuilder(snbt.length());
+        boolean inString = false;
+        boolean escape = false;
+
+        for (int i = 0; i < snbt.length(); i++) {
+            char c = snbt.charAt(i);
+
+            if (escape) {
+                result.append(c);
+                escape = false;
+                continue;
+            }
+            if (c == '\\') {
+                result.append(c);
+                escape = true;
+                continue;
+            }
+            if (c == '"') {
+                inString = !inString;
+                result.append(c);
+                continue;
+            }
+
+            // When not inside a string, after '[' or ',' skip N: prefixes
+            if (!inString && (c == '[' || c == ',')) {
+                result.append(c);
+                int j = i + 1;
+                // Skip whitespace
+                while (j < snbt.length() && Character.isWhitespace(snbt.charAt(j))) {
+                    j++;
+                }
+                // Skip digits
+                int digitStart = j;
+                while (j < snbt.length() && Character.isDigit(snbt.charAt(j))) {
+                    j++;
+                }
+                if (j > digitStart && j < snbt.length() && snbt.charAt(j) == ':') {
+                    // This is an index prefix — skip it
+                    i = j;
+                }
+                continue;
+            }
+
+            result.append(c);
+        }
+        return result.toString();
     }
 
     private static Item resolveItem(String itemId) {

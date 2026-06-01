@@ -7,6 +7,7 @@ import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockReforgeClientRecipe;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -48,8 +49,7 @@ public final class ReforgeRecipeGenerator {
             // Build a sample item stack for the applicable type (use a generic representative)
             ItemStack sampleItem = findSampleItem(data.itemTypes(), itemRegistry);
 
-            Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes",
-                "reforge/" + stoneName.toLowerCase());
+            Identifier recipeId = IdentifierUtil.skyRecipeId("reforge/", stoneName);
 
             recipes.add(new SkyblockReforgeClientRecipe(
                 recipeId,

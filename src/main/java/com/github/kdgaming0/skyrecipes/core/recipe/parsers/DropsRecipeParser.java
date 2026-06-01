@@ -6,6 +6,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockDropsClientRecipe;
 
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -29,7 +30,7 @@ public final class DropsRecipeParser {
      */
     public static SkyblockDropsClientRecipe parse(NeuItem item, NeuRecipe.DropsRecipe recipe, ItemRegistry itemRegistry) {
         try {
-            Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes", "drops/" + item.internalName().toLowerCase());
+            Identifier recipeId = IdentifierUtil.skyRecipeId("drops/", item.internalName());
 
             List<SkyblockDropsClientRecipe.DropEntry> drops = new ArrayList<>();
             for (NeuRecipe.DropsRecipe.Drop drop : recipe.drops()) {

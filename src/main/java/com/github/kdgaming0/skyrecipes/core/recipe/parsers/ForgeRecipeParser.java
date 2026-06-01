@@ -6,6 +6,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockForgeClientRecipe;
 
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 
 import org.slf4j.Logger;
@@ -33,7 +34,7 @@ public final class ForgeRecipeParser {
      */
     public static SkyblockForgeClientRecipe parse(NeuItem item, NeuRecipe.ForgeRecipe recipe, ItemRegistry itemRegistry) {
         try {
-            Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes", "forge/" + item.internalName().toLowerCase());
+            Identifier recipeId = IdentifierUtil.skyRecipeId("forge/", item.internalName());
 
             // Resolve output item
             NeuItem outputItem = item;

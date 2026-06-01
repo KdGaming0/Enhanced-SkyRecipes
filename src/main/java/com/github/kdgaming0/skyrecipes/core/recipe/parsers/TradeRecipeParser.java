@@ -6,6 +6,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockTradeClientRecipe;
 
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -26,7 +27,7 @@ public final class TradeRecipeParser {
      */
     public static SkyblockTradeClientRecipe parse(NeuItem item, NeuRecipe.TradeRecipe recipe, ItemRegistry itemRegistry) {
         try {
-            Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes", "trade/" + item.internalName().toLowerCase());
+            Identifier recipeId = IdentifierUtil.skyRecipeId("trade/", item.internalName());
 
             // Parse input (single ingredient in "cost" field, stored as inputs list)
             ItemStack inputStack = ItemStack.EMPTY;

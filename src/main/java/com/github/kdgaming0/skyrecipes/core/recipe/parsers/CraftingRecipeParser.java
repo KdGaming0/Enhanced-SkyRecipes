@@ -7,6 +7,7 @@ import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 
 import cc.cassian.rrv.common.builtin.crafting.CraftingClientRecipe;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -41,7 +42,7 @@ public final class CraftingRecipeParser {
      */
     public static CraftingClientRecipe parse(NeuItem item, NeuRecipe.CraftingRecipe recipe, ItemRegistry itemRegistry) {
         try {
-            Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes", "crafting/" + item.internalName().toLowerCase());
+            Identifier recipeId = IdentifierUtil.skyRecipeId("crafting/", item.internalName());
 
             // Build ingredient map
             HashMap<Integer, SlotContent> ingredients = new HashMap<>();

@@ -328,12 +328,24 @@ public class BinaryDataCompiler {
             JsonObject recipeObj = JsonUtil.getObject(obj, "recipe");
             if (recipeObj != null) {
                 Map<String, String> grid = new LinkedHashMap<>();
+                int outputCount = JsonUtil.getInt(obj, "count", 1);
                 for (Map.Entry<String, JsonElement> e : recipeObj.entrySet()) {
-                    grid.put(e.getKey(), e.getValue().getAsString());
+                    String key = e.getKey();
+                    if (key.equals("count")) {
+                        // NEU repo stores output count inside recipe object for some items
+                        try {
+                            outputCount = e.getValue().getAsInt();
+                        } catch (NumberFormatException ignored) {}
+                        continue;
+                    }
+                    if (key.equals("overrideOutputId")) {
+                        continue;
+                    }
+                    grid.put(key, e.getValue().getAsString());
                 }
                 crafting = new NeuRecipe.CraftingRecipe(
                     grid,
-                    JsonUtil.getInt(obj, "count", 1),
+                    outputCount,
                     JsonUtil.getString(obj, "overrideOutputId")
                 );
             }

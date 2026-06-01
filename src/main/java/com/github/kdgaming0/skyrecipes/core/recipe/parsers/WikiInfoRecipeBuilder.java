@@ -7,6 +7,7 @@ import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.common.builtin.info.InfoClientRecipe;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import net.minecraft.network.chat.Component;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -37,7 +38,7 @@ public final class WikiInfoRecipeBuilder {
 
         try {
             ItemStack stack = ItemStackBuilder.build(item);
-            Identifier id = Identifier.fromNamespaceAndPath("skyrecipes", "wiki/" + item.internalName().toLowerCase());
+            Identifier id = IdentifierUtil.skyRecipeId("wiki/", item.internalName());
 
             StringBuilder text = new StringBuilder();
             text.append("§eWiki Links:\n\n");

@@ -6,6 +6,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockKatUpgradeClientRecipe;
 
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -30,7 +31,7 @@ public final class KatUpgradeRecipeParser {
      */
     public static SkyblockKatUpgradeClientRecipe parse(NeuItem item, NeuRecipe.KatGradeRecipe recipe, ItemRegistry itemRegistry) {
         try {
-            Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes", "katgrade/" + item.internalName().toLowerCase());
+            Identifier recipeId = IdentifierUtil.skyRecipeId("katgrade/", item.internalName());
 
             // Resolve input pet
             NeuItem inputItem = itemRegistry.getByInternalName(recipe.input()).orElse(null);

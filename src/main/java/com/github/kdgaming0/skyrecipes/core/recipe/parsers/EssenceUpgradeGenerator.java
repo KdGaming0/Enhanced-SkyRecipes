@@ -7,6 +7,7 @@ import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockEssenceUpgradeClientRecipe;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -76,8 +77,8 @@ public final class EssenceUpgradeGenerator {
                     }
                 }
 
-                Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes",
-                    "essence/" + itemName.toLowerCase() + "/" + starLevel);
+                Identifier recipeId = IdentifierUtil.skyRecipeId("essence/",
+                    itemName + "/" + starLevel);
 
                 recipes.add(new SkyblockEssenceUpgradeClientRecipe(
                     recipeId,

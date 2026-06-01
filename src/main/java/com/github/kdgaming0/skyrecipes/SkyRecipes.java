@@ -10,6 +10,7 @@ import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
 import eu.midnightdust.lib.config.MidnightConfig;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,22 +45,31 @@ public class SkyRecipes implements ClientModInitializer {
         // Initialise runtime data manager
         dataManager = new RuntimeDataManager(dataDir, cacheDir);
 
-        // Try warm start (non-blocking)
-        boolean warmLoaded = dataManager.initializeWarm();
-
-        if (warmLoaded) {
-            LOGGER.info("SkyRecipes warm start successful.");
-            buildSearchAutocomplete();
-        } else {
-            LOGGER.info("SkyRecipes cold start — data will download and compile in background.");
-            dataManager.initializeCold();
-        }
-
-        // Register callback for when data becomes ready (cold start completion)
+        // Register callback for when data becomes ready (warm or cold start completion)
         dataManager.whenReady(result -> {
-            buildSearchAutocomplete();
-            notifyDataReady(result);
-            LOGGER.info("SkyRecipes data is now ready.");
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                mc.execute(() -> {
+                    buildSearchAutocomplete();
+                    notifyDataReady(result);
+                    LOGGER.info("SkyRecipes data is now ready.");
+                });
+            }
+        });
+
+        // ETag-first startup: check remote ETag before loading local data
+        dataManager.initializeEtagFirst(warmLoaded -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                mc.execute(() -> {
+                    if (warmLoaded) {
+                        LOGGER.info("SkyRecipes warm start successful.");
+                        buildSearchAutocomplete();
+                    } else {
+                        LOGGER.info("SkyRecipes cold start — data will download and compile in background.");
+                    }
+                });
+            }
         });
 
         // Register shutdown hook to clean up resources

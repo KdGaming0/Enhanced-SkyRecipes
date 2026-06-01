@@ -6,6 +6,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockNpcShopClientRecipe;
 
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -30,7 +31,7 @@ public final class NpcShopRecipeParser {
      */
     public static SkyblockNpcShopClientRecipe parse(NeuItem item, NeuRecipe.NpcShopRecipe recipe, ItemRegistry itemRegistry) {
         try {
-            Identifier recipeId = Identifier.fromNamespaceAndPath("skyrecipes", "npc_shop/" + item.internalName().toLowerCase());
+            Identifier recipeId = IdentifierUtil.skyRecipeId("npc_shop/", item.internalName());
 
             // Resolve result item
             NeuItem resultItem = itemRegistry.getByInternalName(recipe.result()).orElse(item);

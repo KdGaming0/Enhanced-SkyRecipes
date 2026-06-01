@@ -84,17 +84,17 @@ public class BinaryDataLoader {
                 schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
 
             // Read items section
-            ByteBuffer itemsSlice = fileBuffer.duplicate();
-            itemsSlice.position((int) itemsOffset);
-            itemsSlice.limit((int) (itemsOffset + itemsLength));
-            List<NeuItem> items = unpackItems(itemsSlice, itemCount);
+            // Copy to byte[] because msgpack-core 0.9.8 cannot read from
+            // MappedByteBuffer (direct buffer) on Java 25+ due to module restrictions.
+            byte[] itemsBytes = new byte[(int) itemsLength];
+            fileBuffer.duplicate().position((int) itemsOffset).limit((int) (itemsOffset + itemsLength)).get(itemsBytes);
+            List<NeuItem> items = unpackItems(itemsBytes, itemCount);
             this.itemRegistry = new ItemRegistry(items);
 
             // Read constants section
-            ByteBuffer constantsSlice = fileBuffer.duplicate();
-            constantsSlice.position((int) constantsOffset);
-            constantsSlice.limit((int) (constantsOffset + constantsLength));
-            this.constantsRegistry = unpackConstants(constantsSlice);
+            byte[] constantsBytes = new byte[(int) constantsLength];
+            fileBuffer.duplicate().position((int) constantsOffset).limit((int) (constantsOffset + constantsLength)).get(constantsBytes);
+            this.constantsRegistry = unpackConstants(constantsBytes);
 
             long elapsed = System.currentTimeMillis() - startTime;
             LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}",
@@ -435,7 +435,7 @@ public class BinaryDataLoader {
     private Map<String, String> unpackStringMap(Map<String, Value> raw) {
         Map<String, String> map = new LinkedHashMap<>();
         for (Map.Entry<String, Value> e : raw.entrySet()) {
-            if (!e.getValue().isNilValue()) {
+            if (!e.getValue().isNilValue() && e.getValue().isStringValue()) {
                 map.put(e.getKey(), e.getValue().asStringValue().asString());
             }
         }

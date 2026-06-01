@@ -12,6 +12,8 @@ import cc.cassian.rrv.api.ReliableRecipeViewerClientPlugin;
 import cc.cassian.rrv.api.recipe.ItemView;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.client.recipe.ClientRecipeCache;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -44,7 +46,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             }
         });
 
-        // Register reload callback for world changes / resource reloads
+        // Register reload callback for world changes / resource reloads.
+        // This is called AFTER components are bound, so ItemStack creation is safe.
         ItemView.addClientReloadCallback(() -> {
             if (SkyRecipes.isDataReady()) {
                 registerStackSensitives();
@@ -53,20 +56,29 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             }
         });
 
-        // If data is already ready at plugin init time, register immediately
+        // If data is already ready at plugin init time, only register aliases
+        // (which don't need bound components) and build autocomplete.
         if (SkyRecipes.isDataReady()) {
-            registerStackSensitives();
             registerAliases();
             SkyRecipes.buildSearchAutocomplete();
         }
 
-        // Register for deferred data arrival (cold start or background update)
+        // Register for deferred data arrival (cold start or background update).
+        // ItemStacks can only be created after components are bound (i.e. after world join).
         SkyRecipes.addDataReadyListener(result -> {
-            LOGGER.info("Data became ready — triggering RRV recipe rebuild.");
-            registerStackSensitives();
-            registerAliases();
-            SkyRecipes.buildSearchAutocomplete();
-            triggerRrvRebuild();
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                mc.execute(() -> {
+                    SkyRecipes.buildSearchAutocomplete();
+                    registerAliases();
+                    // Only register stack-sensitives and trigger rebuild if we're already in a world
+                    if (mc.level != null) {
+                        LOGGER.info("Data became ready while in-world — triggering RRV recipe rebuild.");
+                        registerStackSensitives();
+                        triggerRrvRebuild();
+                    }
+                });
+            }
         });
 
         LOGGER.info("SkyRecipes RRV client plugin initialized");
@@ -176,15 +188,29 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         for (Map.Entry<String, String> entry : ALIASES.entrySet()) {
             registry.getByInternalName(entry.getValue()).ifPresent(neuItem -> {
                 try {
-                    ItemStack stack = ItemStackBuilder.build(neuItem);
-                    if (!stack.isEmpty()) {
-                        ItemView.addAlias(stack.getItem(), entry.getKey());
+                    // Avoid ItemStack creation — aliases only need the Item, which
+                    // can be resolved directly without requiring bound components.
+                    Item item = resolveAliasItem(neuItem);
+                    if (item != null) {
+                        ItemView.addAlias(item, entry.getKey());
                     }
                 } catch (Exception e) {
                     LOGGER.debug("Failed to register alias for {}", entry.getValue());
                 }
             });
         }
+    }
+
+    private static Item resolveAliasItem(com.github.kdgaming0.skyrecipes.core.model.NeuItem neuItem) {
+        String itemId = neuItem.itemId();
+        if (itemId == null || itemId.isEmpty()) {
+            return null;
+        }
+        net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.tryParse(itemId);
+        if (id == null) {
+            return null;
+        }
+        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(id).orElse(null);
     }
 
     /**

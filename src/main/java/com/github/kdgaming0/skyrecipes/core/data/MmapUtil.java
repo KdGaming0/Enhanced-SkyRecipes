@@ -70,12 +70,9 @@ public final class MmapUtil {
             return buffer;
         } catch (IOException e) {
             LOGGER.warn("Memory mapping failed for {}, falling back to heap read", path, e);
-            // Fallback: read into heap buffer
+            // Fallback: read into heap buffer (msgpack-core cannot read from direct buffers on Java 25+)
             byte[] bytes = Files.readAllBytes(path);
-            ByteBuffer buffer = ByteBuffer.allocateDirect(bytes.length);
-            buffer.put(bytes);
-            buffer.flip();
-            return buffer;
+            return ByteBuffer.wrap(bytes);
         }
     }
 

@@ -86,6 +86,49 @@ public class RuntimeUpdateService {
     }
 
     /**
+     * Check remote ETag against local metadata asynchronously.
+     * Calls {@code onComplete} with {@code true} if local data is up-to-date
+     * and a warm start should be attempted; {@code false} if a cold start
+     * (download + compile) is required.
+     *
+     * <p>If the network is unreachable, returns {@code true} when local data
+     * exists so the user isn't left with no recipes.</p>
+     */
+    public void checkEtagAsync(Consumer<Boolean> onComplete) {
+        scheduler.execute(() -> {
+            try {
+                String currentEtag = readCurrentEtag();
+                String remoteEtag = fetchRemoteEtag();
+
+                if (remoteEtag == null) {
+                    // Network unavailable — use warm start if we have any local data
+                    LOGGER.warn("Could not fetch remote ETag (network unavailable). Using local data if present.");
+                    onComplete.accept(currentEtag != null);
+                    return;
+                }
+
+                if (currentEtag == null) {
+                    LOGGER.info("No local metadata found — cold start required.");
+                    onComplete.accept(false);
+                    return;
+                }
+
+                boolean matches = remoteEtag.equals(currentEtag);
+                if (matches) {
+                    LOGGER.info("Remote ETag matches local ({}). Warm start permitted.", remoteEtag);
+                } else {
+                    LOGGER.info("Remote ETag changed (remote: {}, local: {}). Cold start required.", remoteEtag, currentEtag);
+                }
+                onComplete.accept(matches);
+
+            } catch (Exception e) {
+                LOGGER.error("ETag check failed unexpectedly", e);
+                onComplete.accept(false);
+            }
+        });
+    }
+
+    /**
      * Compile data immediately (for cold start). Runs on the scheduler thread.
      */
     public void compileNow(Consumer<BinaryDataCompiler.CompileResult> onComplete) {
@@ -253,7 +296,7 @@ public class RuntimeUpdateService {
         }
     }
 
-    private String readCurrentEtag() {
+    public String readCurrentEtag() {
         Path metaPath = dataDir.resolve("skyrecipes_data.meta.json");
         try {
             if (Files.exists(metaPath)) {

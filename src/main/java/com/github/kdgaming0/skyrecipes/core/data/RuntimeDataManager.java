@@ -85,18 +85,41 @@ public class RuntimeDataManager {
             this.state = State.READY;
 
             LOGGER.info("Warm start successful: {} items from {}", itemRegistry.size(), dataPath);
-
-            // Start background update checks
-            updateService.start();
-
             notifyCallbacks();
             return true;
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOGGER.error("Failed to read metadata or binary during warm start", e);
             state = State.UNINITIALIZED;
             return false;
         }
+    }
+
+    /**
+     * Launch with an ETag-first check: compare remote ETag to local metadata
+     * before deciding whether to warm-start or cold-start.
+     *
+     * <p>The {@code onDecision} callback receives {@code true} if a warm start
+     * was attempted (and succeeded), or {@code false} if a cold start was
+     * triggered.</p>
+     */
+    public void initializeEtagFirst(Consumer<Boolean> onDecision) {
+        updateService.checkEtagAsync(etagMatches -> {
+            if (etagMatches) {
+                boolean loaded = initializeWarm();
+                if (loaded) {
+                    updateService.start();
+                    onDecision.accept(true);
+                } else {
+                    LOGGER.warn("ETag matched but warm start failed — forcing cold start");
+                    initializeCold();
+                    onDecision.accept(false);
+                }
+            } else {
+                initializeCold();
+                onDecision.accept(false);
+            }
+        });
     }
 
     /**
@@ -159,7 +182,7 @@ public class RuntimeDataManager {
             notifyCallbacks();
             return true;
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOGGER.error("Failed to reload data", e);
             return false;
         }
@@ -220,6 +243,10 @@ public class RuntimeDataManager {
                 return;
             }
 
+            // Capture registries BEFORE close() nulls them
+            ItemRegistry loadedItems = loader.getItemRegistry();
+            ConstantsRegistry loadedConstants = loader.getConstantsRegistry();
+
             // Close loader to release file lock before moving
             loader.close();
 
@@ -234,17 +261,17 @@ public class RuntimeDataManager {
                 LOGGER.warn("Failed to move compiled files to final location, keeping at temp path", moveEx);
             }
 
-            this.itemRegistry = loader.getItemRegistry();
-            this.constantsRegistry = loader.getConstantsRegistry();
+            this.itemRegistry = loadedItems;
+            this.constantsRegistry = loadedConstants;
             this.currentMetadata = metadata;
             this.state = State.READY;
 
             LOGGER.info("Cold start complete: {} items loaded", itemRegistry.size());
             notifyCallbacks();
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             state = State.ERROR;
-            LOGGER.error("Failed to read metadata for compiled binary", e);
+            LOGGER.error("Failed to read metadata or load compiled binary", e);
         }
     }
 
