@@ -3,6 +3,8 @@
   "package": "com.github.kdgaming0.skyrecipes.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "ItemFiltersMixin",
+    "ClientRecipeCacheMixin"
   ],
   "injectors": {
     "defaultRequire": 1

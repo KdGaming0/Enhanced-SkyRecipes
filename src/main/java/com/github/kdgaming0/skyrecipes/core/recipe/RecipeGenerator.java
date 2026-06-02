@@ -85,31 +85,39 @@ public final class RecipeGenerator {
 
         // Essence upgrade recipes (from constants)
         if (constantsRegistry != null) {
-            List<ReliableClientRecipe> essenceRecipes = EssenceUpgradeGenerator.generateAll(constantsRegistry, itemRegistry);
-            for (ReliableClientRecipe recipe : essenceRecipes) {
-                recipes.add(recipe);
-                // Index by result item internal name
-                if (recipe.getId() != null) {
-                    String resultName = recipe.getId().getPath();
-                    int lastSlash = resultName.lastIndexOf('/');
-                    if (lastSlash != -1) {
-                        resultName = resultName.substring(0, lastSlash);
-                        int firstSlash = resultName.indexOf('/');
-                        if (firstSlash != -1) {
-                            resultName = resultName.substring(firstSlash + 1);
+            try {
+                List<ReliableClientRecipe> essenceRecipes = EssenceUpgradeGenerator.generateAll(constantsRegistry, itemRegistry);
+                for (ReliableClientRecipe recipe : essenceRecipes) {
+                    recipes.add(recipe);
+                    // Index by result item internal name
+                    if (recipe.getId() != null) {
+                        String resultName = recipe.getId().getPath();
+                        int lastSlash = resultName.lastIndexOf('/');
+                        if (lastSlash != -1) {
+                            resultName = resultName.substring(0, lastSlash);
+                            int firstSlash = resultName.indexOf('/');
+                            if (firstSlash != -1) {
+                                resultName = resultName.substring(firstSlash + 1);
+                            }
                         }
+                        indexBuilder.addResult(resultName, recipe.getId());
                     }
-                    indexBuilder.addResult(resultName, recipe.getId());
                 }
+            } catch (Exception e) {
+                LOGGER.error("Failed to generate essence upgrade recipes", e);
             }
 
             // Reforge recipes (from constants)
-            List<ReliableClientRecipe> reforgeRecipes = ReforgeRecipeGenerator.generateAll(constantsRegistry, itemRegistry);
-            for (ReliableClientRecipe recipe : reforgeRecipes) {
-                recipes.add(recipe);
-                if (recipe.getId() != null) {
-                    indexBuilder.addResult("reforge", recipe.getId());
+            try {
+                List<ReliableClientRecipe> reforgeRecipes = ReforgeRecipeGenerator.generateAll(constantsRegistry, itemRegistry);
+                for (ReliableClientRecipe recipe : reforgeRecipes) {
+                    recipes.add(recipe);
+                    if (recipe.getId() != null) {
+                        indexBuilder.addResult("reforge", recipe.getId());
+                    }
                 }
+            } catch (Exception e) {
+                LOGGER.error("Failed to generate reforge recipes", e);
             }
         }
 

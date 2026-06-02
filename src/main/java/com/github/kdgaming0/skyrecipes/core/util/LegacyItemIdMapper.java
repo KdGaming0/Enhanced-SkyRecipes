@@ -266,6 +266,7 @@ public final class LegacyItemIdMapper {
                 case 5 -> "minecraft:infested_chiseled_stone_bricks";
                 default -> "minecraft:infested_stone";
             };
+            case "minecraft:spawn_egg" -> "minecraft:pig_spawn_egg";
             default -> itemId;
         };
     }
