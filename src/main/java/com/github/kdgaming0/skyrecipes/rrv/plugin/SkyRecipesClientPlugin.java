@@ -8,6 +8,7 @@ import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 
 import cc.cassian.rrv.api.ReliableRecipeViewerClientPlugin;
 import cc.cassian.rrv.api.recipe.ItemView;
@@ -304,6 +305,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 // Fallback: use the stable rebuild path.
                 ClientRecipeCache.INSTANCE.buildRecipeCache(false);
             }
+
+            // Rebuild parallel SkyBlock-ID index for fast collision-free lookups
+            SkyblockRecipeCache.rebuild(recipes);
 
             recipesReady = true;
             startupFinalized = true;
