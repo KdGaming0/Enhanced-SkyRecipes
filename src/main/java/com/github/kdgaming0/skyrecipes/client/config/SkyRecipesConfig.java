@@ -64,6 +64,9 @@ public class SkyRecipesConfig extends MidnightConfig {
     @Entry(category = "ui")
     public static boolean calculatorEnabled = true;
 
+    @Entry(category = "ui")
+    public static boolean familyExpansionEnabled = true;
+
     // -----------------------------------------------------------------
     // Data & debug settings
     // -----------------------------------------------------------------

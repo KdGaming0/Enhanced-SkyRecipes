@@ -7,6 +7,7 @@ import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
+import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 
@@ -306,7 +307,12 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 ClientRecipeCache.INSTANCE.buildRecipeCache(false);
             }
 
-            // Rebuild parallel SkyBlock-ID index for fast collision-free lookups
+            // Build family resolver and rebuild parallel SkyBlock-ID index
+            FamilyResolver familyResolver = new FamilyResolver(
+                SkyRecipes.getConstantsRegistry(),
+                SkyRecipes.getItemRegistry()
+            );
+            SkyblockRecipeCache.setFamilyResolver(familyResolver);
             SkyblockRecipeCache.rebuild(recipes);
 
             recipesReady = true;

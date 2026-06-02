@@ -1,5 +1,7 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
+import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
@@ -11,6 +13,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -28,8 +31,17 @@ public final class SkyblockRecipeCache {
 
     private static volatile Map<String, List<ReliableClientRecipe>> byIngredientId = Map.of();
     private static volatile Map<String, List<ReliableClientRecipe>> byResultId = Map.of();
+    private static volatile FamilyResolver familyResolver;
 
     private SkyblockRecipeCache() {}
+
+    /**
+     * Set the family resolver used for result-lookup expansion.
+     * Must be called before {@link #rebuild(List)} on the main thread.
+     */
+    public static void setFamilyResolver(FamilyResolver resolver) {
+        familyResolver = resolver;
+    }
 
     /**
      * Rebuild the parallel index from the given recipe list.
@@ -109,7 +121,20 @@ public final class SkyblockRecipeCache {
         if (id == null) {
             return null;
         }
-        List<ReliableClientRecipe> list = byResultId.get(id);
-        return list == null ? new ArrayList<>() : new ArrayList<>(list);
+
+        if (!SkyRecipesConfig.familyExpansionEnabled || familyResolver == null) {
+            List<ReliableClientRecipe> list = byResultId.get(id);
+            return list == null ? new ArrayList<>() : new ArrayList<>(list);
+        }
+
+        Set<String> familyIds = familyResolver.getFamilyMembers(id);
+        LinkedHashSet<ReliableClientRecipe> merged = new LinkedHashSet<>();
+        for (String familyId : familyIds) {
+            List<ReliableClientRecipe> list = byResultId.get(familyId);
+            if (list != null) {
+                merged.addAll(list);
+            }
+        }
+        return new ArrayList<>(merged);
     }
 }
