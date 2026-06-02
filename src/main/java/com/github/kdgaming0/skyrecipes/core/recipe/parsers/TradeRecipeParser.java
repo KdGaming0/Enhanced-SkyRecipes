@@ -4,12 +4,10 @@ import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
-import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockTradeClientRecipe;
-
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockTradeClientRecipe;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

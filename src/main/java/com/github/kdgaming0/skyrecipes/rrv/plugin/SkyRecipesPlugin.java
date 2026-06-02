@@ -1,15 +1,13 @@
 package com.github.kdgaming0.skyrecipes.rrv.plugin;
 
+import cc.cassian.rrv.api.ReliableRecipeViewerPlugin;
+import cc.cassian.rrv.api.recipe.ItemView;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
-
-import cc.cassian.rrv.api.ReliableRecipeViewerPlugin;
-import cc.cassian.rrv.api.recipe.ItemView;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

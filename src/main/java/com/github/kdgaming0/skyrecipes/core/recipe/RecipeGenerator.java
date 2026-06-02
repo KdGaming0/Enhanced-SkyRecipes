@@ -1,14 +1,12 @@
 package com.github.kdgaming0.skyrecipes.core.recipe;
 
+import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
 import com.github.kdgaming0.skyrecipes.core.recipe.parsers.*;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
-
-import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import net.minecraft.resources.Identifier;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

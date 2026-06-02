@@ -1,21 +1,19 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.parsers;
 
+import cc.cassian.rrv.common.builtin.crafting.CraftingClientRecipe;
+import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
-
-import cc.cassian.rrv.common.builtin.crafting.CraftingClientRecipe;
-import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Parses NEU crafting recipes into RRV {@link CraftingClientRecipe} instances.

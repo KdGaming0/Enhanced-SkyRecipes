@@ -2,11 +2,7 @@ package com.github.kdgaming0.skyrecipes.core.recipe;
 
 import net.minecraft.resources.Identifier;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Indexes recipes by result item and ingredient item for fast lookups.

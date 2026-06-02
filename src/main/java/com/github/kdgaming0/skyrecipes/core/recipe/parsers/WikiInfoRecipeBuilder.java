@@ -1,16 +1,14 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.parsers;
 
-import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
-import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
-
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.common.builtin.info.InfoClientRecipe;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
-import net.minecraft.network.chat.Component;
+import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

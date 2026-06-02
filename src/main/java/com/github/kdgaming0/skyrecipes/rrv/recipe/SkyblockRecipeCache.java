@@ -1,19 +1,13 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
+import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
+import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
-
-import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
-import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**

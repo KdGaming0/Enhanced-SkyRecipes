@@ -2,11 +2,7 @@ package com.github.kdgaming0.skyrecipes.core.registry;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Thread-safe registry of all parsed NEU items.

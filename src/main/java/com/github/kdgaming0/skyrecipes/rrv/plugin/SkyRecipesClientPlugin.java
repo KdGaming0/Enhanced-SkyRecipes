@@ -1,21 +1,20 @@
 package com.github.kdgaming0.skyrecipes.rrv.plugin;
 
-import com.github.kdgaming0.skyrecipes.SkyRecipes;
-import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
-import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
-import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator;
-import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
-import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
-import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
-import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
-import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
-import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
-
 import cc.cassian.rrv.api.ReliableRecipeViewerClientPlugin;
 import cc.cassian.rrv.api.recipe.ItemView;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.client.recipe.ClientRecipeCache;
 import cc.cassian.rrv.common.config.Configs;
+import com.github.kdgaming0.skyrecipes.SkyRecipes;
+import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
+import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator;
+import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
+import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
+import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
+import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
@@ -25,17 +24,12 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 /**

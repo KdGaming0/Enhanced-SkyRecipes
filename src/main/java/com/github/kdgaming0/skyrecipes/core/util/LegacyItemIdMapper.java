@@ -1,9 +1,5 @@
 package com.github.kdgaming0.skyrecipes.core.util;
 
-import net.minecraft.resources.Identifier;
-
-import java.util.Map;
-
 /**
  * Maps legacy Minecraft item IDs (pre-1.13 / pre-1.20) to modern IDs.
  *
