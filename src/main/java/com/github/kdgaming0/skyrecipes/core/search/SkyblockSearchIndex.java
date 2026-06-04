@@ -154,7 +154,7 @@ public final class SkyblockSearchIndex {
 
         BitSet candidates = resolveQuery(parsed, category, subtype);
         if (candidates.isEmpty()) {
-            return List.of();
+            return new ArrayList<>();
         }
 
         return rankToList(parsed, candidates);
@@ -338,13 +338,14 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolveKeyword(String token) {
-        // Alias match: "aote" -> exact match on indexed alias token
-        BitSet aliasMatch = anyTokenIndex.get(token);
-        if (aliasMatch != null && !aliasMatch.isEmpty()) {
-            return (BitSet) aliasMatch.clone();
+        // Single-character numeric tokens: exact match only to prevent "1" from
+        // matching "10", "11", "12", etc. via prefix expansion.
+        if (token.length() == 1 && Character.isDigit(token.charAt(0))) {
+            BitSet exact = anyTokenIndex.get(token);
+            return exact != null ? (BitSet) exact.clone() : new BitSet();
         }
 
-        // Prefix match
+        // Prefix match (also covers exact matches since sortedTokens contains all indexed tokens)
         BitSet prefix = resolvePrefixUnion(token);
         if (!prefix.isEmpty()) {
             return prefix;
@@ -359,10 +360,6 @@ public final class SkyblockSearchIndex {
         // Singular fallback
         String singular = toSingular(token);
         if (singular != null) {
-            aliasMatch = anyTokenIndex.get(singular);
-            if (aliasMatch != null && !aliasMatch.isEmpty()) {
-                return (BitSet) aliasMatch.clone();
-            }
             prefix = resolvePrefixUnion(singular);
             if (!prefix.isEmpty()) {
                 return prefix;
@@ -745,8 +742,8 @@ public final class SkyblockSearchIndex {
             addAnyToken(lower, itemIndex);
             if (itemTokens != null) {
                 itemTokens.add(lower);
-                for (String part : lower.split("_")) {
-                    if (part.length() > 1) {
+                for (String part : lower.split("[_;]")) {
+                    if (part.length() > 1 || (part.length() == 1 && Character.isDigit(part.charAt(0)))) {
                         itemTokens.add(part);
                         addAnyToken(part, itemIndex);
                     }

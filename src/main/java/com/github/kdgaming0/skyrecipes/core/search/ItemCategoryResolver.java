@@ -4,6 +4,8 @@ import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.regex.Pattern;
+
 /**
  * Single-responsibility resolver that determines the {@link SkyblockItemCategory}
  * for a {@link NeuItem}.
@@ -98,19 +100,65 @@ public final class ItemCategoryResolver {
         if (itemId == null) return SkyblockItemCategory.UNKNOWN;
         String id = itemId.toLowerCase();
 
+        // Enchanted books by item ID (reliable structural check)
+        if ("minecraft:enchanted_book".equals(itemId)) {
+            return SkyblockItemCategory.ENCHANTED_BOOK;
+        }
+
+        // Minions by internal name pattern (reliable structural check)
+        if (isMinion(item)) {
+            return SkyblockItemCategory.MINION;
+        }
+
+        // NPC items by internal name suffix
+        if (isNpc(item)) {
+            return SkyblockItemCategory.NPC;
+        }
+
         // Pet detection: must have pet indicators, not just ;N suffix
         if (isLikelyPet(item)) {
             return SkyblockItemCategory.PET;
         }
 
+        // Internal name patterns (reliable structural checks)
+        if (internalName != null) {
+            String in = internalName.toUpperCase();
+            if (in.endsWith("_SKIN") || in.contains("_DYE") || in.contains("_RUNE")) {
+                return SkyblockItemCategory.COSMETIC;
+            }
+            if (in.contains("_PHONE") || in.contains("ABIPHONE") || in.contains("ABICASE") || in.contains("_SACK")) {
+                return SkyblockItemCategory.MISC;
+            }
+            if (in.startsWith("ENCHANTED_") && !in.startsWith("ENCHANTED_BOOK")) {
+                return SkyblockItemCategory.MATERIAL;
+            }
+        }
+
+        // Item ID heuristics (least reliable — many functional items use skulls/heads)
         if (id.contains("sword") || id.contains("bow") || id.contains("wand")) return SkyblockItemCategory.WEAPON;
         if (id.contains("helmet") || id.contains("chestplate") || id.contains("leggings") || id.contains("boots")) return SkyblockItemCategory.ARMOR;
         if (id.contains("pickaxe") || id.contains("drill") || id.contains("hoe") || id.contains("axe") || id.contains("shovel")) return SkyblockItemCategory.TOOL;
         if (id.contains("rod")) return SkyblockItemCategory.FISHING;
         if (id.contains("potion")) return SkyblockItemCategory.CONSUMABLE;
         if (id.contains("book")) return SkyblockItemCategory.ENCHANTED_BOOK;
-        if (id.contains("skull") || id.contains("head")) return SkyblockItemCategory.COSMETIC;
         return SkyblockItemCategory.UNKNOWN;
+    }
+
+    private static final Pattern MINION_PATTERN = Pattern.compile(".*_GENERATOR_\\d+");
+
+    /**
+     * Minions are identified by their internal name pattern {@code *_GENERATOR_\d+},
+     * not by lore text (NEU minion lore often lacks a "MINION" type suffix).
+     */
+    private static boolean isNpc(NeuItem item) {
+        String internalName = item.internalName();
+        return internalName != null && internalName.endsWith("_NPC");
+    }
+
+    private static boolean isMinion(NeuItem item) {
+        String internalName = item.internalName();
+        if (internalName == null) return false;
+        return MINION_PATTERN.matcher(internalName).matches();
     }
 
     /**

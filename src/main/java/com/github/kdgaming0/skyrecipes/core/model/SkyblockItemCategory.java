@@ -11,25 +11,24 @@ import java.util.Set;
  * <p>Categories match the {@code %CATEGORY} search path syntax. Subtypes are
  * parsed from the lore type line after rarity and dungeon prefix stripping.</p>
  *
- * <p>There are 9 button categories (displayed as toggle buttons) and several
- * search-only categories that are indexed but have no button.</p>
+ * <p>Button categories render as toggle buttons in the RRV overlay. Search-only
+ * categories are indexed but have no button.</p>
  */
 public enum SkyblockItemCategory {
     // ── Button categories (9 total) ───────────────────────────────────────
     ARMOR,
     WEAPON,
+    TOOL,
     ACCESSORY,
     PET,
-    TOOL,
+    ENCHANTED_BOOK,
     MINION,
     EQUIPMENT,
     MATERIAL,
-    MISC,
 
     // ── Search-only categories (no button, but searchable via % prefix) ───
     FISHING,
     CONSUMABLE,
-    ENCHANTED_BOOK,
     REFORGE_STONE,
     COSMETIC,
     PORTAL,
@@ -37,12 +36,15 @@ public enum SkyblockItemCategory {
     RIFT_ITEM,
     BLOCK,
     PET_ITEM,
+    FARMING,
+    MISC,
+    NPC,
 
     UNKNOWN;
 
     /** Categories that render a toggle button in the RRV overlay. */
     public static final List<SkyblockItemCategory> BUTTON_CATEGORIES = List.of(
-        ARMOR, WEAPON, ACCESSORY, PET, TOOL, MINION, EQUIPMENT, MATERIAL, MISC
+        ARMOR, WEAPON, TOOL, ACCESSORY, PET, ENCHANTED_BOOK, MINION, EQUIPMENT, MATERIAL
     );
 
     private static final Set<String> RARITY_WORDS = Set.of(
@@ -59,11 +61,12 @@ public enum SkyblockItemCategory {
     public SkyblockItemCategory getButtonCategory() {
         return switch (this) {
             case ARMOR, WEAPON, ACCESSORY, PET, TOOL, MINION,
-                 EQUIPMENT, MATERIAL, MISC, UNKNOWN -> this;
+                 EQUIPMENT, MATERIAL, ENCHANTED_BOOK, UNKNOWN -> this;
             case FISHING -> TOOL;
-            case CONSUMABLE, COSMETIC, PORTAL, ENCHANTED_BOOK, RIFT_ITEM -> MISC;
-            case REFORGE_STONE, PET_ITEM -> EQUIPMENT;
-            case BLOCK, DUNGEON_ITEM -> MATERIAL;
+            case BLOCK -> MATERIAL;
+            case CONSUMABLE, COSMETIC, PORTAL, RIFT_ITEM, FARMING,
+                 PET_ITEM, REFORGE_STONE, MISC, NPC -> MISC;
+            case DUNGEON_ITEM -> DUNGEON_ITEM; // search-only, no button rollup
         };
     }
 
@@ -123,51 +126,93 @@ public enum SkyblockItemCategory {
         String t = type.toUpperCase().trim();
 
         return switch (t) {
-            case "SWORD", "LONGSWORD", "WAND", "DUNGEON SWORD", "DUNGEON LONGSWORD" -> WEAPON;
-            case "BOW", "DUNGEON BOW" -> WEAPON;
+            // ── Weapons ──────────────────────────────────────────────────────
+            case "SWORD", "BOW", "SHORTBOW", "LONGSWORD", "WAND", "FISHING WEAPON",
+                 "DUNGEON SWORD", "DUNGEON BOW", "DUNGEON SHORTBOW",
+                 "DUNGEON LONGSWORD", "DUNGEON WAND" -> WEAPON;
+
+            // ── Armor ─────────────────────────────────────────────────────────
             case "HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS",
                  "DUNGEON HELMET", "DUNGEON CHESTPLATE",
                  "DUNGEON LEGGINGS", "DUNGEON BOOTS" -> ARMOR;
-            case "ACCESSORY", "TALISMAN", "RING", "ARTIFACT", "RELIC", "POWER STONE",
-                 "DUNGEON ACCESSORY", "HATCESSORY", "CARNIVAL MASK" -> ACCESSORY;
-            case "BELT", "NECKLACE", "CLOAK", "GLOVES", "BRACELET",
-                 "DUNGEON NECKLACE", "DUNGEON BELT",
-                 "DUNGEON CLOAK", "DUNGEON GLOVES" -> ACCESSORY;
+
+            // ── Equipment (Powerstone equipment slots) ─────────────────────────
+            case "BELT", "NECKLACE", "CLOAK", "GLOVES", "BRACELET" -> EQUIPMENT;
+
+            // ── Accessories ───────────────────────────────────────────────────
+            case "ACCESSORY", "TALISMAN", "RING", "ARTIFACT", "RELIC",
+                 "HATCESSORY", "CARNIVAL MASK" -> ACCESSORY;
+
+            // ── Pets & pet items ──────────────────────────────────────────────
             case "PET" -> PET;
             case "PET ITEM" -> PET_ITEM;
+
+            // ── Tools ──────────────────────────────────────────────────────────
             case "PICKAXE", "DRILL", "AXE", "HOE", "SHOVEL", "SHEARS",
                  "FARMING TOOL", "WATERING CAN", "DEPLOYABLE",
                  "GARDEN CHIP", "VACUUM", "CHISEL" -> TOOL;
-            case "ROD", "FISHING ROD", "FISHING NET" -> FISHING;
-            case "BAIT", "TROPHY", "ROD PART" -> FISHING;
+
+            // ── Fishing ───────────────────────────────────────────────────────
+            case "ROD", "FISHING ROD", "FISHING NET", "ROD PART",
+                 "TROPHY FISH", "BAIT", "TROPHY" -> FISHING;
+
+            // ── Minions ───────────────────────────────────────────────────────
             case "MINION" -> MINION;
+
+            // ── Materials ─────────────────────────────────────────────────────
             case "GEMSTONE", "ORE", "DWARVEN METAL" -> MATERIAL;
+
+            // ── Blocks ────────────────────────────────────────────────────────
             case "BLOCK", "SALT" -> BLOCK;
-            case "DUNGEON ITEM", "TROPHY FISH", "MUTATION",
-                 "COMBAT SHARD", "WATER SHARD", "FOREST SHARD" -> DUNGEON_ITEM;
-            case "POTION", "FOOD", "ARROW", "ARROW POISON" -> CONSUMABLE;
+
+            // ── Dungeon items ─────────────────────────────────────────────────
+            case "DUNGEON ITEM" -> DUNGEON_ITEM;
+
+            // ── Consumables ───────────────────────────────────────────────────
+            case "POTION" -> CONSUMABLE;
+
+            // ── Enchanted books ───────────────────────────────────────────────
             case "ENCHANTED BOOK", "BOOK" -> ENCHANTED_BOOK;
+
+            // ── Reforge stones ────────────────────────────────────────────────
             case "REFORGE STONE" -> REFORGE_STONE;
-            case "DYE", "MEMENTO", "SKIN", "COSMETIC" -> COSMETIC;
+
+            // ── Cosmetics ──────────────────────────────────────────────────────
+            case "COSMETIC", "DYE", "MEMENTO", "SKIN" -> COSMETIC;
+
+            // ── Portals ───────────────────────────────────────────────────────
             case "PORTAL", "TRAVEL SCROLL" -> PORTAL;
+
+            // ── Rift items ─────────────────────────────────────────────────────
             case "RIFT TIMECHARM" -> RIFT_ITEM;
+
+            // ── Farming ────────────────────────────────────────────────────────
+            case "MUTATION" -> FARMING;
+
+            // ── Miscellaneous ──────────────────────────────────────────────────
+            case "POWER STONE", "COMBAT SHARD", "WATER SHARD", "FOREST SHARD",
+                 "FOOD", "ARROW", "SACK" -> MISC;
+
             default -> {
                 // Broad fallback: if it contains known type words
                 if (t.contains("SWORD") || t.contains("BOW") || t.contains("WAND") || t.contains("LONGSWORD")) yield WEAPON;
                 if (t.contains("HELMET") || t.contains("CHESTPLATE") || t.contains("LEGGINGS") || t.contains("BOOTS")) yield ARMOR;
-                if (t.contains("ACCESSORY") || t.contains("TALISMAN") || t.contains("RING") || t.contains("ARTIFACT") || t.contains("RELIC") || t.contains("POWER STONE")) yield ACCESSORY;
+                if (t.contains("BELT") || t.contains("NECKLACE") || t.contains("CLOAK") || t.contains("GLOVES") || t.contains("BRACELET")) yield EQUIPMENT;
+                if (t.contains("ACCESSORY") || t.contains("TALISMAN") || t.contains("RING") || t.contains("ARTIFACT") || t.contains("RELIC") || t.contains("HATCESSORY") || t.contains("CARNIVAL MASK")) yield ACCESSORY;
                 if (t.contains("PET") && !t.contains("PET ITEM")) yield PET;
                 if (t.contains("MINION")) yield MINION;
-                if (t.contains("PICKAXE") || t.contains("DRILL") || t.contains("HOE") || t.contains("AXE") || t.contains("SHOVEL") || t.contains("SHEARS") || t.contains("CHISEL")) yield TOOL;
+                if (t.contains("PICKAXE") || t.contains("DRILL") || t.contains("HOE") || t.contains("AXE") || t.contains("SHOVEL") || t.contains("SHEARS") || t.contains("CHISEL") || t.contains("FARMING TOOL") || t.contains("DEPLOYABLE") || t.contains("GARDEN CHIP") || t.contains("VACUUM")) yield TOOL;
                 if (t.contains("ROD") || t.contains("BAIT") || t.contains("TROPHY") || t.contains("FISHING")) yield FISHING;
-                if (t.contains("POTION") || t.contains("FOOD") || t.contains("ARROW")) yield CONSUMABLE;
+                if (t.contains("POTION")) yield CONSUMABLE;
                 if (t.contains("BOOK") && !t.contains("ROD")) yield ENCHANTED_BOOK;
                 if (t.contains("REFORGE STONE") || t.contains("REFORGE")) yield REFORGE_STONE;
                 if (t.contains("DYE") || t.contains("SKIN") || t.contains("COSMETIC") || t.contains("MEMENTO")) yield COSMETIC;
                 if (t.contains("PORTAL") || t.contains("TRAVEL SCROLL")) yield PORTAL;
                 if (t.contains("RIFT") && !t.contains("TIMECHARM")) yield RIFT_ITEM;
-                if (t.contains("DUNGEON") && !t.contains("ITEM")) yield DUNGEON_ITEM;
-                if (t.contains("GEMSTONE") || t.contains("ORE") || t.contains("BLOCK") || t.contains("METAL") || t.contains("SHARD") || t.contains("SALT")) yield MATERIAL;
+                if (t.contains("DUNGEON") && t.contains("ITEM")) yield DUNGEON_ITEM;
+                if (t.contains("GEMSTONE") || t.contains("ORE") || t.contains("BLOCK") || t.contains("METAL") || t.contains("SALT")) yield MATERIAL;
+                if (t.contains("MUTATION")) yield FARMING;
+                if (t.contains("POWER STONE") || t.contains("SHARD") || t.contains("SACK") || t.contains("FOOD") || t.contains("ARROW")) yield MISC;
                 yield UNKNOWN;
             }
         };
@@ -219,6 +264,8 @@ public enum SkyblockItemCategory {
             case RIFT_ITEM -> "minecraft:ender_eye";
             case BLOCK -> "minecraft:stone";
             case PET_ITEM -> "minecraft:wheat_seeds";
+            case FARMING -> "minecraft:wheat";
+            case NPC -> "minecraft:player_head";
             case UNKNOWN -> "minecraft:barrier";
         };
     }
@@ -245,7 +292,29 @@ public enum SkyblockItemCategory {
             case RIFT_ITEM -> "Rift Items";
             case BLOCK -> "Blocks";
             case PET_ITEM -> "Pet Items";
+            case FARMING -> "Farming";
+            case NPC -> "NPCs";
             case UNKNOWN -> "Unknown";
+        };
+    }
+
+    /**
+     * Returns the sprite base name for the category toggle button, or {@code null}
+     * if this category has no button texture.
+     */
+    @Nullable
+    public String getSpriteName() {
+        return switch (this) {
+            case ARMOR -> "armour";
+            case WEAPON -> "weaponry";
+            case TOOL -> "tools";
+            case ACCESSORY -> "accessories";
+            case PET -> "pets";
+            case ENCHANTED_BOOK -> "enchants";
+            case MINION -> "minions";
+            case EQUIPMENT -> "equipment";
+            case MATERIAL -> "materials";
+            default -> null;
         };
     }
 

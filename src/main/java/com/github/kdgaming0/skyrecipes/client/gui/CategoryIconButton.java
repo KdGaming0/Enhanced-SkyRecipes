@@ -1,46 +1,72 @@
 package com.github.kdgaming0.skyrecipes.client.gui;
 
-import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractButton;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.InputWithModifiers;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
-import org.jspecify.annotations.NonNull;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.ARGB;
 
 /**
- * A 16×16 icon button that renders a representative {@link ItemStack} for a
- * {@link SkyblockItemCategory}. A colored border indicates the active state.
+ * A square icon button that renders one of four category-filter sprites depending on its
+ * toggled and hovered state. No text is drawn; the icon communicates the category.
+ *
+ * <p>Sprite names follow the pattern (all under
+ * {@code skyrecipes:gui/sprites/item_list/}):
+ * <ul>
+ *   <li>{@code <base>.png} — normal</li>
+ *   <li>{@code <base>_highlighted.png} — hovered</li>
+ *   <li>{@code <base>_toggled.png} — active filter</li>
+ *   <li>{@code <base>_toggled_highlighted.png} — active filter + hovered</li>
+ * </ul>
  */
 public final class CategoryIconButton extends AbstractButton {
 
-    private static final int SIZE = 18;
-    private static final int BORDER_NORMAL = 0xFF444444;
-    private static final int BORDER_HOVER = 0xFFAAAAAA;
-    private static final int BORDER_ACTIVE = 0xFF44AA44;
-    private static final int BORDER_ACTIVE_HOVER = 0xFF66CC66;
-    private static final int BG_COLOR = 0xFF222222;
+    private static final String NAMESPACE = "skyrecipes";
+    private static final String SPRITE_BASE = "item_list/";
 
-    private final SkyblockItemCategory category;
-    private final ItemStack iconStack;
-    private final Runnable onToggle;
-
-    public CategoryIconButton(int x, int y,
-                              SkyblockItemCategory category,
-                              ItemStack iconStack,
-                              boolean active,
-                              Runnable onToggle) {
-        super(x, y, SIZE, SIZE, Component.empty());
-        this.category = category;
-        this.iconStack = iconStack;
-        this.onToggle = onToggle;
-        this.setTooltip(net.minecraft.client.gui.components.Tooltip.create(
-            Component.literal(category.getDisplayName())));
+    /** Called when the button is pressed; receives the owning button instance. */
+    public interface PressHandler {
+        void onPress(CategoryIconButton button);
     }
 
-    private boolean toggled = false;
+    private final Identifier spriteNormal;
+    private final Identifier spriteHighlighted;
+    private final Identifier spriteToggled;
+    private final Identifier spriteToggledHighlighted;
+
+    private final PressHandler pressHandler;
+    private boolean toggled;
+
+    /**
+     * @param x            left position in screen pixels
+     * @param y            top position in screen pixels
+     * @param size         width and height in pixels (buttons are square)
+     * @param spriteName   base sprite name without suffix, e.g. {@code "armour"}
+     * @param toggled      initial toggled (active filter) state
+     * @param pressHandler called when the button is pressed
+     */
+    public CategoryIconButton(
+            int x,
+            int y,
+            int size,
+            String spriteName,
+            boolean toggled,
+            PressHandler pressHandler) {
+        super(x, y, size, size, Component.empty());
+        this.toggled = toggled;
+        this.pressHandler = pressHandler;
+
+        spriteNormal             = sprite(spriteName);
+        spriteHighlighted        = sprite(spriteName + "_highlighted");
+        spriteToggled            = sprite(spriteName + "_toggled");
+        spriteToggledHighlighted = sprite(spriteName + "_toggled_highlighted");
+    }
+
+    // ── State ─────────────────────────────────────────────────────────────────────
 
     public void setToggled(boolean toggled) {
         this.toggled = toggled;
@@ -50,38 +76,37 @@ public final class CategoryIconButton extends AbstractButton {
         return toggled;
     }
 
-    public SkyblockItemCategory getCategory() {
-        return category;
+    public void setTooltipText(String text) {
+        setTooltip(Tooltip.create(Component.literal(text)));
+    }
+
+    // ── AbstractButton contract ───────────────────────────────────────────────────
+
+    @Override
+    public void onPress(InputWithModifiers input) {
+        pressHandler.onPress(this);
     }
 
     @Override
-    public void onPress(@NonNull InputWithModifiers input) {
-        onToggle.run();
+    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        Identifier sprite = resolveSprite(isHoveredOrFocused());
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, getX(), getY(), width, height,
+                ARGB.white(alpha));
     }
 
     @Override
-    protected void extractContents(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        boolean hovered = isHoveredOrFocused();
-        int borderColor = toggled
-            ? (hovered ? BORDER_ACTIVE_HOVER : BORDER_ACTIVE)
-            : (hovered ? BORDER_HOVER : BORDER_NORMAL);
-
-        // Background
-        graphics.fill(getX(), getY(), getX() + width, getY() + height, BG_COLOR);
-        // Border
-        graphics.fill(getX(), getY(), getX() + width, getY() + 1, borderColor);
-        graphics.fill(getX(), getY() + height - 1, getX() + width, getY() + height, borderColor);
-        graphics.fill(getX(), getY(), getX() + 1, getY() + height, borderColor);
-        graphics.fill(getX() + width - 1, getY(), getX() + width, getY() + height, borderColor);
-
-        // Item icon (16×16 inside 18×18 button)
-        if (!iconStack.isEmpty()) {
-            graphics.fakeItem(iconStack, getX() + 1, getY() + 1);
-        }
-    }
-
-    @Override
-    protected void updateWidgetNarration(@NonNull NarrationElementOutput output) {
+    protected void updateWidgetNarration(NarrationElementOutput output) {
         defaultButtonNarrationText(output);
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────────
+
+    private Identifier resolveSprite(boolean hovered) {
+        if (toggled) return hovered ? spriteToggledHighlighted : spriteToggled;
+        return hovered ? spriteHighlighted : spriteNormal;
+    }
+
+    private static Identifier sprite(String name) {
+        return Identifier.fromNamespaceAndPath(NAMESPACE, SPRITE_BASE + name);
     }
 }

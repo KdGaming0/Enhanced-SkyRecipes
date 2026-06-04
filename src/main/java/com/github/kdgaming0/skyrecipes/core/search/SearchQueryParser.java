@@ -126,7 +126,7 @@ public final class SearchQueryParser {
 
             // 5. Keyword
             for (String part : splitOnNonAlphanumeric(token)) {
-                if (part.length() > 1) {
+                if (part.length() > 1 || (part.length() == 1 && Character.isDigit(part.charAt(0)))) {
                     if (keywords == null) keywords = new ArrayList<>(4);
                     keywords.add(new SearchQuery.KeywordClause(part));
                 }
@@ -454,7 +454,7 @@ public final class SearchQueryParser {
                 }
             } else {
                 if (start >= 0) {
-                    if (j - start > 1) {
+                    if (j - start > 1 || (j - start == 1 && Character.isDigit(token.charAt(start)))) {
                         parts.add(token.substring(start, j));
                     }
                     start = -1;
@@ -462,7 +462,7 @@ public final class SearchQueryParser {
             }
         }
 
-        if (start >= 0 && len - start > 1) {
+        if (start >= 0 && (len - start > 1 || (len - start == 1 && Character.isDigit(token.charAt(start))))) {
             parts.add(token.substring(start, len));
         }
 
