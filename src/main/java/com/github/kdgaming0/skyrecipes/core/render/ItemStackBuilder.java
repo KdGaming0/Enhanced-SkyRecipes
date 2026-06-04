@@ -59,8 +59,11 @@ public final class ItemStackBuilder {
 
         ItemStack stack = new ItemStack(itemType, count);
 
-        // For vanilla items, skip custom NBT parsing
+        // For vanilla items, skip heavy SNBT parsing (SkullOwner, enchantments, etc.)
+        // but still apply NEU display name/lore so the item is distinguishable.
+        // NEU's vanilla flag means "uses a vanilla base item", not "has no custom data".
         if (item.vanilla()) {
+            applyVanillaDisplay(stack, item);
             return stack;
         }
 
@@ -152,29 +155,104 @@ public final class ItemStackBuilder {
         return BuiltInRegistries.ITEM.getOptional(id).orElse(null);
     }
 
+    /**
+     * Apply display name, lore, and minimal ExtraAttributes for items marked vanilla.
+     *
+     * <p>NEU marks collection items and other SkyBlock items as {@code vanilla:true}
+     * when they use a vanilla base item ID. They still carry NEU-specific display data
+     * and a SkyBlock ID in {@code ExtraAttributes}. This method applies those lightweight
+     * components without parsing heavy SNBT like {@code SkullOwner} or enchantments.</p>
+     */
+    private static void applyVanillaDisplay(ItemStack stack, NeuItem item) {
+        // Apply NEU display name (may be compile-time resolved, e.g. pet placeholders)
+        String rawName = item.displayName();
+        if (rawName != null && !rawName.isEmpty()) {
+            stack.set(DataComponents.CUSTOM_NAME, LegacyStringParser.parse(rawName));
+        }
+
+        // Apply NEU lore (may be compile-time resolved pet stats)
+        List<String> loreLines = item.lore();
+        if (loreLines != null && !loreLines.isEmpty()) {
+            List<Component> loreComponents = new ArrayList<>(loreLines.size());
+            for (String line : loreLines) {
+                if (!line.isEmpty()) {
+                    loreComponents.add(LegacyStringParser.parse(line));
+                }
+            }
+            if (!loreComponents.isEmpty()) {
+                stack.set(DataComponents.LORE, new ItemLore(loreComponents));
+            }
+        }
+
+        // Minimal ExtraAttributes parsing so SkyBlock ID is available for recipe lookups
+        String nbtString = item.nbtTag();
+        if (nbtString == null || nbtString.isEmpty()) {
+            return;
+        }
+        try {
+            String normalizedNbt = preprocessNeuSnbt(nbtString);
+            CompoundTag tag = TagParser.parseCompoundFully(normalizedNbt);
+            Optional<CompoundTag> extraOpt = tag.getCompound("ExtraAttributes");
+            if (extraOpt.isPresent()) {
+                CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
+                    existing.merge(extraOpt.get());
+                });
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Failed to parse minimal NBT for vanilla item {}: {}",
+                item.internalName(), e.getMessage());
+        }
+    }
+
     private static void applyComponents(ItemStack stack, CompoundTag tag, NeuItem item) {
         // display: {Name, Lore, color}
         CompoundTag display = tag.getCompoundOrEmpty("display");
         if (!display.isEmpty()) {
-            // Custom name
-            String rawName = display.getStringOr("Name", "");
+            // Custom name — prefer NeuItem.displayName() (which may have been resolved at
+            // compile time, e.g. pet placeholders), fall back to SNBT display.Name.
+            String rawName = item.displayName();
+            if (rawName == null || rawName.isEmpty()) {
+                rawName = display.getStringOr("Name", "");
+            }
             if (!rawName.isEmpty()) {
                 Component name = LegacyStringParser.parse(rawName);
                 stack.set(DataComponents.CUSTOM_NAME, name);
             }
 
-            // Lore
-            ListTag loreList = display.getListOrEmpty("Lore");
-            if (!loreList.isEmpty()) {
-                List<Component> loreComponents = new ArrayList<>();
-                for (int i = 0; i < loreList.size(); i++) {
-                    String rawLine = loreList.getStringOr(i, "");
+            // Lore — prefer NeuItem.lore() (compile-time resolved), fall back to SNBT.
+            List<String> loreLines = item.lore();
+            if (loreLines == null || loreLines.isEmpty()) {
+                ListTag loreList = display.getListOrEmpty("Lore");
+                if (!loreList.isEmpty()) {
+                    loreLines = new ArrayList<>(loreList.size());
+                    for (int i = 0; i < loreList.size(); i++) {
+                        String rawLine = loreList.getStringOr(i, "");
+                        if (!rawLine.isEmpty()) {
+                            loreLines.add(rawLine);
+                        }
+                    }
+                }
+            }
+            if (loreLines != null && !loreLines.isEmpty()) {
+                List<Component> loreComponents = new ArrayList<>(loreLines.size());
+                for (String rawLine : loreLines) {
                     if (!rawLine.isEmpty()) {
                         loreComponents.add(LegacyStringParser.parse(rawLine));
                     }
                 }
                 if (!loreComponents.isEmpty()) {
                     stack.set(DataComponents.LORE, new ItemLore(loreComponents));
+                }
+            }
+
+            // Safety net: warn if unresolved pet placeholders leaked through
+            if (loreLines != null) {
+                for (String line : loreLines) {
+                    if (line != null && line.contains("{") && line.matches(".*\\{[A-Z_]+\\}.*")) {
+                        LOGGER.warn("Unresolved placeholder in lore for {}: {}",
+                            item.internalName(), line);
+                        break;
+                    }
                 }
             }
 

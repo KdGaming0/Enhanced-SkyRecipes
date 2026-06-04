@@ -9,6 +9,8 @@
     "EditBoxAccessor",
     "ItemFiltersMixin",
     "ItemViewOverlayMixin",
+    "RecipeCategoryConfigMixin",
+    "RecipeCategoryConfigScreenMixin",
     "SearchBarMixin"
   ],
   "injectors": {

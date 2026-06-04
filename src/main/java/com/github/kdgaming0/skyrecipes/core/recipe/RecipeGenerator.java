@@ -56,6 +56,13 @@ public final class RecipeGenerator {
                 }
             }
 
+            // NPC info recipes
+            ReliableClientRecipe npcInfoRecipe = NpcInfoRecipeBuilder.build(item);
+            if (npcInfoRecipe != null) {
+                recipes.add(npcInfoRecipe);
+                indexRecipe(npcInfoRecipe, item, List.of(), indexBuilder);
+            }
+
             // Other recipe types
             if (item.recipes() != null) {
                 for (NeuRecipe recipeData : item.recipes()) {

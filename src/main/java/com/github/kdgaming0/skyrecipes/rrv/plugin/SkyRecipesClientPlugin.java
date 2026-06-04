@@ -6,7 +6,6 @@ import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.client.recipe.ClientRecipeCache;
 import cc.cassian.rrv.common.config.Configs;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
-import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator;
@@ -141,12 +140,26 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             LOGGER.warn("================================================================================");
         }
 
+        // Exclude vanilla Minecraft recipe categories from RRV.
+        // SkyBlock recipes use minecraft:crafting; all other vanilla categories are hidden.
+        ItemView.excludeRecipeTypes(
+            Identifier.fromNamespaceAndPath("minecraft", "furnace_smelting"),
+            Identifier.fromNamespaceAndPath("minecraft", "furnace_blasting"),
+            Identifier.fromNamespaceAndPath("minecraft", "furnace_smoking"),
+            Identifier.fromNamespaceAndPath("minecraft", "campfire_cooking"),
+            Identifier.fromNamespaceAndPath("minecraft", "brewing"),
+            Identifier.fromNamespaceAndPath("minecraft", "smithing"),
+            Identifier.fromNamespaceAndPath("minecraft", "stonecutting"),
+            Identifier.fromNamespaceAndPath("minecraft", "fuel"),
+            Identifier.fromNamespaceAndPath("minecraft", "anvil_combining")
+        );
+
         // Fallback provider — RRV calls this on every buildRecipeCache.
         ItemView.addClientRecipeProvider(recipeList -> {
             if (recipesReady) {
                 RecipeResult result = cachedResult;
                 if (result != null) {
-                    recipeList.addAll(filterRecipesByConfig(result.recipes()));
+                    recipeList.addAll(result.recipes());
                 }
             }
         });
@@ -299,7 +312,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (startupFinalized) return;
         if (cachedResult == null) return;
 
-        List<ReliableClientRecipe> recipes = filterRecipesByConfig(cachedResult.recipes());
+        List<ReliableClientRecipe> recipes = cachedResult.recipes();
         if (recipes.isEmpty()) {
             LOGGER.warn("Recipe generation produced zero recipes, skipping injection");
             return;
@@ -367,17 +380,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             LOGGER.error("Failed to generate recipes", e);
             return null;
         }
-    }
-
-    private List<ReliableClientRecipe> filterRecipesByConfig(List<ReliableClientRecipe> recipes) {
-        List<ReliableClientRecipe> filtered = new ArrayList<>();
-        for (ReliableClientRecipe recipe : recipes) {
-            String categoryId = recipe.getType().getId().getPath();
-            if (SkyRecipesConfig.isCategoryEnabled(categoryId)) {
-                filtered.add(recipe);
-            }
-        }
-        return filtered;
     }
 
     /** Build ItemStacks for all NeuItems. Safe to call from any thread once components are bound. */

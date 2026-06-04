@@ -26,7 +26,7 @@ public class BinaryDataLoader {
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
 
     private static final byte[] EXPECTED_MAGIC = new byte[] { 'S', 'K', 'Y', '2' };
-    public static final int EXPECTED_SCHEMA = 3;
+    public static final int EXPECTED_SCHEMA = 4;
 
     private ByteBuffer fileBuffer;
     private ItemRegistry itemRegistry;

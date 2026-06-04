@@ -35,7 +35,7 @@ public class BinaryDataCompiler {
         "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[] { 'S', 'K', 'Y', '2' };
-    private static final int SCHEMA_VERSION = 3;
+    private static final int SCHEMA_VERSION = 4;
 
     public static void main(String[] args) throws Exception {
         String outputDir = args.length > 0 ? args[0] : "build/generated/skyrecipes/data";
@@ -115,6 +115,7 @@ public class BinaryDataCompiler {
         Map<String, String> museumCategories = new LinkedHashMap<>();
         Map<String, ReforgeData> reforges = new LinkedHashMap<>();
         Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
+        this.petResolver = null;
 
         parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
 
@@ -272,6 +273,8 @@ public class BinaryDataCompiler {
 
     // ---- Parsing (unchanged from original) ----
 
+    private PetStatResolver petResolver;
+
     private void parseZip(Path zipFile, List<NeuItem> items, Map<String, List<String>> parents,
                           Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
                           Map<String, String> museumCategories,
@@ -311,6 +314,8 @@ public class BinaryDataCompiler {
                         parseReforges(bytes, reforges);
                     } else if (name.equals(prefix + "constants/reforgestones.json")) {
                         parseReforgeStones(bytes, reforgeStones);
+                    } else if (name.equals(prefix + "constants/petnums.json")) {
+                        this.petResolver = PetStatResolver.load(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject());
                     }
                 } catch (Exception e) {
                     LOGGER.warn("Failed to parse {}: {}", name, e.getMessage());
@@ -777,15 +782,22 @@ public class BinaryDataCompiler {
     private void packItems(MessagePacker packer, List<NeuItem> items) throws IOException {
         packer.packArrayHeader(items.size());
         for (NeuItem item : items) {
+            // Resolve pet placeholders at compile time
+            PetStatResolver.ResolvedStrings resolved = petResolver != null && petResolver.isLoaded()
+                ? petResolver.resolve(item)
+                : null;
+            String displayName = resolved != null ? resolved.displayName() : item.displayName();
+            List<String> lore = resolved != null ? resolved.lore() : item.lore();
+
             packer.packMapHeader(14);
             packer.packString("internalName"); packer.packString(item.internalName());
             packer.packString("itemId"); packer.packString(item.itemId());
-            packer.packString("displayName"); packer.packString(item.displayName());
+            packer.packString("displayName"); packer.packString(displayName);
             packer.packString("nbtTag"); packer.packString(item.nbtTag());
 
             packer.packString("lore");
-            packer.packArrayHeader(item.lore().size());
-            for (String line : item.lore()) {
+            packer.packArrayHeader(lore.size());
+            for (String line : lore) {
                 packer.packString(line);
             }
 

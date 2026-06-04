@@ -7,44 +7,13 @@ import eu.midnightdust.lib.config.MidnightConfig;
  *
  * <p>All fields must be {@code public static} (not {@code final}) so MidnightLib
  * can read and write them. Defaults are set via inline initialisers.</p>
+ *
+ * <p><b>Note on recipe categories:</b> Recipe category visibility is managed natively
+ * by RRV through its Recipe Category Config screen. SkyRecipes no longer maintains
+ * separate category toggles — all SkyBlock recipe categories are auto-discovered by
+ * RRV and can be enabled or disabled through RRV's settings.</p>
  */
 public class SkyRecipesConfig extends MidnightConfig {
-
-    // -----------------------------------------------------------------
-    // Category toggles
-    // -----------------------------------------------------------------
-    @Entry(category = "categories")
-    public static boolean categoryCraftingEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryForgeEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryDropsEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryNpcShopEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryNpcInfoEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryKatUpgradeEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryTradeEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryWikiInfoEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryEssenceEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryReforgeEnabled = true;
-
-    @Entry(category = "categories")
-    public static boolean categoryGardenEnabled = true;
 
     // -----------------------------------------------------------------
     // UI settings
@@ -87,27 +56,4 @@ public class SkyRecipesConfig extends MidnightConfig {
 
     @Entry(category = "debug")
     public static boolean debugLogging = false;
-
-    /**
-     * Returns true if the given recipe category is enabled in config.
-     *
-     * @param categoryId the RRV recipe type identifier path (e.g. "crafting", "forge")
-     * @return true if enabled
-     */
-    public static boolean isCategoryEnabled(String categoryId) {
-        return switch (categoryId) {
-            case "crafting" -> categoryCraftingEnabled;
-            case "forge" -> categoryForgeEnabled;
-            case "drops" -> categoryDropsEnabled;
-            case "npc_shop" -> categoryNpcShopEnabled;
-            case "npc_info" -> categoryNpcInfoEnabled;
-            case "kat_upgrade" -> categoryKatUpgradeEnabled;
-            case "trade" -> categoryTradeEnabled;
-            case "wiki_info" -> categoryWikiInfoEnabled;
-            case "essence" -> categoryEssenceEnabled;
-            case "reforge" -> categoryReforgeEnabled;
-            case "garden" -> categoryGardenEnabled;
-            default -> true;
-        };
-    }
 }
