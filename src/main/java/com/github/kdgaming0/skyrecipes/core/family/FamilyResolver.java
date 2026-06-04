@@ -31,7 +31,27 @@ public final class FamilyResolver {
         "SMOOTH_BRICK"
     );
 
-    private static final Set<String> ACCESSORY_SUFFIXES = Set.of("TALISMAN", "RING", "ARTIFACT", "RELIC");
+    private static final Set<String> ACCESSORY_SUFFIXES = Set.of("TALISMAN", "RING", "ARTIFACT", "RELIC", "HEIRLOOM", "CHRONOMICON");
+
+    private static final Map<String, Integer> ACCESSORY_TIER_MAP;
+    static {
+        Map<String, Integer> map = new LinkedHashMap<>();
+        map.put("TALISMAN", 1);
+        map.put("RING", 2);
+        map.put("ARTIFACT", 3);
+        map.put("RELIC", 4);
+        map.put("HEIRLOOM", 5);
+        map.put("CHRONOMICON", 6);
+        ACCESSORY_TIER_MAP = Collections.unmodifiableMap(map);
+    }
+
+    private static final Map<String, Integer> GEMSTONE_TIER_MAP = Map.of(
+        "ROUGH", 1,
+        "FLAWED", 2,
+        "FINE", 3,
+        "FLAWLESS", 4,
+        "PERFECT", 5
+    );
 
     private final Map<String, FamilyInfo> memberToFamily;
 
@@ -55,6 +75,9 @@ public final class FamilyResolver {
      * <p>If the item's family type does not expand for results, returns a singleton set
      * containing only the given name.</p>
      *
+     * <p>For expanding families, members are returned in tier-aware order (lower tiers
+     * first) so that recipe views display progression chains logically.</p>
+     *
      * @param internalName the SkyBlock internal name (e.g. {@code "WHEAT_GENERATOR_3"})
      * @return set of names to query; never null
      */
@@ -67,6 +90,153 @@ public final class FamilyResolver {
             return Set.of(internalName);
         }
         return info.members();
+    }
+
+    // -----------------------------------------------------------------
+    // Tier extraction utilities (shared across sorting contexts)
+    // -----------------------------------------------------------------
+
+    /**
+     * Extracts the numeric tier from an internal name.
+     *
+     * <p>Priority order:</p>
+     * <ol>
+     *   <li>Numeric suffix {@code _N} or {@code ;N} (minions, pets, enchantments, drills)</li>
+     *   <li>Accessory suffix ({@code TALISMAN=1}, {@code RING=2}, {@code ARTIFACT=3},
+     *       {@code RELIC=4}, {@code HEIRLOOM=5}, {@code CHRONOMICON=6})</li>
+     *   <li>Gemstone quality prefix ({@code ROUGH=1}, {@code FLAWED=2}, {@code FINE=3},
+     *       {@code FLAWLESS=4}, {@code PERFECT=5}) for {@code *_GEM} items</li>
+     * </ol>
+     *
+     * <p>Returns 0 when no tier is found.</p>
+     */
+    public static int extractTier(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return 0;
+        }
+
+        // Tiered: ;N suffix (pets, enchantments, etc.)
+        int semi = internalName.lastIndexOf(';');
+        if (semi != -1 && semi < internalName.length() - 1) {
+            String suffix = internalName.substring(semi + 1);
+            if (isAllDigits(suffix)) {
+                try {
+                    return Integer.parseInt(suffix);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        // Tiered: _N suffix (minions, drills, etc.)
+        int lastUnderscore = internalName.lastIndexOf('_');
+        if (lastUnderscore != -1 && lastUnderscore < internalName.length() - 1) {
+            String suffix = internalName.substring(lastUnderscore + 1);
+            if (isAllDigits(suffix)) {
+                try {
+                    return Integer.parseInt(suffix);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+
+        // Accessory chain suffixes
+        for (Map.Entry<String, Integer> entry : ACCESSORY_TIER_MAP.entrySet()) {
+            String suffix = "_" + entry.getKey();
+            if (internalName.endsWith(suffix)) {
+                return entry.getValue();
+            }
+        }
+
+        // Gemstone quality prefixes
+        if (internalName.endsWith("_GEM")) {
+            int firstUnderscore = internalName.indexOf('_');
+            if (firstUnderscore > 0) {
+                String prefix = internalName.substring(0, firstUnderscore);
+                Integer tier = GEMSTONE_TIER_MAP.get(prefix);
+                if (tier != null) {
+                    return tier;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Extracts the family base name from an internal name.
+     *
+     * <p>For tiered items this is the prefix before the numeric tier suffix
+     * (e.g. {@code WHEAT_GENERATOR_3} → {@code WHEAT_GENERATOR},
+     * {@code ARMADILLO;2} → {@code ARMADILLO}).</p>
+     *
+     * <p>For accessory chains the accessory suffix is stripped
+     * (e.g. {@code ZOMBIE_TALISMAN} → {@code ZOMBIE}).</p>
+     *
+     * <p>For armor sets the armor-piece suffix is stripped
+     * (e.g. {@code DIAMOND_CHESTPLATE} → {@code DIAMOND}).</p>
+     *
+     * <p>For gemstones the quality prefix is stripped
+     * (e.g. {@code FINE_RUBY_GEM} → {@code RUBY_GEM}).</p>
+     *
+     * <p>For all other items the full internal name is returned.</p>
+     */
+    public static String extractBaseName(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return "";
+        }
+
+        // Tiered: ;N suffix (pets, enchantments, etc.)
+        int semi = internalName.lastIndexOf(';');
+        if (semi != -1 && semi < internalName.length() - 1) {
+            String suffix = internalName.substring(semi + 1);
+            if (isAllDigits(suffix)) {
+                return internalName.substring(0, semi);
+            }
+        }
+
+        // Tiered: _N suffix (minions, drills, etc.)
+        int lastUnderscore = internalName.lastIndexOf('_');
+        if (lastUnderscore != -1 && lastUnderscore < internalName.length() - 1) {
+            String suffix = internalName.substring(lastUnderscore + 1);
+            if (isAllDigits(suffix)) {
+                return internalName.substring(0, lastUnderscore);
+            }
+        }
+
+        // Accessory chain suffixes
+        for (String accSuffix : ACCESSORY_SUFFIXES) {
+            String withUnderscore = "_" + accSuffix;
+            if (internalName.endsWith(withUnderscore)) {
+                return internalName.substring(0, internalName.length() - withUnderscore.length());
+            }
+        }
+
+        // Armor set suffixes
+        if (internalName.endsWith("_HELMET")) {
+            return internalName.substring(0, internalName.length() - 7);
+        }
+        if (internalName.endsWith("_CHESTPLATE")) {
+            return internalName.substring(0, internalName.length() - 11);
+        }
+        if (internalName.endsWith("_LEGGINGS")) {
+            return internalName.substring(0, internalName.length() - 9);
+        }
+        if (internalName.endsWith("_BOOTS")) {
+            return internalName.substring(0, internalName.length() - 6);
+        }
+
+        // Gemstone quality prefixes
+        if (internalName.endsWith("_GEM")) {
+            int firstUnderscore = internalName.indexOf('_');
+            if (firstUnderscore > 0) {
+                String prefix = internalName.substring(0, firstUnderscore);
+                if (GEMSTONE_TIER_MAP.containsKey(prefix)) {
+                    return internalName.substring(firstUnderscore + 1);
+                }
+            }
+        }
+
+        return internalName;
     }
 
     // -----------------------------------------------------------------
@@ -96,7 +266,10 @@ public final class FamilyResolver {
             if (members.size() < 2) continue;
 
             FamilyType type = classifyExplicitFamily(parent, members);
-            FamilyInfo info = new FamilyInfo(parent, type, Collections.unmodifiableSet(members));
+            List<String> sortedMembers = members.stream()
+                .sorted(FamilyMemberComparator.INSTANCE)
+                .toList();
+            FamilyInfo info = new FamilyInfo(parent, type, Collections.unmodifiableSet(new LinkedHashSet<>(sortedMembers)));
             for (String member : members) {
                 out.put(member, info);
             }
@@ -197,7 +370,10 @@ public final class FamilyResolver {
                                         String idSuffix, int minSize, Map<String, FamilyInfo> out) {
         for (Map.Entry<String, Set<String>> entry : groups.entrySet()) {
             if (entry.getValue().size() >= minSize) {
-                Set<String> members = Collections.unmodifiableSet(new LinkedHashSet<>(entry.getValue()));
+                List<String> sorted = entry.getValue().stream()
+                    .sorted(FamilyMemberComparator.INSTANCE)
+                    .toList();
+                Set<String> members = Collections.unmodifiableSet(new LinkedHashSet<>(sorted));
                 FamilyInfo info = new FamilyInfo(entry.getKey() + idSuffix, type, members);
                 for (String member : members) {
                     out.put(member, info);
@@ -226,7 +402,7 @@ public final class FamilyResolver {
         return false;
     }
 
-    private boolean isAllDigits(String s) {
+    private static boolean isAllDigits(String s) {
         for (int i = 0; i < s.length(); i++) {
             if (!Character.isDigit(s.charAt(i))) return false;
         }

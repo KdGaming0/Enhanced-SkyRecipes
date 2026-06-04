@@ -643,26 +643,9 @@ public final class SkyblockSearchIndex {
         int card = bits.cardinality();
         if (card == 0) return;
 
-        int[] indices = new int[card];
-        int idx = 0;
+        // Preserve original item order (which is family-sorted from buildAllStacks).
+        // BitSet iteration naturally yields indices in ascending order.
         for (int i = bits.nextSetBit(0); i >= 0; i = bits.nextSetBit(i + 1)) {
-            indices[idx++] = i;
-        }
-
-        Integer[] boxed = new Integer[card];
-        for (int i = 0; i < card; i++) boxed[i] = indices[i];
-
-        Arrays.sort(boxed, (a, b) -> {
-            int cmp = Boolean.compare(hasCraftingRecipe[b], hasCraftingRecipe[a]);
-            if (cmp != 0) return cmp;
-            cmp = Boolean.compare(isBazaar[b], isBazaar[a]);
-            if (cmp != 0) return cmp;
-            cmp = Integer.compare(displayNames[a].length(), displayNames[b].length());
-            if (cmp != 0) return cmp;
-            return displayNames[a].compareToIgnoreCase(displayNames[b]);
-        });
-
-        for (int i : boxed) {
             out.add(items.get(i));
         }
     }

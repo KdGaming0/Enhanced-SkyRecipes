@@ -385,7 +385,11 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         List<ItemStack> stacks = new ArrayList<>();
         if (registry == null) return stacks;
-        for (NeuItem item : registry.getAllItems()) {
+
+        List<NeuItem> items = new ArrayList<>(registry.getAllItems());
+        items.sort(Comparator.comparing(ItemSortKey::of));
+
+        for (NeuItem item : items) {
             try {
                 ItemStack stack = ItemStackBuilder.build(item);
                 if (!stack.isEmpty() && stack.getItem() != Items.BARRIER) {
@@ -396,6 +400,53 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             }
         }
         return stacks;
+    }
+
+    /**
+     * Pre-computed sort key for NeuItems. Groups family members together and
+     * orders tiered items numerically (e.g. Minion I before Minion XII).
+     */
+    private record ItemSortKey(String familyBase, int tier, String cleanDisplayName, String internalName)
+            implements Comparable<ItemSortKey> {
+
+        static ItemSortKey of(NeuItem item) {
+            String name = item.internalName() != null ? item.internalName() : "";
+            String display = item.displayName() != null ? item.displayName() : "";
+            return new ItemSortKey(
+                com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractBaseName(name),
+                com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractTier(name),
+                stripColorCodes(display),
+                name
+            );
+        }
+
+        @Override
+        public int compareTo(ItemSortKey other) {
+            int c = this.familyBase.compareTo(other.familyBase);
+            if (c != 0) return c;
+
+            c = Integer.compare(this.tier, other.tier);
+            if (c != 0) return c;
+
+            c = this.cleanDisplayName.compareTo(other.cleanDisplayName);
+            if (c != 0) return c;
+
+            return this.internalName.compareTo(other.internalName);
+        }
+
+        private static String stripColorCodes(String text) {
+            if (text == null || text.isEmpty()) return "";
+            StringBuilder sb = new StringBuilder(text.length());
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (c == '§' && i + 1 < text.length()) {
+                    i++;
+                } else {
+                    sb.append(c);
+                }
+            }
+            return sb.toString().trim();
+        }
     }
 
     /**
