@@ -1,0 +1,159 @@
+package com.github.kdgaming0.skyrecipes.core.search;
+
+import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
+import org.jetbrains.annotations.Nullable;
+
+/**
+ * Single-responsibility resolver that determines the {@link SkyblockItemCategory}
+ * for a {@link NeuItem}.
+ *
+ * <p>Resolution order:</p>
+ * <ol>
+ *   <li>Last lore line (standard NEU rarity/type format)</li>
+ *   <li>Item ID heuristics (minecraft material type)</li>
+ *   <li>Internal name heuristics (pet tier suffix, etc.)</li>
+ * </ol>
+ *
+ * <p>Also infers a subtype string (e.g. "sword", "helmet") for search indexing.</p>
+ */
+public final class ItemCategoryResolver {
+
+    private ItemCategoryResolver() {}
+
+    /**
+     * Resolve the category for the given item.
+     *
+     * <p>First tries {@link SkyblockItemCategory#fromLore(String)}. If that returns
+     * {@link SkyblockItemCategory#UNKNOWN}, falls back to ID-based and name-based
+     * heuristics.</p>
+     */
+    public static SkyblockItemCategory resolve(NeuItem item) {
+        String lastLore = (item.lore() != null && !item.lore().isEmpty()) ? item.lore().getLast() : null;
+        SkyblockItemCategory category = SkyblockItemCategory.fromLore(lastLore);
+        if (category != SkyblockItemCategory.UNKNOWN) {
+            return category;
+        }
+        return inferCategoryFromItemId(item);
+    }
+
+    /**
+     * Infer a subtype string from the item for the {@code type:} search filter.
+     *
+     * <p>Examples: {@code "sword"}, {@code "helmet"}, {@code "pickaxe"}, {@code "pet"}.</p>
+     */
+    @Nullable
+    public static String inferType(NeuItem item) {
+        String itemId = item.itemId() != null ? item.itemId().toLowerCase() : "";
+        String internalName = item.internalName() != null ? item.internalName().toLowerCase() : "";
+
+        if (itemId.contains("sword")) return "sword";
+        if (itemId.contains("bow")) return "bow";
+        if (itemId.contains("axe") && !itemId.contains("pickaxe")) return "axe";
+        if (itemId.contains("pickaxe") || itemId.contains("drill")) return "pickaxe";
+        if (itemId.contains("hoe")) return "hoe";
+        if (itemId.contains("shovel") || itemId.contains("spade")) return "shovel";
+        if (itemId.contains("rod") || internalName.contains("rod")) return "rod";
+        if (itemId.contains("helmet") || itemId.contains("head") || itemId.contains("hat")) return "helmet";
+        if (itemId.contains("chestplate") || itemId.contains("chest") || itemId.contains("jacket")) return "chestplate";
+        if (itemId.contains("leggings") || itemId.contains("pants")) return "leggings";
+        if (itemId.contains("boots") || itemId.contains("shoes")) return "boots";
+        if (internalName.contains("_pet")) return "pet";
+        if (internalName.contains("_accessory") || internalName.contains("_talisman")
+            || internalName.contains("_ring") || internalName.contains("_artifact")
+            || internalName.contains("_relic")) return "accessory";
+
+        if (item.lore() != null && !item.lore().isEmpty()) {
+            String last = stripColorCodes(item.lore().getLast()).toLowerCase();
+            if (last.endsWith(" sword")) return "sword";
+            if (last.endsWith(" bow")) return "bow";
+            if (last.endsWith(" axe")) return "axe";
+            if (last.endsWith(" helmet") || last.endsWith(" hat") || last.endsWith(" head")) return "helmet";
+            if (last.endsWith(" chestplate") || last.endsWith(" chest") || last.endsWith(" cloak")) return "chestplate";
+            if (last.endsWith(" leggings") || last.endsWith(" pants")) return "leggings";
+            if (last.endsWith(" boots") || last.endsWith(" shoes")) return "boots";
+            if (last.endsWith(" pickaxe") || last.endsWith(" drill")) return "pickaxe";
+            if (last.endsWith(" hoe")) return "hoe";
+            if (last.endsWith(" shovel") || last.endsWith(" spade")) return "shovel";
+            if (last.endsWith(" rod") || last.endsWith(" staff")) return "rod";
+            if (last.endsWith(" pet")) return "pet";
+            if (last.endsWith(" accessory") || last.endsWith(" talisman") || last.endsWith(" ring")
+                || last.endsWith(" artifact") || last.endsWith(" relic")) return "accessory";
+            if (last.endsWith(" minion")) return "minion";
+            if (last.endsWith(" book")) return "book";
+        }
+
+        return null;
+    }
+
+    // -----------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------
+
+    private static SkyblockItemCategory inferCategoryFromItemId(NeuItem item) {
+        String itemId = item.itemId();
+        String displayName = item.displayName();
+        String internalName = item.internalName();
+
+        if (itemId == null) return SkyblockItemCategory.UNKNOWN;
+        String id = itemId.toLowerCase();
+
+        // Pet detection: must have pet indicators, not just ;N suffix
+        if (isLikelyPet(item)) {
+            return SkyblockItemCategory.PET;
+        }
+
+        if (id.contains("sword") || id.contains("bow") || id.contains("wand")) return SkyblockItemCategory.WEAPON;
+        if (id.contains("helmet") || id.contains("chestplate") || id.contains("leggings") || id.contains("boots")) return SkyblockItemCategory.ARMOR;
+        if (id.contains("pickaxe") || id.contains("drill") || id.contains("hoe") || id.contains("axe") || id.contains("shovel")) return SkyblockItemCategory.TOOL;
+        if (id.contains("rod")) return SkyblockItemCategory.FISHING;
+        if (id.contains("potion")) return SkyblockItemCategory.CONSUMABLE;
+        if (id.contains("book")) return SkyblockItemCategory.ENCHANTED_BOOK;
+        if (id.contains("skull") || id.contains("head")) return SkyblockItemCategory.COSMETIC;
+        return SkyblockItemCategory.UNKNOWN;
+    }
+
+    /**
+     * Determines whether an item is likely a pet based on reliable indicators.
+     *
+     * <p>NEU uses {@code ;N} suffixes for pets, enchanted books, runes, and other
+     * tiered items. We must NOT classify all {@code ;N} items as pets.</p>
+     */
+    private static boolean isLikelyPet(NeuItem item) {
+        String displayName = item.displayName();
+        if (displayName != null && displayName.contains("[Lvl ")) {
+            return true;
+        }
+
+        // Check last lore line for PET type indicator
+        if (item.lore() != null && !item.lore().isEmpty()) {
+            String last = stripColorCodes(item.lore().getLast()).toUpperCase();
+            if (last.contains("PET") && !last.contains("PET ITEM")) {
+                return true;
+            }
+        }
+
+        String internalName = item.internalName();
+        if (internalName != null && internalName.matches(".*;[0-5]")) {
+            // Has tier suffix but no pet indicators — require the display name
+            // to contain the pet level pattern as a stronger signal
+            return displayName != null && displayName.contains("[Lvl ");
+        }
+
+        return false;
+    }
+
+    private static String stripColorCodes(String text) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' && i + 1 < text.length()) {
+                i++;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString().trim();
+    }
+}

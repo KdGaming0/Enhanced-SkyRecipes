@@ -1,7 +1,6 @@
 package com.github.kdgaming0.skyrecipes;
 
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
-import com.github.kdgaming0.skyrecipes.client.gui.CategoryFilterOverlay;
 import com.github.kdgaming0.skyrecipes.core.data.DataLoadResult;
 import com.github.kdgaming0.skyrecipes.core.data.RuntimeDataManager;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
@@ -80,9 +79,6 @@ public class SkyRecipes implements ClientModInitializer {
         }, "SkyRecipes-Shutdown"));
 
         LOGGER.info("SkyRecipes initialization complete.");
-
-        // Initialise category filter overlay (no-op if RRV not present)
-        new CategoryFilterOverlay();
     }
 
     public static boolean isDataReady() {

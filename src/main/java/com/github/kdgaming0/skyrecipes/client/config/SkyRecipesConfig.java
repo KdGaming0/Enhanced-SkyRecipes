@@ -67,6 +67,12 @@ public class SkyRecipesConfig extends MidnightConfig {
     @Entry(category = "ui")
     public static boolean familyExpansionEnabled = true;
 
+    @Entry(category = "ui")
+    public static boolean searchCategoryButtonsVisible = true;
+
+    @Entry(category = "ui", min = 1, max = 100)
+    public static int searchMaxResults = 50;
+
     // -----------------------------------------------------------------
     // Data & debug settings
     // -----------------------------------------------------------------

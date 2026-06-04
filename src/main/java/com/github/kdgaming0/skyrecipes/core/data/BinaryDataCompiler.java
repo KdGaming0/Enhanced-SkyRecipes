@@ -35,7 +35,7 @@ public class BinaryDataCompiler {
         "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[] { 'S', 'K', 'Y', '2' };
-    private static final int SCHEMA_VERSION = 2;
+    private static final int SCHEMA_VERSION = 3;
 
     public static void main(String[] args) throws Exception {
         String outputDir = args.length > 0 ? args[0] : "build/generated/skyrecipes/data";
@@ -118,11 +118,16 @@ public class BinaryDataCompiler {
 
         parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
 
+        // Generate stat whitelist from gear item lore
+        Set<String> knownStats = buildKnownStats(items);
+        // Build reverse map: reforge name → stone internal name
+        Map<String, String> reforgeNameToStone = buildReforgeNameToStone(reforgeStones);
+
         if (callback != null) callback.onProgress("Serializing", 50);
 
         LOGGER.info("Parsed {} items", items.size());
-        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones",
-            parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size());
+        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones, {} known stats, {} reforge name mappings",
+            parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size());
 
         // Write binary
         Files.createDirectories(outputPath.getParent());
@@ -149,7 +154,7 @@ public class BinaryDataCompiler {
             // Write constants section
             ByteArrayOutputStream constantsBaos = new ByteArrayOutputStream();
             try (MessagePacker packer = MessagePack.newDefaultPacker(constantsBaos)) {
-                packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
+                packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone);
             }
             byte[] constantsBytes = constantsBaos.toByteArray();
             bos.write(constantsBytes);
@@ -591,6 +596,106 @@ public class BinaryDataCompiler {
         }
     }
 
+    // -----------------------------------------------------------------
+    // Compile-time generated metadata
+    // -----------------------------------------------------------------
+
+    /**
+     * Scans all parsed items and builds a whitelist of stat names that appear
+     * in gear item lore (weapons, armor, tools, accessories, equipment, etc.).
+     */
+    private Set<String> buildKnownStats(List<NeuItem> items) {
+        Set<String> stats = new HashSet<>(256);
+        Set<String> gearTypes = Set.of(
+            "SWORD", "BOW", "WAND", "LONGSWORD", "DUNGEON SWORD", "DUNGEON LONGSWORD",
+            "DUNGEON BOW", "HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS",
+            "DUNGEON HELMET", "DUNGEON CHESTPLATE", "DUNGEON LEGGINGS", "DUNGEON BOOTS",
+            "ACCESSORY", "TALISMAN", "RING", "ARTIFACT", "RELIC", "POWER STONE",
+            "DUNGEON ACCESSORY", "HATCESSORY", "CARNIVAL MASK",
+            "BELT", "NECKLACE", "CLOAK", "GLOVES", "BRACELET",
+            "DUNGEON NECKLACE", "DUNGEON BELT", "DUNGEON CLOAK", "DUNGEON GLOVES",
+            "PICKAXE", "DRILL", "AXE", "HOE", "SHOVEL", "SHEARS",
+            "FARMING TOOL", "WATERING CAN", "DEPLOYABLE", "GARDEN CHIP", "VACUUM", "CHISEL",
+            "ROD", "FISHING ROD", "FISHING NET"
+        );
+
+        for (NeuItem item : items) {
+            if (item.lore() == null || item.lore().isEmpty()) continue;
+
+            // Only scan gear items to avoid false positives from non-gear
+            String last = stripColorCodes(item.lore().getLast()).toUpperCase().trim();
+            boolean isGear = false;
+            for (String gearType : gearTypes) {
+                if (last.contains(gearType)) {
+                    isGear = true;
+                    break;
+                }
+            }
+            if (!isGear) continue;
+
+            for (String line : item.lore()) {
+                String clean = stripColorCodes(line);
+                int colonIdx = clean.indexOf(':');
+                if (colonIdx <= 0) continue;
+                String statName = clean.substring(0, colonIdx).trim().toLowerCase();
+                statName = normalizeStatName(statName);
+                if (statName.isEmpty()) continue;
+
+                String valuePart = clean.substring(colonIdx + 1).trim();
+                // Require a numeric value with + or - sign to reduce false positives
+                if (!valuePart.matches(".*[+-]?\\d+.*")) continue;
+
+                stats.add(statName);
+            }
+        }
+        return stats;
+    }
+
+    private static String normalizeStatName(String raw) {
+        StringBuilder sb = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                sb.append(Character.toLowerCase(c));
+            } else if (c == ' ') {
+                sb.append('_');
+            }
+        }
+        String normalized = sb.toString();
+        if ("walk_speed".equals(normalized)) return "speed";
+        return normalized;
+    }
+
+    private static String stripColorCodes(String text) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' && i + 1 < text.length()) {
+                i++;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * Builds a reverse map from reforge name to the stone item's internal name.
+     */
+    private Map<String, String> buildReforgeNameToStone(Map<String, ReforgeStoneData> reforgeStones) {
+        Map<String, String> map = new LinkedHashMap<>();
+        for (Map.Entry<String, ReforgeStoneData> e : reforgeStones.entrySet()) {
+            ReforgeStoneData stone = e.getValue();
+            String reforgeName = stone.reforgeName();
+            String internalName = stone.internalName();
+            if (reforgeName != null && !reforgeName.isEmpty() && internalName != null && !internalName.isEmpty()) {
+                map.putIfAbsent(reforgeName, internalName);
+            }
+        }
+        return map;
+    }
+
     private Map<String, Map<String, Number>> parseStatsMap(JsonObject obj) {
         Map<String, Map<String, Number>> result = new LinkedHashMap<>();
         if (obj == null) return result;
@@ -811,8 +916,10 @@ public class BinaryDataCompiler {
                                Set<String> bazaarItems,
                                Map<String, String> museumCategories,
                                Map<String, ReforgeData> reforges,
-                               Map<String, ReforgeStoneData> reforgeStones) throws IOException {
-        packer.packMapHeader(6);
+                               Map<String, ReforgeStoneData> reforgeStones,
+                               Set<String> knownStats,
+                               Map<String, String> reforgeNameToStone) throws IOException {
+        packer.packMapHeader(8);
 
         packer.packString("parents");
         packer.packMapHeader(parents.size());
@@ -953,6 +1060,19 @@ public class BinaryDataCompiler {
                     }
                 }
             }
+        }
+
+        packer.packString("knownStats");
+        packer.packArrayHeader(knownStats.size());
+        for (String stat : knownStats) {
+            packer.packString(stat);
+        }
+
+        packer.packString("reforgeNameToStone");
+        packer.packMapHeader(reforgeNameToStone.size());
+        for (Map.Entry<String, String> e : reforgeNameToStone.entrySet()) {
+            packer.packString(e.getKey());
+            packer.packString(e.getValue());
         }
     }
 }

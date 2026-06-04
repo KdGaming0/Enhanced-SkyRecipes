@@ -14,8 +14,13 @@ import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
+import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
+import com.github.kdgaming0.skyrecipes.mixin.EditBoxAccessor;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -107,6 +112,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     /** Cached ItemStacks for stack-sensitive registration. Built lazily. Invalidated on data change. */
     private volatile List<ItemStack> cachedStacks = null;
 
+    /** Search index for SkyBlock item filtering. Built after stacks. Invalidated on data change. */
+    private static volatile SkyblockSearchIndex searchIndex = null;
+
     /** Tracks the background recipe-generation task so we never start two in parallel. */
     private volatile CompletableFuture<?> pendingRecipeGen = null;
 
@@ -166,6 +174,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             startWorkIfReady();
         });
 
+        // Right-arrow / Tab commits the autocomplete suggestion in the RRV search bar.
+        ClientTickEvents.END_CLIENT_TICK.register(this::handleSearchBarSuggestionCommit);
+
         LOGGER.info("SkyRecipes RRV client plugin initialized");
     }
 
@@ -173,6 +184,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private void invalidateCaches() {
         cachedResult = null;
         cachedStacks = null;
+        searchIndex = null;
         recipesReady = false;
         stacksReady = false;
         startupFinalized = false;
@@ -414,6 +426,31 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
         stacksReady = true;
         LOGGER.info("Registered {} stack-sensitives with RRV", stacks.size());
+
+        // Build search index now that stacks are registered
+        buildSearchIndex(stacks);
+    }
+
+    private void buildSearchIndex(List<ItemStack> stacks) {
+        ItemRegistry registry = SkyRecipes.getItemRegistry();
+        ConstantsRegistry constants = SkyRecipes.getConstantsRegistry();
+        if (registry == null || constants == null) {
+            LOGGER.warn("Cannot build search index: registries not available");
+            return;
+        }
+        try {
+            searchIndex = new SkyblockSearchIndex(stacks, registry, constants, ALIASES);
+        } catch (Exception e) {
+            LOGGER.error("Failed to build SkyblockSearchIndex", e);
+        }
+    }
+
+    /**
+     * Returns the current SkyBlock search index, or {@code null} if it has not been
+     * built yet (data not loaded or still processing).
+     */
+    public static SkyblockSearchIndex getSearchIndex() {
+        return searchIndex;
     }
 
     /** Alias map exposed for {@link com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete}. */
@@ -490,5 +527,36 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     /** Exposed to the mixin that skips redundant RRV cache rebuilds. */
     public static boolean areRecipesReady() {
         return recipesReady;
+    }
+
+    // ── Autocomplete suggestion commit (Right Arrow / Tab) ─────────────────────
+
+    private boolean wasRightArrowDown = false;
+    private boolean wasTabDown = false;
+
+    private void handleSearchBarSuggestionCommit(Minecraft client) {
+        if (client.screen == null) return;
+        if (!(client.screen.getFocused() instanceof SearchBar searchBar)) return;
+
+        boolean rightDown = InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RIGHT);
+        boolean tabDown = InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_TAB);
+
+        boolean rightPressed = rightDown && !wasRightArrowDown;
+        boolean tabPressed = tabDown && !wasTabDown;
+
+        if (rightPressed || tabPressed) {
+            String suggestion = ((EditBoxAccessor) searchBar).skyrecipes$getSuggestion();
+            if (suggestion != null && !suggestion.isEmpty()) {
+                String current = searchBar.getValue();
+                String fullText = current + suggestion;
+                searchBar.setValue(fullText);
+                searchBar.setCursorPosition(fullText.length());
+                searchBar.setHighlightPos(fullText.length());
+                searchBar.setSuggestion(null);
+            }
+        }
+
+        wasRightArrowDown = rightDown;
+        wasTabDown = tabDown;
     }
 }

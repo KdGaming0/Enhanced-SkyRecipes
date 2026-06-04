@@ -48,11 +48,17 @@ public final class SearchAutocomplete {
             }
         }
 
-        // Tier 3: aliases
+        // Tier 3: aliases resolved to display names
         for (Map.Entry<String, String> alias : aliases.entrySet()) {
-            String text = alias.getKey();
-            if (!text.isBlank() && seen.add(text.toLowerCase())) {
-                entries.add(new Entry(text, Tier.ALIAS, 0));
+            String aliasKey = alias.getKey();
+            String targetId = alias.getValue();
+            // Resolve alias to display name for better UX
+            String displayName = itemRegistry.getByInternalName(targetId)
+                .map(item -> stripColorCodes(item.displayName()))
+                .filter(name -> !name.isBlank())
+                .orElse(aliasKey);
+            if (seen.add(displayName.toLowerCase())) {
+                entries.add(new Entry(displayName, Tier.ALIAS, 0));
             }
         }
 

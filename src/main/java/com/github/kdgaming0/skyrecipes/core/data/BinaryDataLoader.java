@@ -26,7 +26,7 @@ public class BinaryDataLoader {
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
 
     private static final byte[] EXPECTED_MAGIC = new byte[] { 'S', 'K', 'Y', '2' };
-    public static final int EXPECTED_SCHEMA = 2;
+    public static final int EXPECTED_SCHEMA = 3;
 
     private ByteBuffer fileBuffer;
     private ItemRegistry itemRegistry;
@@ -470,6 +470,8 @@ public class BinaryDataLoader {
         Map<String, String> museumCategories = new LinkedHashMap<>();
         Map<String, ReforgeData> reforges = new LinkedHashMap<>();
         Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
+        Set<String> knownStats = new HashSet<>();
+        Map<String, String> reforgeNameToStone = new LinkedHashMap<>();
 
         for (int i = 0; i < mapSize; i++) {
             String key = unpacker.unpackString();
@@ -590,9 +592,21 @@ public class BinaryDataLoader {
                         ));
                     }
                 }
+                case "knownStats" -> {
+                    int ssize = unpacker.unpackArrayHeader();
+                    for (int j = 0; j < ssize; j++) {
+                        knownStats.add(unpacker.unpackString());
+                    }
+                }
+                case "reforgeNameToStone" -> {
+                    int rsize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < rsize; j++) {
+                        reforgeNameToStone.put(unpacker.unpackString(), unpacker.unpackString());
+                    }
+                }
                 default -> unpacker.skipValue();
             }
         }
-        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
+        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone);
     }
 }
