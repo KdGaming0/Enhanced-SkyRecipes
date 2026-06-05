@@ -22,18 +22,28 @@ public final class FamilyResolver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FamilyResolver.class);
 
-    /** Prefixes of families that have numeric-looking members but are actually collections. */
+    /**
+     * Prefixes of families that have numeric-looking members but are actually collections.
+     */
     private static final Set<String> DENYLIST_PREFIXES = Set.of(
-        "MASTER_SKULL_TIER", "DUNGEON_DISC_",
-        "BANNER", "CARPET", "INK_SACK", "STAINED_CLAY", "STAINED_GLASS",
-        "STAINED_GLASS_PANE", "WOOL", "WOOD", "WOOD_STEP", "STONE", "STEP",
-        "LOG", "SANDSTONE", "RED_SANDSTONE", "PRISMARINE", "QUARTZ_BLOCK",
-        "SMOOTH_BRICK"
+            "MASTER_SKULL_TIER", "DUNGEON_DISC_",
+            "BANNER", "CARPET", "INK_SACK", "STAINED_CLAY", "STAINED_GLASS",
+            "STAINED_GLASS_PANE", "WOOL", "WOOD", "WOOD_STEP", "STONE", "STEP",
+            "LOG", "SANDSTONE", "RED_SANDSTONE", "PRISMARINE", "QUARTZ_BLOCK",
+            "SMOOTH_BRICK"
     );
 
     private static final Set<String> ACCESSORY_SUFFIXES = Set.of("TALISMAN", "RING", "ARTIFACT", "RELIC", "HEIRLOOM", "CHRONOMICON");
 
     private static final Map<String, Integer> ACCESSORY_TIER_MAP;
+    private static final Map<String, Integer> GEMSTONE_TIER_MAP = Map.of(
+            "ROUGH", 1,
+            "FLAWED", 2,
+            "FINE", 3,
+            "FLAWLESS", 4,
+            "PERFECT", 5
+    );
+
     static {
         Map<String, Integer> map = new LinkedHashMap<>();
         map.put("TALISMAN", 1);
@@ -44,14 +54,6 @@ public final class FamilyResolver {
         map.put("CHRONOMICON", 6);
         ACCESSORY_TIER_MAP = Collections.unmodifiableMap(map);
     }
-
-    private static final Map<String, Integer> GEMSTONE_TIER_MAP = Map.of(
-        "ROUGH", 1,
-        "FLAWED", 2,
-        "FINE", 3,
-        "FLAWLESS", 4,
-        "PERFECT", 5
-    );
 
     private final Map<String, FamilyInfo> memberToFamily;
 
@@ -65,36 +67,8 @@ public final class FamilyResolver {
         }
         this.memberToFamily = Collections.unmodifiableMap(map);
         LOGGER.info("FamilyResolver built: {} items in {} families",
-            map.size(), (int) map.values().stream().map(FamilyInfo::familyId).distinct().count());
+                map.size(), (int) map.values().stream().map(FamilyInfo::familyId).distinct().count());
     }
-
-    /**
-     * Returns the set of internal names to search for recipes when the player presses
-     * <b>R</b> on the given item.
-     *
-     * <p>If the item's family type does not expand for results, returns a singleton set
-     * containing only the given name.</p>
-     *
-     * <p>For expanding families, members are returned in tier-aware order (lower tiers
-     * first) so that recipe views display progression chains logically.</p>
-     *
-     * @param internalName the SkyBlock internal name (e.g. {@code "WHEAT_GENERATOR_3"})
-     * @return set of names to query; never null
-     */
-    public Set<String> getFamilyMembers(String internalName) {
-        FamilyInfo info = memberToFamily.get(internalName);
-        if (info == null) {
-            return Set.of(internalName);
-        }
-        if (!info.type().expandsForResults()) {
-            return Set.of(internalName);
-        }
-        return info.members();
-    }
-
-    // -----------------------------------------------------------------
-    // Tier extraction utilities (shared across sorting contexts)
-    // -----------------------------------------------------------------
 
     /**
      * Extracts the numeric tier from an internal name.
@@ -161,6 +135,10 @@ public final class FamilyResolver {
 
         return 0;
     }
+
+    // -----------------------------------------------------------------
+    // Tier extraction utilities (shared across sorting contexts)
+    // -----------------------------------------------------------------
 
     /**
      * Extracts the family base name from an internal name.
@@ -239,9 +217,40 @@ public final class FamilyResolver {
         return internalName;
     }
 
+    private static boolean isAllDigits(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            if (!Character.isDigit(s.charAt(i))) return false;
+        }
+        return !s.isEmpty();
+    }
+
     // -----------------------------------------------------------------
     // Explicit families from parents.json
     // -----------------------------------------------------------------
+
+    /**
+     * Returns the set of internal names to search for recipes when the player presses
+     * <b>R</b> on the given item.
+     *
+     * <p>If the item's family type does not expand for results, returns a singleton set
+     * containing only the given name.</p>
+     *
+     * <p>For expanding families, members are returned in tier-aware order (lower tiers
+     * first) so that recipe views display progression chains logically.</p>
+     *
+     * @param internalName the SkyBlock internal name (e.g. {@code "WHEAT_GENERATOR_3"})
+     * @return set of names to query; never null
+     */
+    public Set<String> getFamilyMembers(String internalName) {
+        FamilyInfo info = memberToFamily.get(internalName);
+        if (info == null) {
+            return Set.of(internalName);
+        }
+        if (!info.type().expandsForResults()) {
+            return Set.of(internalName);
+        }
+        return info.members();
+    }
 
     private void buildExplicitFamilies(ConstantsRegistry constants, Map<String, FamilyInfo> out) {
         Map<String, List<String>> parentToChildren = constants.getAllParents();
@@ -267,8 +276,8 @@ public final class FamilyResolver {
 
             FamilyType type = classifyExplicitFamily(parent, members);
             List<String> sortedMembers = members.stream()
-                .sorted(FamilyMemberComparator.INSTANCE)
-                .toList();
+                    .sorted(FamilyMemberComparator.INSTANCE)
+                    .toList();
             FamilyInfo info = new FamilyInfo(parent, type, Collections.unmodifiableSet(new LinkedHashSet<>(sortedMembers)));
             for (String member : members) {
                 out.put(member, info);
@@ -284,6 +293,10 @@ public final class FamilyResolver {
             collectDescendants(child, parentToChildren, members);
         }
     }
+
+    // -----------------------------------------------------------------
+    // Implicit families from item name patterns
+    // -----------------------------------------------------------------
 
     private FamilyType classifyExplicitFamily(String root, Set<String> members) {
         // Denylist
@@ -315,10 +328,6 @@ public final class FamilyResolver {
 
         return FamilyType.COLLECTION;
     }
-
-    // -----------------------------------------------------------------
-    // Implicit families from item name patterns
-    // -----------------------------------------------------------------
 
     private void buildImplicitFamilies(ConstantsRegistry constants, ItemRegistry items, Map<String, FamilyInfo> out) {
         Set<String> alreadyRegistered = new HashSet<>(out.keySet());
@@ -366,13 +375,17 @@ public final class FamilyResolver {
         registerImplicitFamily(drillFamilies, FamilyType.TIERED, "_DRILL", 2, out);
     }
 
+    // -----------------------------------------------------------------
+    // Pattern detection helpers
+    // -----------------------------------------------------------------
+
     private void registerImplicitFamily(Map<String, Set<String>> groups, FamilyType type,
                                         String idSuffix, int minSize, Map<String, FamilyInfo> out) {
         for (Map.Entry<String, Set<String>> entry : groups.entrySet()) {
             if (entry.getValue().size() >= minSize) {
                 List<String> sorted = entry.getValue().stream()
-                    .sorted(FamilyMemberComparator.INSTANCE)
-                    .toList();
+                        .sorted(FamilyMemberComparator.INSTANCE)
+                        .toList();
                 Set<String> members = Collections.unmodifiableSet(new LinkedHashSet<>(sorted));
                 FamilyInfo info = new FamilyInfo(entry.getKey() + idSuffix, type, members);
                 for (String member : members) {
@@ -381,10 +394,6 @@ public final class FamilyResolver {
             }
         }
     }
-
-    // -----------------------------------------------------------------
-    // Pattern detection helpers
-    // -----------------------------------------------------------------
 
     private boolean hasNumericTier(String id) {
         // Match _N at end (e.g. GENERATOR_1, PERFECT_BOOTS_12)
@@ -400,13 +409,6 @@ public final class FamilyResolver {
             if (isAllDigits(suffix)) return true;
         }
         return false;
-    }
-
-    private static boolean isAllDigits(String s) {
-        for (int i = 0; i < s.length(); i++) {
-            if (!Character.isDigit(s.charAt(i))) return false;
-        }
-        return !s.isEmpty();
     }
 
     private String getArmorBase(String id) {

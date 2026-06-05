@@ -3,9 +3,13 @@ package com.github.kdgaming0.skyrecipes.core.recipe;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
+import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutation;
+import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutationRegistry;
 import com.github.kdgaming0.skyrecipes.core.recipe.parsers.*;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockGardenMutationClientRecipe;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +41,8 @@ public final class RecipeGenerator {
         List<ReliableClientRecipe> recipes = new ArrayList<>();
         RecipeIndex.Builder indexBuilder = new RecipeIndex.Builder();
 
+        GardenMutationRegistry.load();
+
         for (NeuItem item : itemRegistry.getAllItems()) {
             // Crafting recipe
             if (item.recipe() instanceof NeuRecipe.CraftingRecipe crafting) {
@@ -67,16 +73,13 @@ public final class RecipeGenerator {
             if (item.recipes() != null) {
                 for (NeuRecipe recipeData : item.recipes()) {
                     ReliableClientRecipe recipe = switch (recipeData) {
-                        case NeuRecipe.ForgeRecipe forge ->
-                            ForgeRecipeParser.parse(item, forge, itemRegistry);
-                        case NeuRecipe.KatGradeRecipe kat ->
-                            KatUpgradeRecipeParser.parse(item, kat, itemRegistry);
-                        case NeuRecipe.NpcShopRecipe shop ->
-                            NpcShopRecipeParser.parse(item, shop, itemRegistry);
-                        case NeuRecipe.DropsRecipe drops ->
-                            DropsRecipeParser.parse(item, drops, itemRegistry);
-                        case NeuRecipe.TradeRecipe trade ->
-                            TradeRecipeParser.parse(item, trade, itemRegistry);
+                        case NeuRecipe.CraftingRecipe crafting ->
+                                CraftingRecipeParser.parse(item, crafting, itemRegistry);
+                        case NeuRecipe.ForgeRecipe forge -> ForgeRecipeParser.parse(item, forge, itemRegistry);
+                        case NeuRecipe.KatGradeRecipe kat -> KatUpgradeRecipeParser.parse(item, kat, itemRegistry);
+                        case NeuRecipe.NpcShopRecipe shop -> NpcShopRecipeParser.parse(item, shop, itemRegistry);
+                        case NeuRecipe.DropsRecipe drops -> DropsRecipeParser.parse(item, drops, itemRegistry);
+                        case NeuRecipe.TradeRecipe trade -> TradeRecipeParser.parse(item, trade, itemRegistry);
                         default -> null;
                     };
 
@@ -124,11 +127,35 @@ public final class RecipeGenerator {
             } catch (Exception e) {
                 LOGGER.error("Failed to generate reforge recipes", e);
             }
+
+            // Garden mutation recipes (from built-in resource)
+            try {
+                for (GardenMutation mutation : GardenMutationRegistry.all()) {
+                    Identifier recipeId = IdentifierUtil.skyRecipeId("garden_mutation/", mutation.id());
+                    SkyblockGardenMutationClientRecipe recipe =
+                            new SkyblockGardenMutationClientRecipe(recipeId, mutation, itemRegistry);
+                    recipes.add(recipe);
+                    indexBuilder.addResult(mutation.id(), recipeId);
+                    // Index ingredients
+                    for (int row = 0; row < mutation.gridSize(); row++) {
+                        for (int col = 0; col < mutation.gridSize(); col++) {
+                            if (mutation.isIngredient(row, col)) {
+                                String ingId = mutation.ingredientIdAt(row, col);
+                                if (!ingId.isEmpty()) {
+                                    indexBuilder.addIngredient(ingId, recipeId);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to generate garden mutation recipes", e);
+            }
         }
 
         RecipeIndex index = indexBuilder.build();
         LOGGER.info("Generated {} recipes ({} result entries, {} ingredient entries)",
-            recipes.size(), index.resultCount(), index.ingredientCount());
+                recipes.size(), index.resultCount(), index.ingredientCount());
 
         return new RecipeResult(recipes, index);
     }
@@ -170,5 +197,6 @@ public final class RecipeGenerator {
     /**
      * Immutable result of recipe generation.
      */
-    public record RecipeResult(List<ReliableClientRecipe> recipes, RecipeIndex index) {}
+    public record RecipeResult(List<ReliableClientRecipe> recipes, RecipeIndex index) {
+    }
 }

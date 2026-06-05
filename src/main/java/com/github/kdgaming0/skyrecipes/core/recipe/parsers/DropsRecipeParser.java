@@ -21,7 +21,8 @@ public final class DropsRecipeParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DropsRecipeParser.class);
 
-    private DropsRecipeParser() {}
+    private DropsRecipeParser() {
+    }
 
     /**
      * Parse a drops recipe.
@@ -37,8 +38,8 @@ public final class DropsRecipeParser {
 
                 NeuItem dropItem = SlotRefParser.resolve(ref, itemRegistry);
                 ItemStack stack = dropItem != null
-                    ? ItemStackBuilder.build(dropItem)
-                    : ItemStack.EMPTY;
+                        ? ItemStackBuilder.build(dropItem)
+                        : ItemStack.EMPTY;
 
                 drops.add(new SkyblockDropsClientRecipe.DropEntry(stack, drop.id(), drop.chance()));
             }

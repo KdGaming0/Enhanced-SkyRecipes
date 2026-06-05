@@ -32,20 +32,52 @@ public class BinaryDataCompiler {
     private static final Logger LOGGER = LoggerFactory.getLogger("SkyRecipesCompiler");
 
     private static final String NEU_REPO_URL =
-        "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
+            "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
-    private static final byte[] MAGIC = new byte[] { 'S', 'K', 'Y', '2' };
+    private static final byte[] MAGIC = new byte[]{'S', 'K', 'Y', '2'};
     private static final int SCHEMA_VERSION = 4;
+    private PetStatResolver petResolver;
+
+    // ---- Legacy build-time entrypoint (kept for compatibility) ----
 
     public static void main(String[] args) throws Exception {
         String outputDir = args.length > 0 ? args[0] : "build/generated/skyrecipes/data";
         String cacheDir = System.getProperty("skyrecipes.cacheDir",
-            System.getProperty("user.home") + "/.gradle/skyrecipes-cache");
+                System.getProperty("user.home") + "/.gradle/skyrecipes-cache");
 
         new BinaryDataCompiler().compile(outputDir, cacheDir);
     }
 
-    // ---- Legacy build-time entrypoint (kept for compatibility) ----
+    // ---- Runtime-friendly API ----
+
+    private static String normalizeStatName(String raw) {
+        StringBuilder sb = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                sb.append(Character.toLowerCase(c));
+            } else if (c == ' ') {
+                sb.append('_');
+            }
+        }
+        String normalized = sb.toString();
+        if ("walk_speed".equals(normalized)) return "speed";
+        return normalized;
+    }
+
+    private static String stripColorCodes(String text) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' && i + 1 < text.length()) {
+                i++;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString().trim();
+    }
 
     public void compile(String outputDirPath, String cacheDirPath) throws Exception {
         Path cacheDir = Path.of(cacheDirPath);
@@ -71,25 +103,7 @@ public class BinaryDataCompiler {
         compileToPath(zipFile, outputPath, metaPath, actualEtag, null);
     }
 
-    // ---- Runtime-friendly API ----
-
-    /**
-     * Progress callback for long-running compiles.
-     */
-    public interface ProgressCallback {
-        void onProgress(String stage, int percent);
-    }
-
-    /**
-     * Result of a successful compile.
-     */
-    public record CompileResult(
-        Path outputPath,
-        Path metaPath,
-        int itemCount,
-        String etag,
-        long durationMs
-    ) {}
+    // ---- ETag helpers ----
 
     /**
      * Compile the NEU repository ZIP into a binary .mpk and metadata sidecar.
@@ -128,7 +142,7 @@ public class BinaryDataCompiler {
 
         LOGGER.info("Parsed {} items", items.size());
         LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones, {} known stats, {} reforge name mappings",
-            parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size());
+                parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size());
 
         // Write binary
         Files.createDirectories(outputPath.getParent());
@@ -179,12 +193,12 @@ public class BinaryDataCompiler {
 
         // Write metadata sidecar
         BinaryMetadata metadata = new BinaryMetadata(
-            SCHEMA_VERSION,
-            System.currentTimeMillis(),
-            items.size(),
-            etag,
-            Long.toHexString(commitHash),
-            NEU_REPO_URL
+                SCHEMA_VERSION,
+                System.currentTimeMillis(),
+                items.size(),
+                etag,
+                Long.toHexString(commitHash),
+                NEU_REPO_URL
         );
         metadata.write(metaPath);
 
@@ -196,8 +210,6 @@ public class BinaryDataCompiler {
         return new CompileResult(outputPath, metaPath, items.size(), etag, duration);
     }
 
-    // ---- ETag helpers ----
-
     private String readEtag(Path etagFile) {
         try {
             if (Files.exists(etagFile)) {
@@ -208,6 +220,8 @@ public class BinaryDataCompiler {
         }
         return null;
     }
+
+    // ---- Download ----
 
     private long hashEtag(String etag) {
         if (etag == null || etag.isEmpty()) return 0L;
@@ -224,7 +238,7 @@ public class BinaryDataCompiler {
         }
     }
 
-    // ---- Download ----
+    // ---- Parsing (unchanged from original) ----
 
     public boolean downloadNeuRepo(Path zipFile, Path etagFile, String existingEtag) {
         try {
@@ -270,10 +284,6 @@ public class BinaryDataCompiler {
             return false;
         }
     }
-
-    // ---- Parsing (unchanged from original) ----
-
-    private PetStatResolver petResolver;
 
     private void parseZip(Path zipFile, List<NeuItem> items, Map<String, List<String>> parents,
                           Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
@@ -345,7 +355,8 @@ public class BinaryDataCompiler {
                         // NEU repo stores output count inside recipe object for some items
                         try {
                             outputCount = e.getValue().getAsInt();
-                        } catch (NumberFormatException ignored) {}
+                        } catch (NumberFormatException ignored) {
+                        }
                         continue;
                     }
                     if (key.equals("overrideOutputId")) {
@@ -354,9 +365,9 @@ public class BinaryDataCompiler {
                     grid.put(key, e.getValue().getAsString());
                 }
                 crafting = new NeuRecipe.CraftingRecipe(
-                    grid,
-                    outputCount,
-                    JsonUtil.getString(obj, "overrideOutputId")
+                        grid,
+                        outputCount,
+                        JsonUtil.getString(obj, "overrideOutputId")
                 );
             }
 
@@ -376,21 +387,27 @@ public class BinaryDataCompiler {
                 }
             }
 
+            String island = JsonUtil.getString(obj, "island");
+            int x = JsonUtil.getInt(obj, "x", 0);
+            int y = JsonUtil.getInt(obj, "y", 0);
+            int z = JsonUtil.getInt(obj, "z", 0);
+
             return new NeuItem(
-                internalName,
-                JsonUtil.getString(obj, "itemid"),
-                JsonUtil.getString(obj, "displayname"),
-                JsonUtil.getString(obj, "nbttag"),
-                JsonUtil.getStringList(obj, "lore"),
-                JsonUtil.getInt(obj, "damage", 0),
-                JsonUtil.getString(obj, "clickcommand"),
-                JsonUtil.getString(obj, "crafttext"),
-                JsonUtil.getString(obj, "infoType"),
-                JsonUtil.getStringList(obj, "info"),
-                crafting,
-                otherRecipes,
-                obj.has("slayer_req") ? JsonUtil.getString(obj, "slayer_req") : null,
-                JsonUtil.getBoolean(obj, "vanilla", false)
+                    internalName,
+                    JsonUtil.getString(obj, "itemid"),
+                    JsonUtil.getString(obj, "displayname"),
+                    JsonUtil.getString(obj, "nbttag"),
+                    JsonUtil.getStringList(obj, "lore"),
+                    JsonUtil.getInt(obj, "damage", 0),
+                    JsonUtil.getString(obj, "clickcommand"),
+                    JsonUtil.getString(obj, "crafttext"),
+                    JsonUtil.getString(obj, "infoType"),
+                    JsonUtil.getStringList(obj, "info"),
+                    crafting,
+                    otherRecipes,
+                    obj.has("slayer_req") ? JsonUtil.getString(obj, "slayer_req") : null,
+                    JsonUtil.getBoolean(obj, "vanilla", false),
+                    island, x, y, z
             );
 
         } catch (Exception e) {
@@ -403,17 +420,17 @@ public class BinaryDataCompiler {
         String type = JsonUtil.getString(obj, "type");
         return switch (type) {
             case "forge" -> new NeuRecipe.ForgeRecipe(
-                JsonUtil.getStringList(obj, "inputs"),
-                JsonUtil.getInt(obj, "count", 1),
-                JsonUtil.getString(obj, "overrideOutputId"),
-                JsonUtil.getInt(obj, "duration", 0)
+                    JsonUtil.getStringList(obj, "inputs"),
+                    JsonUtil.getInt(obj, "count", 1),
+                    JsonUtil.getString(obj, "overrideOutputId"),
+                    JsonUtil.getInt(obj, "duration", 0)
             );
             case "katgrade" -> new NeuRecipe.KatGradeRecipe(
-                JsonUtil.getInt(obj, "coins", 0),
-                JsonUtil.getInt(obj, "time", 0),
-                JsonUtil.getString(obj, "input"),
-                JsonUtil.getString(obj, "output"),
-                JsonUtil.getStringList(obj, "items")
+                    JsonUtil.getInt(obj, "coins", 0),
+                    JsonUtil.getInt(obj, "time", 0),
+                    JsonUtil.getString(obj, "input"),
+                    JsonUtil.getString(obj, "output"),
+                    JsonUtil.getStringList(obj, "items")
             );
             case "npc_shop" -> {
                 List<NeuRecipe.NpcShopRecipe.Cost> costs = new ArrayList<>();
@@ -423,8 +440,8 @@ public class BinaryDataCompiler {
                         if (ce.isJsonObject()) {
                             JsonObject co = ce.getAsJsonObject();
                             costs.add(new NeuRecipe.NpcShopRecipe.Cost(
-                                JsonUtil.getString(co, "item"),
-                                JsonUtil.getInt(co, "cost", 0)
+                                    JsonUtil.getString(co, "item"),
+                                    JsonUtil.getInt(co, "cost", 0)
                             ));
                         } else if (ce.isJsonPrimitive() && ce.getAsJsonPrimitive().isString()) {
                             String costStr = ce.getAsString();
@@ -446,9 +463,9 @@ public class BinaryDataCompiler {
                     }
                 }
                 yield new NeuRecipe.NpcShopRecipe(
-                    JsonUtil.getString(obj, "npc"),
-                    costs,
-                    JsonUtil.getString(obj, "result")
+                        JsonUtil.getString(obj, "npc"),
+                        costs,
+                        JsonUtil.getString(obj, "result")
                 );
             }
             case "drops" -> {
@@ -459,8 +476,8 @@ public class BinaryDataCompiler {
                         if (de.isJsonObject()) {
                             JsonObject d = de.getAsJsonObject();
                             drops.add(new NeuRecipe.DropsRecipe.Drop(
-                                JsonUtil.getString(d, "id"),
-                                JsonUtil.getString(d, "chance")
+                                    JsonUtil.getString(d, "id"),
+                                    JsonUtil.getString(d, "chance")
                             ));
                         }
                     }
@@ -468,10 +485,20 @@ public class BinaryDataCompiler {
                 yield new NeuRecipe.DropsRecipe(drops);
             }
             case "trade" -> new NeuRecipe.TradeRecipe(
-                JsonUtil.getStringList(obj, "inputs"),
-                JsonUtil.getString(obj, "output"),
-                JsonUtil.getInt(obj, "count", 1)
+                    JsonUtil.getStringList(obj, "inputs"),
+                    JsonUtil.getString(obj, "output"),
+                    JsonUtil.getInt(obj, "count", 1)
             );
+            case "crafting" -> {
+                Map<String, String> grid = new LinkedHashMap<>();
+                int outputCount = JsonUtil.getInt(obj, "count", 1);
+                for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
+                    String key = e.getKey();
+                    if (key.equals("type") || key.equals("count") || key.equals("overrideOutputId")) continue;
+                    grid.put(key, e.getValue().getAsString());
+                }
+                yield new NeuRecipe.CraftingRecipe(grid, outputCount, JsonUtil.getString(obj, "overrideOutputId"));
+            }
             default -> null;
         };
     }
@@ -518,7 +545,8 @@ public class BinaryDataCompiler {
                             }
                         }
                         items.put(tier, reqs);
-                    } catch (NumberFormatException ignored) {}
+                    } catch (NumberFormatException ignored) {
+                    }
                 }
             }
 
@@ -596,7 +624,7 @@ public class BinaryDataCompiler {
             Map<String, Map<String, Number>> stats = parseStatsMap(JsonUtil.getObject(r, "reforgeStats"));
 
             reforgeStones.put(e.getKey(), new ReforgeStoneData(
-                internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats
+                    internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats
             ));
         }
     }
@@ -612,16 +640,16 @@ public class BinaryDataCompiler {
     private Set<String> buildKnownStats(List<NeuItem> items) {
         Set<String> stats = new HashSet<>(256);
         Set<String> gearTypes = Set.of(
-            "SWORD", "BOW", "WAND", "LONGSWORD", "DUNGEON SWORD", "DUNGEON LONGSWORD",
-            "DUNGEON BOW", "HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS",
-            "DUNGEON HELMET", "DUNGEON CHESTPLATE", "DUNGEON LEGGINGS", "DUNGEON BOOTS",
-            "ACCESSORY", "TALISMAN", "RING", "ARTIFACT", "RELIC", "POWER STONE",
-            "DUNGEON ACCESSORY", "HATCESSORY", "CARNIVAL MASK",
-            "BELT", "NECKLACE", "CLOAK", "GLOVES", "BRACELET",
-            "DUNGEON NECKLACE", "DUNGEON BELT", "DUNGEON CLOAK", "DUNGEON GLOVES",
-            "PICKAXE", "DRILL", "AXE", "HOE", "SHOVEL", "SHEARS",
-            "FARMING TOOL", "WATERING CAN", "DEPLOYABLE", "GARDEN CHIP", "VACUUM", "CHISEL",
-            "ROD", "FISHING ROD", "FISHING NET"
+                "SWORD", "BOW", "WAND", "LONGSWORD", "DUNGEON SWORD", "DUNGEON LONGSWORD",
+                "DUNGEON BOW", "HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS",
+                "DUNGEON HELMET", "DUNGEON CHESTPLATE", "DUNGEON LEGGINGS", "DUNGEON BOOTS",
+                "ACCESSORY", "TALISMAN", "RING", "ARTIFACT", "RELIC", "POWER STONE",
+                "DUNGEON ACCESSORY", "HATCESSORY", "CARNIVAL MASK",
+                "BELT", "NECKLACE", "CLOAK", "GLOVES", "BRACELET",
+                "DUNGEON NECKLACE", "DUNGEON BELT", "DUNGEON CLOAK", "DUNGEON GLOVES",
+                "PICKAXE", "DRILL", "AXE", "HOE", "SHOVEL", "SHEARS",
+                "FARMING TOOL", "WATERING CAN", "DEPLOYABLE", "GARDEN CHIP", "VACUUM", "CHISEL",
+                "ROD", "FISHING ROD", "FISHING NET"
         );
 
         for (NeuItem item : items) {
@@ -654,35 +682,6 @@ public class BinaryDataCompiler {
             }
         }
         return stats;
-    }
-
-    private static String normalizeStatName(String raw) {
-        StringBuilder sb = new StringBuilder(raw.length());
-        for (int i = 0; i < raw.length(); i++) {
-            char c = raw.charAt(i);
-            if (Character.isLetterOrDigit(c)) {
-                sb.append(Character.toLowerCase(c));
-            } else if (c == ' ') {
-                sb.append('_');
-            }
-        }
-        String normalized = sb.toString();
-        if ("walk_speed".equals(normalized)) return "speed";
-        return normalized;
-    }
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
     }
 
     /**
@@ -777,23 +776,25 @@ public class BinaryDataCompiler {
         return result;
     }
 
-    // ---- MessagePack serialization (unchanged) ----
-
     private void packItems(MessagePacker packer, List<NeuItem> items) throws IOException {
         packer.packArrayHeader(items.size());
         for (NeuItem item : items) {
             // Resolve pet placeholders at compile time
             PetStatResolver.ResolvedStrings resolved = petResolver != null && petResolver.isLoaded()
-                ? petResolver.resolve(item)
-                : null;
+                    ? petResolver.resolve(item)
+                    : null;
             String displayName = resolved != null ? resolved.displayName() : item.displayName();
             List<String> lore = resolved != null ? resolved.lore() : item.lore();
 
-            packer.packMapHeader(14);
-            packer.packString("internalName"); packer.packString(item.internalName());
-            packer.packString("itemId"); packer.packString(item.itemId());
-            packer.packString("displayName"); packer.packString(displayName);
-            packer.packString("nbtTag"); packer.packString(item.nbtTag());
+            packer.packMapHeader(18);
+            packer.packString("internalName");
+            packer.packString(item.internalName());
+            packer.packString("itemId");
+            packer.packString(item.itemId());
+            packer.packString("displayName");
+            packer.packString(displayName);
+            packer.packString("nbtTag");
+            packer.packString(item.nbtTag());
 
             packer.packString("lore");
             packer.packArrayHeader(lore.size());
@@ -801,10 +802,14 @@ public class BinaryDataCompiler {
                 packer.packString(line);
             }
 
-            packer.packString("damage"); packer.packInt(item.damage());
-            packer.packString("clickCommand"); packer.packString(item.clickCommand());
-            packer.packString("craftText"); packer.packString(item.craftText());
-            packer.packString("infoType"); packer.packString(item.infoType());
+            packer.packString("damage");
+            packer.packInt(item.damage());
+            packer.packString("clickCommand");
+            packer.packString(item.clickCommand());
+            packer.packString("craftText");
+            packer.packString(item.craftText());
+            packer.packString("infoType");
+            packer.packString(item.infoType());
 
             packer.packString("info");
             packer.packArrayHeader(item.info().size());
@@ -815,9 +820,12 @@ public class BinaryDataCompiler {
             packer.packString("recipe");
             if (item.recipe() instanceof NeuRecipe.CraftingRecipe c) {
                 packer.packMapHeader(3 + c.grid().size());
-                packer.packString("_type"); packer.packString("crafting");
-                packer.packString("count"); packer.packInt(c.count());
-                packer.packString("overrideOutputId"); packer.packString(c.overrideOutputId());
+                packer.packString("_type");
+                packer.packString("crafting");
+                packer.packString("count");
+                packer.packInt(c.count());
+                packer.packString("overrideOutputId");
+                packer.packString(c.overrideOutputId());
                 for (Map.Entry<String, String> slot : c.grid().entrySet()) {
                     packer.packString(slot.getKey());
                     packer.packString(slot.getValue());
@@ -843,7 +851,16 @@ public class BinaryDataCompiler {
                 packer.packNil();
             }
 
-            packer.packString("vanilla"); packer.packBoolean(item.vanilla());
+            packer.packString("vanilla");
+            packer.packBoolean(item.vanilla());
+            packer.packString("island");
+            packer.packString(item.island());
+            packer.packString("x");
+            packer.packInt(item.x());
+            packer.packString("y");
+            packer.packInt(item.y());
+            packer.packString("z");
+            packer.packInt(item.z());
         }
     }
 
@@ -851,9 +868,12 @@ public class BinaryDataCompiler {
         switch (recipe) {
             case NeuRecipe.CraftingRecipe c -> {
                 packer.packMapHeader(3 + c.grid().size());
-                packer.packString("_type"); packer.packString("crafting");
-                packer.packString("count"); packer.packInt(c.count());
-                packer.packString("overrideOutputId"); packer.packString(c.overrideOutputId());
+                packer.packString("_type");
+                packer.packString("crafting");
+                packer.packString("count");
+                packer.packInt(c.count());
+                packer.packString("overrideOutputId");
+                packer.packString(c.overrideOutputId());
                 for (Map.Entry<String, String> slot : c.grid().entrySet()) {
                     packer.packString(slot.getKey());
                     packer.packString(slot.getValue());
@@ -861,10 +881,14 @@ public class BinaryDataCompiler {
             }
             case NeuRecipe.ForgeRecipe f -> {
                 packer.packMapHeader(5);
-                packer.packString("_type"); packer.packString("forge");
-                packer.packString("count"); packer.packInt(f.count());
-                packer.packString("overrideOutputId"); packer.packString(f.overrideOutputId());
-                packer.packString("duration"); packer.packInt(f.duration());
+                packer.packString("_type");
+                packer.packString("forge");
+                packer.packString("count");
+                packer.packInt(f.count());
+                packer.packString("overrideOutputId");
+                packer.packString(f.overrideOutputId());
+                packer.packString("duration");
+                packer.packInt(f.duration());
                 packer.packString("inputs");
                 packer.packArrayHeader(f.inputs().size());
                 for (String input : f.inputs()) {
@@ -873,11 +897,16 @@ public class BinaryDataCompiler {
             }
             case NeuRecipe.KatGradeRecipe k -> {
                 packer.packMapHeader(6);
-                packer.packString("_type"); packer.packString("katgrade");
-                packer.packString("coins"); packer.packInt(k.coins());
-                packer.packString("time"); packer.packInt(k.time());
-                packer.packString("input"); packer.packString(k.input());
-                packer.packString("output"); packer.packString(k.output());
+                packer.packString("_type");
+                packer.packString("katgrade");
+                packer.packString("coins");
+                packer.packInt(k.coins());
+                packer.packString("time");
+                packer.packInt(k.time());
+                packer.packString("input");
+                packer.packString(k.input());
+                packer.packString("output");
+                packer.packString(k.output());
                 packer.packString("items");
                 packer.packArrayHeader(k.items().size());
                 for (String item : k.items()) {
@@ -886,33 +915,44 @@ public class BinaryDataCompiler {
             }
             case NeuRecipe.NpcShopRecipe n -> {
                 packer.packMapHeader(4);
-                packer.packString("_type"); packer.packString("npc_shop");
-                packer.packString("npc"); packer.packString(n.npc());
-                packer.packString("result"); packer.packString(n.result());
+                packer.packString("_type");
+                packer.packString("npc_shop");
+                packer.packString("npc");
+                packer.packString(n.npc());
+                packer.packString("result");
+                packer.packString(n.result());
                 packer.packString("cost");
                 packer.packArrayHeader(n.costs().size());
                 for (NeuRecipe.NpcShopRecipe.Cost cost : n.costs()) {
                     packer.packMapHeader(2);
-                    packer.packString("item"); packer.packString(cost.item());
-                    packer.packString("cost"); packer.packInt(cost.cost());
+                    packer.packString("item");
+                    packer.packString(cost.item());
+                    packer.packString("cost");
+                    packer.packInt(cost.cost());
                 }
             }
             case NeuRecipe.DropsRecipe d -> {
                 packer.packMapHeader(2);
-                packer.packString("_type"); packer.packString("drops");
+                packer.packString("_type");
+                packer.packString("drops");
                 packer.packString("drops");
                 packer.packArrayHeader(d.drops().size());
                 for (NeuRecipe.DropsRecipe.Drop drop : d.drops()) {
                     packer.packMapHeader(2);
-                    packer.packString("id"); packer.packString(drop.id());
-                    packer.packString("chance"); packer.packString(drop.chance());
+                    packer.packString("id");
+                    packer.packString(drop.id());
+                    packer.packString("chance");
+                    packer.packString(drop.chance());
                 }
             }
             case NeuRecipe.TradeRecipe t -> {
                 packer.packMapHeader(4);
-                packer.packString("_type"); packer.packString("trade");
-                packer.packString("count"); packer.packInt(t.count());
-                packer.packString("output"); packer.packString(t.output());
+                packer.packString("_type");
+                packer.packString("trade");
+                packer.packString("count");
+                packer.packInt(t.count());
+                packer.packString("output");
+                packer.packString(t.output());
                 packer.packString("inputs");
                 packer.packArrayHeader(t.inputs().size());
                 for (String input : t.inputs()) {
@@ -921,6 +961,8 @@ public class BinaryDataCompiler {
             }
         }
     }
+
+    // ---- MessagePack serialization (unchanged) ----
 
     private void packConstants(MessagePacker packer,
                                Map<String, List<String>> parents,
@@ -951,7 +993,8 @@ public class BinaryDataCompiler {
             int mapSize = 1 + data.costsPerStar().size();
             if (!data.extraItemsPerStar().isEmpty()) mapSize++;
             packer.packMapHeader(mapSize);
-            packer.packString("type"); packer.packString(data.essenceType());
+            packer.packString("type");
+            packer.packString(data.essenceType());
             for (Map.Entry<Integer, Integer> ce : data.costsPerStar().entrySet()) {
                 packer.packString(String.valueOf(ce.getKey()));
                 packer.packInt(ce.getValue());
@@ -992,8 +1035,10 @@ public class BinaryDataCompiler {
             if (!d.reforgeAbility().isEmpty()) mapSize++;
             if (!d.reforgeCosts().isEmpty()) mapSize++;
             packer.packMapHeader(mapSize);
-            packer.packString("reforgeName"); packer.packString(d.reforgeName());
-            packer.packString("itemTypes"); packer.packString(d.itemTypes());
+            packer.packString("reforgeName");
+            packer.packString(d.reforgeName());
+            packer.packString("itemTypes");
+            packer.packString(d.itemTypes());
             packer.packString("requiredRarities");
             packer.packArrayHeader(d.requiredRarities().size());
             for (String r : d.requiredRarities()) packer.packString(r);
@@ -1037,10 +1082,14 @@ public class BinaryDataCompiler {
             if (!d.reforgeCosts().isEmpty()) mapSize++;
             if (!d.reforgeStats().isEmpty()) mapSize++;
             packer.packMapHeader(mapSize);
-            packer.packString("internalName"); packer.packString(d.internalName());
-            packer.packString("reforgeName"); packer.packString(d.reforgeName());
-            packer.packString("reforgeType"); packer.packString(d.reforgeType());
-            packer.packString("itemTypes"); packer.packString(d.itemTypes());
+            packer.packString("internalName");
+            packer.packString(d.internalName());
+            packer.packString("reforgeName");
+            packer.packString(d.reforgeName());
+            packer.packString("reforgeType");
+            packer.packString(d.reforgeType());
+            packer.packString("itemTypes");
+            packer.packString(d.itemTypes());
             packer.packString("requiredRarities");
             packer.packArrayHeader(d.requiredRarities().size());
             for (String r : d.requiredRarities()) packer.packString(r);
@@ -1086,5 +1135,24 @@ public class BinaryDataCompiler {
             packer.packString(e.getKey());
             packer.packString(e.getValue());
         }
+    }
+
+    /**
+     * Progress callback for long-running compiles.
+     */
+    public interface ProgressCallback {
+        void onProgress(String stage, int percent);
+    }
+
+    /**
+     * Result of a successful compile.
+     */
+    public record CompileResult(
+            Path outputPath,
+            Path metaPath,
+            int itemCount,
+            String etag,
+            long durationMs
+    ) {
     }
 }

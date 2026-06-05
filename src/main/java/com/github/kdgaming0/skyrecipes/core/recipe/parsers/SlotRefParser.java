@@ -13,15 +13,8 @@ public final class SlotRefParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SlotRefParser.class);
 
-    private SlotRefParser() {}
-
-    /**
-     * Parsed ingredient reference.
-     *
-     * @param internalName The NEU internal name of the ingredient
-     * @param count        The quantity required
-     */
-    public record IngredientRef(String internalName, int count) {}
+    private SlotRefParser() {
+    }
 
     /**
      * Parse an ingredient string like "ENCHANTED_EYE_OF_ENDER:16" or "STICK".
@@ -63,5 +56,14 @@ public final class SlotRefParser {
             return null;
         }
         return registry.getByInternalName(ref.internalName()).orElse(null);
+    }
+
+    /**
+     * Parsed ingredient reference.
+     *
+     * @param internalName The NEU internal name of the ingredient
+     * @param count        The quantity required
+     */
+    public record IngredientRef(String internalName, int count) {
     }
 }

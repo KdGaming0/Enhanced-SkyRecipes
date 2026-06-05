@@ -22,17 +22,18 @@ public final class MobPreviewRenderer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MobPreviewRenderer.class);
 
-    private MobPreviewRenderer() {}
+    private MobPreviewRenderer() {
+    }
 
     /**
      * Render a preview entity at the given screen coordinates.
      *
-     * @param graphics   the gui graphics context
-     * @param entity     the preview entity (must be non-null)
-     * @param x          screen X centre
-     * @param y          screen Y centre
-     * @param scale      render scale (e.g. 24.0f)
-     * @param rotationY  rotation around Y-axis in degrees
+     * @param graphics  the gui graphics context
+     * @param entity    the preview entity (must be non-null)
+     * @param x         screen X centre
+     * @param y         screen Y centre
+     * @param scale     render scale (e.g. 24.0f)
+     * @param rotationY rotation around Y-axis in degrees
      */
     @SuppressWarnings("unchecked")
     public static void render(GuiGraphicsExtractor graphics, LivingEntity entity,

@@ -28,8 +28,8 @@ public final class SearchAutocomplete {
      * @param pageNames    list of page / recipe type display names
      */
     public SearchAutocomplete(ItemRegistry itemRegistry,
-                               Map<String, String> aliases,
-                               List<String> pageNames) {
+                              Map<String, String> aliases,
+                              List<String> pageNames) {
         Set<String> seen = new HashSet<>();
 
         // Tier 1: display names
@@ -54,9 +54,9 @@ public final class SearchAutocomplete {
             String targetId = alias.getValue();
             // Resolve alias to display name for better UX
             String displayName = itemRegistry.getByInternalName(targetId)
-                .map(item -> stripColorCodes(item.displayName()))
-                .filter(name -> !name.isBlank())
-                .orElse(aliasKey);
+                    .map(item -> stripColorCodes(item.displayName()))
+                    .filter(name -> !name.isBlank())
+                    .orElse(aliasKey);
             if (seen.add(displayName.toLowerCase())) {
                 entries.add(new Entry(displayName, Tier.ALIAS, 0));
             }
@@ -71,6 +71,20 @@ public final class SearchAutocomplete {
 
         // Sort by text for deterministic binary search
         entries.sort(Comparator.comparing(e -> e.text().toLowerCase()));
+    }
+
+    private static String stripColorCodes(String text) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' && i + 1 < text.length()) {
+                i++; // skip formatting code
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString().trim();
     }
 
     /**
@@ -109,6 +123,10 @@ public final class SearchAutocomplete {
         return results;
     }
 
+    // -----------------------------------------------------------------
+    // Internal helpers
+    // -----------------------------------------------------------------
+
     /**
      * Return suggestions that match the query via fuzzy matching.
      *
@@ -141,31 +159,6 @@ public final class SearchAutocomplete {
         return results;
     }
 
-    // -----------------------------------------------------------------
-    // Internal helpers
-    // -----------------------------------------------------------------
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++; // skip formatting code
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
-    }
-
-    private record Entry(String text, Tier tier, int priority) {}
-
-    /**
-     * A single autocomplete suggestion.
-     */
-    public record Suggestion(String text, Tier tier) {}
-
     /**
      * Suggestion tier determines display priority.
      */
@@ -180,5 +173,14 @@ public final class SearchAutocomplete {
         Tier(int priority) {
             this.priority = priority;
         }
+    }
+
+    private record Entry(String text, Tier tier, int priority) {
+    }
+
+    /**
+     * A single autocomplete suggestion.
+     */
+    public record Suggestion(String text, Tier tier) {
     }
 }

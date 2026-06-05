@@ -24,7 +24,8 @@ public final class ExpressionCalculator {
     private static final MathContext MC = MathContext.DECIMAL64;
     private static final int SCALE = 10;
 
-    private ExpressionCalculator() {}
+    private ExpressionCalculator() {
+    }
 
     // -----------------------------------------------------------------
     // Public API
@@ -55,45 +56,6 @@ public final class ExpressionCalculator {
             return Result.error("Arithmetic error: " + e.getMessage());
         }
     }
-
-    /**
-     * Result of an expression evaluation.
-     */
-    public sealed interface Result {
-        boolean success();
-
-        BigDecimal value();
-
-        String error();
-
-        static Result ok(BigDecimal value) {
-            return new Ok(value);
-        }
-
-        static Result error(String message) {
-            return new Err(message);
-        }
-    }
-
-    private record Ok(BigDecimal value) implements Result {
-        @Override public boolean success() { return true; }
-        @Override public String error() { return null; }
-    }
-
-    private record Err(String error) implements Result {
-        @Override public boolean success() { return false; }
-        @Override public BigDecimal value() { return null; }
-    }
-
-    // -----------------------------------------------------------------
-    // Tokenizer
-    // -----------------------------------------------------------------
-
-    private enum TokenType {
-        NUMBER, OPERATOR, LPAREN, RPAREN, SUFFIX
-    }
-
-    private record Token(TokenType type, String text, BigDecimal value) {}
 
     private static List<Token> tokenize(String expr) throws ParseException {
         List<Token> tokens = new ArrayList<>();
@@ -189,7 +151,7 @@ public final class ExpressionCalculator {
     }
 
     // -----------------------------------------------------------------
-    // Shunting-yard: infix -> RPN
+    // Tokenizer
     // -----------------------------------------------------------------
 
     private static List<Token> toRpn(List<Token> tokens) throws ParseException {
@@ -248,10 +210,6 @@ public final class ExpressionCalculator {
         };
     }
 
-    // -----------------------------------------------------------------
-    // RPN evaluation
-    // -----------------------------------------------------------------
-
     private static BigDecimal evalRpn(List<Token> rpn) throws ParseException {
         Deque<BigDecimal> stack = new ArrayDeque<>();
 
@@ -303,6 +261,64 @@ public final class ExpressionCalculator {
             }
             default -> throw new ParseException("Unknown operator: " + op);
         };
+    }
+
+    private enum TokenType {
+        NUMBER, OPERATOR, LPAREN, RPAREN, SUFFIX
+    }
+
+    // -----------------------------------------------------------------
+    // Shunting-yard: infix -> RPN
+    // -----------------------------------------------------------------
+
+    /**
+     * Result of an expression evaluation.
+     */
+    public sealed interface Result {
+        static Result ok(BigDecimal value) {
+            return new Ok(value);
+        }
+
+        static Result error(String message) {
+            return new Err(message);
+        }
+
+        boolean success();
+
+        BigDecimal value();
+
+        String error();
+    }
+
+    private record Ok(BigDecimal value) implements Result {
+        @Override
+        public boolean success() {
+            return true;
+        }
+
+        @Override
+        public String error() {
+            return null;
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // RPN evaluation
+    // -----------------------------------------------------------------
+
+    private record Err(String error) implements Result {
+        @Override
+        public boolean success() {
+            return false;
+        }
+
+        @Override
+        public BigDecimal value() {
+            return null;
+        }
+    }
+
+    private record Token(TokenType type, String text, BigDecimal value) {
     }
 
     // -----------------------------------------------------------------

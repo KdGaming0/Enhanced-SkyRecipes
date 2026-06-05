@@ -20,7 +20,7 @@ public class RecipeCategoryConfigMixin {
 
     @Inject(method = "enabled", at = @At("HEAD"), cancellable = true)
     private void skyrecipes$disableVanillaCategories(ReliableClientRecipeType reliableClientRecipeType,
-            CallbackInfoReturnable<Boolean> cir) {
+                                                     CallbackInfoReturnable<Boolean> cir) {
         if (reliableClientRecipeType != null
                 && "minecraft".equals(reliableClientRecipeType.getId().getNamespace())) {
             cir.setReturnValue(false);

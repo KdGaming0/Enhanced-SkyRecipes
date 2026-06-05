@@ -10,16 +10,17 @@ import net.minecraft.world.entity.LivingEntity;
  */
 public final class BlacksmithPreviewRenderer {
 
-    private BlacksmithPreviewRenderer() {}
+    private BlacksmithPreviewRenderer() {
+    }
 
     /**
      * Render the blacksmith villager preview.
      *
-     * @param graphics  the gui graphics context
-     * @param villager  the villager entity
-     * @param x         screen X centre
-     * @param y         screen Y centre
-     * @param scale     render scale
+     * @param graphics the gui graphics context
+     * @param villager the villager entity
+     * @param x        screen X centre
+     * @param y        screen Y centre
+     * @param scale    render scale
      */
     public static void render(GuiGraphicsExtractor graphics, LivingEntity villager,
                               int x, int y, float scale) {

@@ -35,14 +35,60 @@ import java.util.Set;
 @Mixin(value = ItemViewOverlay.class, remap = false)
 public class ItemViewOverlayMixin {
 
-    @Unique private static final int SLOT_SIZE = 18;
-    @Unique private static final int DIM_OVERLAY_COLOR = 0x80000000;
+    @Unique
+    private static final int SLOT_SIZE = 18;
+    @Unique
+    private static final int DIM_OVERLAY_COLOR = 0x80000000;
+
+    @Unique
+    private static boolean enchantedBookMatches(ItemStack stack, String query) {
+        if (!stack.has(DataComponents.CUSTOM_DATA)) return false;
+        CompoundTag tag = stack.get(DataComponents.CUSTOM_DATA).copyTag();
+        if (!tag.contains("StoredEnchantments")) return false;
+
+        String lowerQuery = query.toLowerCase();
+        var enchantments = tag.getListOrEmpty("StoredEnchantments");
+        for (int i = 0; i < enchantments.size(); i++) {
+            var entry = enchantments.getCompoundOrEmpty(i);
+            String id = entry.getStringOr("id", "").toLowerCase();
+            if (id.contains(lowerQuery)) return true;
+            // Also check just the enchantment name part
+            int colon = id.lastIndexOf(':');
+            String name = colon >= 0 ? id.substring(colon + 1) : id;
+            if (name.contains(lowerQuery)) return true;
+        }
+        return false;
+    }
+
+    @Unique
+    private static boolean vanillaNameMatchesQuery(ItemStack stack, String query) {
+        String name = stack.getHoverName().getString().toLowerCase();
+        if (name.isBlank()) return false;
+
+        // Simple keyword containment check
+        for (String word : query.toLowerCase().split("\\s+")) {
+            if (word.length() > 1 && !word.startsWith("%") && !word.contains(":")
+                    && !word.contains(">") && !word.contains("<") && !word.contains("=")) {
+                if (name.contains(word)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Unique
+    private static void dimSlot(GuiGraphicsExtractor guiGraphics, Slot slot) {
+        guiGraphics.fill(slot.x, slot.y,
+                slot.x + SLOT_SIZE, slot.y + SLOT_SIZE,
+                DIM_OVERLAY_COLOR);
+    }
 
     @Inject(
-        method = "renderItemHighlighting",
-        at = @At("HEAD"),
-        cancellable = true,
-        remap = false
+            method = "renderItemHighlighting",
+            at = @At("HEAD"),
+            cancellable = true,
+            remap = false
     )
     private void skyrecipes$renderItemHighlighting(
             AbstractContainerScreen<?> screen,
@@ -129,49 +175,5 @@ public class ItemViewOverlayMixin {
 
         guiGraphics.pose().popMatrix();
         ci.cancel();
-    }
-
-    @Unique
-    private static boolean enchantedBookMatches(ItemStack stack, String query) {
-        if (!stack.has(DataComponents.CUSTOM_DATA)) return false;
-        CompoundTag tag = stack.get(DataComponents.CUSTOM_DATA).copyTag();
-        if (!tag.contains("StoredEnchantments")) return false;
-
-        String lowerQuery = query.toLowerCase();
-        var enchantments = tag.getListOrEmpty("StoredEnchantments");
-        for (int i = 0; i < enchantments.size(); i++) {
-            var entry = enchantments.getCompoundOrEmpty(i);
-            String id = entry.getStringOr("id", "").toLowerCase();
-            if (id.contains(lowerQuery)) return true;
-            // Also check just the enchantment name part
-            int colon = id.lastIndexOf(':');
-            String name = colon >= 0 ? id.substring(colon + 1) : id;
-            if (name.contains(lowerQuery)) return true;
-        }
-        return false;
-    }
-
-    @Unique
-    private static boolean vanillaNameMatchesQuery(ItemStack stack, String query) {
-        String name = stack.getHoverName().getString().toLowerCase();
-        if (name.isBlank()) return false;
-
-        // Simple keyword containment check
-        for (String word : query.toLowerCase().split("\\s+")) {
-            if (word.length() > 1 && !word.startsWith("%") && !word.contains(":")
-                && !word.contains(">") && !word.contains("<") && !word.contains("=")) {
-                if (name.contains(word)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    @Unique
-    private static void dimSlot(GuiGraphicsExtractor guiGraphics, Slot slot) {
-        guiGraphics.fill(slot.x, slot.y,
-            slot.x + SLOT_SIZE, slot.y + SLOT_SIZE,
-            DIM_OVERLAY_COLOR);
     }
 }

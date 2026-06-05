@@ -11,7 +11,8 @@ import java.util.List;
  */
 public final class JsonUtil {
 
-    private JsonUtil() {}
+    private JsonUtil() {
+    }
 
     public static String getString(JsonObject obj, String key, String defaultValue) {
         JsonElement element = obj.get(key);

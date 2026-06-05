@@ -27,20 +27,12 @@ public final class CategoryIconButton extends AbstractButton {
 
     private static final String NAMESPACE = "skyrecipes";
     private static final String SPRITE_BASE = "item_list/";
-
-    /** Called when the button is pressed; receives the owning button instance. */
-    public interface PressHandler {
-        void onPress(CategoryIconButton button);
-    }
-
     private final Identifier spriteNormal;
     private final Identifier spriteHighlighted;
     private final Identifier spriteToggled;
     private final Identifier spriteToggledHighlighted;
-
     private final PressHandler pressHandler;
     private boolean toggled;
-
     /**
      * @param x            left position in screen pixels
      * @param y            top position in screen pixels
@@ -60,20 +52,24 @@ public final class CategoryIconButton extends AbstractButton {
         this.toggled = toggled;
         this.pressHandler = pressHandler;
 
-        spriteNormal             = sprite(spriteName);
-        spriteHighlighted        = sprite(spriteName + "_highlighted");
-        spriteToggled            = sprite(spriteName + "_toggled");
+        spriteNormal = sprite(spriteName);
+        spriteHighlighted = sprite(spriteName + "_highlighted");
+        spriteToggled = sprite(spriteName + "_toggled");
         spriteToggledHighlighted = sprite(spriteName + "_toggled_highlighted");
+    }
+
+    private static Identifier sprite(String name) {
+        return Identifier.fromNamespaceAndPath(NAMESPACE, SPRITE_BASE + name);
     }
 
     // ── State ─────────────────────────────────────────────────────────────────────
 
-    public void setToggled(boolean toggled) {
-        this.toggled = toggled;
-    }
-
     public boolean isToggled() {
         return toggled;
+    }
+
+    public void setToggled(boolean toggled) {
+        this.toggled = toggled;
     }
 
     public void setTooltipText(String text) {
@@ -106,7 +102,10 @@ public final class CategoryIconButton extends AbstractButton {
         return hovered ? spriteHighlighted : spriteNormal;
     }
 
-    private static Identifier sprite(String name) {
-        return Identifier.fromNamespaceAndPath(NAMESPACE, SPRITE_BASE + name);
+    /**
+     * Called when the button is pressed; receives the owning button instance.
+     */
+    public interface PressHandler {
+        void onPress(CategoryIconButton button);
     }
 }

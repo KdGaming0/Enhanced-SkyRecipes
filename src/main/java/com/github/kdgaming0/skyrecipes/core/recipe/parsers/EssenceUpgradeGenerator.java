@@ -25,17 +25,18 @@ public final class EssenceUpgradeGenerator {
     private static final Logger LOGGER = LoggerFactory.getLogger(EssenceUpgradeGenerator.class);
 
     private static final Map<String, String> ESSENCE_ITEM_MAP = Map.of(
-        "Wither", "ESSENCE_WITHER",
-        "Undead", "ESSENCE_UNDEAD",
-        "Spider", "ESSENCE_SPIDER",
-        "Dragon", "ESSENCE_DRAGON",
-        "Diamond", "ESSENCE_DIAMOND",
-        "Gold", "ESSENCE_GOLD",
-        "Ice", "ESSENCE_ICE",
-        "Crimson", "ESSENCE_CRIMSON"
+            "Wither", "ESSENCE_WITHER",
+            "Undead", "ESSENCE_UNDEAD",
+            "Spider", "ESSENCE_SPIDER",
+            "Dragon", "ESSENCE_DRAGON",
+            "Diamond", "ESSENCE_DIAMOND",
+            "Gold", "ESSENCE_GOLD",
+            "Ice", "ESSENCE_ICE",
+            "Crimson", "ESSENCE_CRIMSON"
     );
 
-    private EssenceUpgradeGenerator() {}
+    private EssenceUpgradeGenerator() {
+    }
 
     /**
      * Generate all essence upgrade recipes.
@@ -76,15 +77,15 @@ public final class EssenceUpgradeGenerator {
                 }
 
                 Identifier recipeId = IdentifierUtil.skyRecipeId("essence/",
-                    itemName + "/" + starLevel);
+                        itemName + "/" + starLevel);
 
                 recipes.add(new SkyblockEssenceUpgradeClientRecipe(
-                    recipeId,
-                    baseStack,
-                    essenceStack.copyWithCount(essenceAmount),
-                    starLevel,
-                    data.essenceType(),
-                    extraItems
+                        recipeId,
+                        baseStack,
+                        essenceStack.copyWithCount(essenceAmount),
+                        starLevel,
+                        data.essenceType(),
+                        extraItems
                 ));
             }
         }

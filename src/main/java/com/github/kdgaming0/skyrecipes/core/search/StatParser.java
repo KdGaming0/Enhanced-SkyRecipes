@@ -3,7 +3,6 @@ package com.github.kdgaming0.skyrecipes.core.search;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -23,7 +22,9 @@ public final class StatParser {
 
     private final Set<String> knownStats;
 
-    /** Canonical stat names sorted by length (longest first) for no-colon parsing. */
+    /**
+     * Canonical stat names sorted by length (longest first) for no-colon parsing.
+     */
     private final List<String> sortedStatNames;
 
     public StatParser(Set<String> knownStats) {
@@ -34,85 +35,8 @@ public final class StatParser {
     }
 
     /**
-     * Parsed stat result.
+     * Finds the given word/phrase as a whole-word match in text.
      */
-    public record ParsedStat(String statName, int value) {}
-
-    /**
-     * Extract all stats from a single lore line.
-     *
-     * @param loreLine raw lore line with § color codes
-     * @return list of parsed stats (empty if none)
-     */
-    public List<ParsedStat> parseLoreLine(String loreLine) {
-        if (loreLine == null || loreLine.isEmpty()) {
-            return List.of();
-        }
-
-        List<ParsedStat> result = new ArrayList<>(2);
-
-        ParsedStat colon = parseColonFormat(loreLine);
-        if (colon != null) {
-            result.add(colon);
-        }
-
-        result.addAll(parseNoColonFormat(loreLine));
-
-        return result.isEmpty() ? List.of() : result;
-    }
-
-    // -----------------------------------------------------------------
-    // Colon format: "Strength: +10"
-    // -----------------------------------------------------------------
-
-    @Nullable
-    private ParsedStat parseColonFormat(String loreLine) {
-        String clean = stripColorCodes(loreLine);
-        int colonIdx = clean.indexOf(':');
-        if (colonIdx <= 0) return null;
-
-        String statName = clean.substring(0, colonIdx).trim().toLowerCase();
-        statName = normalizeStatName(statName);
-        if (statName.isEmpty()) return null;
-
-        // Validate against known stat names to avoid false positives like "Archer: +2"
-        if (!knownStats.contains(statName)) return null;
-
-        String valuePart = clean.substring(colonIdx + 1).trim();
-        int value = extractLeadingInt(valuePart);
-        if (value == Integer.MIN_VALUE) return null;
-
-        return new ParsedStat(statName, value);
-    }
-
-    // -----------------------------------------------------------------
-    // No-colon format: "+10☠ Crit Damage"
-    // -----------------------------------------------------------------
-
-    private List<ParsedStat> parseNoColonFormat(String loreLine) {
-        String clean = stripColorCodes(loreLine);
-        // Skip lines that already have a colon (handled by parseColonFormat)
-        if (clean.indexOf(':') >= 0) return List.of();
-        // Quick reject: no + or - sign means no stat value
-        if (clean.indexOf('+') < 0 && clean.indexOf('-') < 0) return List.of();
-
-        String lower = clean.toLowerCase();
-        List<ParsedStat> result = new ArrayList<>(2);
-
-        for (String statName : sortedStatNames) {
-            String spaced = statName.replace('_', ' ');
-            int pos = indexOfWord(lower, spaced);
-            if (pos >= 0) {
-                int value = extractIntBeforePosition(lower, pos);
-                if (value != Integer.MIN_VALUE) {
-                    result.add(new ParsedStat(statName, value));
-                }
-            }
-        }
-        return result;
-    }
-
-    /** Finds the given word/phrase as a whole-word match in text. */
     private static int indexOfWord(String text, String phrase) {
         int pos = text.indexOf(phrase);
         while (pos >= 0) {
@@ -158,6 +82,10 @@ public final class StatParser {
         }
     }
 
+    // -----------------------------------------------------------------
+    // Colon format: "Strength: +10"
+    // -----------------------------------------------------------------
+
     public static int extractLeadingInt(String s) {
         int i = 0;
         while (i < s.length() && (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == ' ')) {
@@ -174,6 +102,10 @@ public final class StatParser {
             return Integer.MIN_VALUE;
         }
     }
+
+    // -----------------------------------------------------------------
+    // No-colon format: "+10☠ Crit Damage"
+    // -----------------------------------------------------------------
 
     public static String normalizeStatName(String raw) {
         StringBuilder sb = new StringBuilder(raw.length());
@@ -203,5 +135,77 @@ public final class StatParser {
             }
         }
         return sb.toString().trim();
+    }
+
+    /**
+     * Extract all stats from a single lore line.
+     *
+     * @param loreLine raw lore line with § color codes
+     * @return list of parsed stats (empty if none)
+     */
+    public List<ParsedStat> parseLoreLine(String loreLine) {
+        if (loreLine == null || loreLine.isEmpty()) {
+            return List.of();
+        }
+
+        List<ParsedStat> result = new ArrayList<>(2);
+
+        ParsedStat colon = parseColonFormat(loreLine);
+        if (colon != null) {
+            result.add(colon);
+        }
+
+        result.addAll(parseNoColonFormat(loreLine));
+
+        return result.isEmpty() ? List.of() : result;
+    }
+
+    @Nullable
+    private ParsedStat parseColonFormat(String loreLine) {
+        String clean = stripColorCodes(loreLine);
+        int colonIdx = clean.indexOf(':');
+        if (colonIdx <= 0) return null;
+
+        String statName = clean.substring(0, colonIdx).trim().toLowerCase();
+        statName = normalizeStatName(statName);
+        if (statName.isEmpty()) return null;
+
+        // Validate against known stat names to avoid false positives like "Archer: +2"
+        if (!knownStats.contains(statName)) return null;
+
+        String valuePart = clean.substring(colonIdx + 1).trim();
+        int value = extractLeadingInt(valuePart);
+        if (value == Integer.MIN_VALUE) return null;
+
+        return new ParsedStat(statName, value);
+    }
+
+    private List<ParsedStat> parseNoColonFormat(String loreLine) {
+        String clean = stripColorCodes(loreLine);
+        // Skip lines that already have a colon (handled by parseColonFormat)
+        if (clean.indexOf(':') >= 0) return List.of();
+        // Quick reject: no + or - sign means no stat value
+        if (clean.indexOf('+') < 0 && clean.indexOf('-') < 0) return List.of();
+
+        String lower = clean.toLowerCase();
+        List<ParsedStat> result = new ArrayList<>(2);
+
+        for (String statName : sortedStatNames) {
+            String spaced = statName.replace('_', ' ');
+            int pos = indexOfWord(lower, spaced);
+            if (pos >= 0) {
+                int value = extractIntBeforePosition(lower, pos);
+                if (value != Integer.MIN_VALUE) {
+                    result.add(new ParsedStat(statName, value));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Parsed stat result.
+     */
+    public record ParsedStat(String statName, int value) {
     }
 }

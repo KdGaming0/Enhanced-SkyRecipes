@@ -12,8 +12,7 @@ import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Map;
 
 /**
  * Builds RRV info recipes for NPC items (internal names ending in {@code _NPC}).
@@ -25,7 +24,35 @@ public final class NpcInfoRecipeBuilder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NpcInfoRecipeBuilder.class);
 
-    private NpcInfoRecipeBuilder() {}
+    /**
+     * NEU island codes → human-readable names (from constants/islands.json).
+     */
+    private static final Map<String, String> ISLAND_NAMES = Map.ofEntries(
+            Map.entry("dynamic", "Private Island"),
+            Map.entry("hub", "Hub"),
+            Map.entry("mining_1", "Gold Mine"),
+            Map.entry("mining_2", "Deep Caverns"),
+            Map.entry("mining_3", "Dwarven Mines"),
+            Map.entry("combat_1", "Spider's Den"),
+            Map.entry("crimson_isle", "Crimson Isle"),
+            Map.entry("combat_3", "The End"),
+            Map.entry("farming_1", "The Farming Islands"),
+            Map.entry("foraging_1", "The Park"),
+            Map.entry("winter", "Jerry's Workshop"),
+            Map.entry("dungeon", "Dungeon"),
+            Map.entry("dungeon_hub", "Dungeon Hub"),
+            Map.entry("crystal_hollows", "Crystal Hollows"),
+            Map.entry("garden", "The Garden"),
+            Map.entry("rift", "Rift"),
+            Map.entry("kuudra", "Kuudra's Hollow"),
+            Map.entry("mineshaft", "Glacite Mineshafts"),
+            Map.entry("fishing_1", "Backwater Bayou"),
+            Map.entry("foraging_2", "Galatea"),
+            Map.entry("lotus_atoll", "Lotus Atoll")
+    );
+
+    private NpcInfoRecipeBuilder() {
+    }
 
     /**
      * Build an NPC info recipe for the given item, or {@code null} if the item is not an NPC.
@@ -46,20 +73,20 @@ public final class NpcInfoRecipeBuilder {
             StringBuilder text = new StringBuilder();
             text.append("§e").append(item.displayName()).append("\n\n");
 
-            // Island and coordinates from NEU JSON fields
-            String island = extractIsland(item);
+            String island = formatIsland(item.island());
             if (!island.isEmpty()) {
                 text.append("§7Island: §f").append(island).append("\n");
             }
 
-            String coords = extractCoordinates(item);
-            if (!coords.isEmpty()) {
-                text.append("§7Location: §f").append(coords).append("\n");
+            if (item.x() != 0 || item.y() != 0 || item.z() != 0) {
+                text.append("§7Location: §f")
+                        .append(item.x()).append(", ")
+                        .append(item.y()).append(", ")
+                        .append(item.z()).append("\n");
             }
 
             text.append("\n");
 
-            // Wiki links if present
             if (item.infoType() != null && !item.infoType().isEmpty()
                     && item.info() != null && !item.info().isEmpty()) {
                 text.append("§eWiki Links:\n");
@@ -76,18 +103,8 @@ public final class NpcInfoRecipeBuilder {
         }
     }
 
-    private static String extractIsland(NeuItem item) {
-        // NEU stores island as a top-level JSON field. Since NeuItem doesn't have an island field,
-        // we can't access it directly. The ItemStackBuilder parses the SNBT nbttag, but the island
-        // is outside the SNBT in the raw JSON.
-        //
-        // For now, we skip island extraction because NeuItem does not store it.
-        // If needed in the future, NeuItem can be extended with an optional island field.
-        return "";
-    }
-
-    private static String extractCoordinates(NeuItem item) {
-        // Same limitation as extractIsland — x/y/z are top-level JSON fields not stored in NeuItem.
-        return "";
+    private static String formatIsland(String code) {
+        if (code == null || code.isEmpty()) return "";
+        return ISLAND_NAMES.getOrDefault(code, code);
     }
 }

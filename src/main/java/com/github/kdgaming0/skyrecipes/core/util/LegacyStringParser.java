@@ -10,7 +10,8 @@ import net.minecraft.network.chat.Style;
  */
 public final class LegacyStringParser {
 
-    private LegacyStringParser() {}
+    private LegacyStringParser() {
+    }
 
     /**
      * Parses a string containing § color/formatting codes into a {@link Component}.
@@ -46,12 +47,12 @@ public final class LegacyStringParser {
                     if (formatting.isColor()) {
                         // Color resets previous color but keeps formatting
                         currentStyle = currentStyle
-                            .withColor(formatting)
-                            .withBold(currentStyle.isBold())
-                            .withItalic(currentStyle.isItalic())
-                            .withUnderlined(currentStyle.isUnderlined())
-                            .withStrikethrough(currentStyle.isStrikethrough())
-                            .withObfuscated(currentStyle.isObfuscated());
+                                .withColor(formatting)
+                                .withBold(currentStyle.isBold())
+                                .withItalic(currentStyle.isItalic())
+                                .withUnderlined(currentStyle.isUnderlined())
+                                .withStrikethrough(currentStyle.isStrikethrough())
+                                .withObfuscated(currentStyle.isObfuscated());
                     } else {
                         // Formatting modifier
                         currentStyle = currentStyle.applyFormat(formatting);

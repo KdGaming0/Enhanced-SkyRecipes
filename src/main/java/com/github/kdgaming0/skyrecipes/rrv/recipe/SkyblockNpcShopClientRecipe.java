@@ -1,6 +1,5 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
-import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
@@ -11,15 +10,14 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SkyblockNpcShopClientRecipe implements ReliableClientRecipe {
+public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
 
-    private final Identifier id;
     private final String npcName;
     private final List<ShopCost> costs;
     private final ItemStack result;
 
     public SkyblockNpcShopClientRecipe(Identifier id, String npcName, List<ShopCost> costs, ItemStack result) {
-        this.id = id;
+        super(id);
         this.npcName = npcName;
         this.costs = costs;
         this.result = result;
@@ -52,16 +50,6 @@ public class SkyblockNpcShopClientRecipe implements ReliableClientRecipe {
         return List.of(SlotContent.of(result));
     }
 
-    @Override
-    public Identifier getId() {
-        return id;
-    }
-
-    @Override
-    public boolean isVisualOnly() {
-        return true;
-    }
-
     public String getNpcName() {
         return npcName;
     }
@@ -70,5 +58,6 @@ public class SkyblockNpcShopClientRecipe implements ReliableClientRecipe {
         return Component.literal("NPC: " + (npcName.isEmpty() ? "Unknown" : npcName));
     }
 
-    public record ShopCost(ItemStack stack, String internalName, int count, boolean isCoins) {}
+    public record ShopCost(ItemStack stack, String internalName, int count, boolean isCoins) {
+    }
 }

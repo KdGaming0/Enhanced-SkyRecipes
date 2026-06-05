@@ -24,7 +24,7 @@ public class RuntimeUpdateService {
     private static final Logger LOGGER = LoggerFactory.getLogger(RuntimeUpdateService.class);
 
     private static final String NEU_REPO_URL =
-        "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
+            "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final long CHECK_INTERVAL_MINUTES = 15;
     private static final long INITIAL_DELAY_SECONDS = 5;
@@ -59,10 +59,10 @@ public class RuntimeUpdateService {
         if (running) return;
         running = true;
         scheduler.scheduleWithFixedDelay(
-            this::performUpdateCheck,
-            INITIAL_DELAY_SECONDS,
-            CHECK_INTERVAL_MINUTES * 60,
-            TimeUnit.SECONDS
+                this::performUpdateCheck,
+                INITIAL_DELAY_SECONDS,
+                CHECK_INTERVAL_MINUTES * 60,
+                TimeUnit.SECONDS
         );
         LOGGER.info("Update service started. Checking every {} minutes.", CHECK_INTERVAL_MINUTES);
     }

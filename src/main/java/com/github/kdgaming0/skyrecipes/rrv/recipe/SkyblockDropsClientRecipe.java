@@ -1,6 +1,5 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
-import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
@@ -15,16 +14,14 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SkyblockDropsClientRecipe implements ReliableClientRecipe {
+public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
 
-    private final Identifier id;
     private final List<DropEntry> drops;
-
-    private LivingEntity mobEntity;
     private final String mobId;
+    private LivingEntity mobEntity;
 
     public SkyblockDropsClientRecipe(Identifier id, List<DropEntry> drops) {
-        this.id = id;
+        super(id);
         this.drops = drops;
         this.mobId = drops.isEmpty() ? "" : drops.get(0).internalName();
     }
@@ -59,16 +56,6 @@ public class SkyblockDropsClientRecipe implements ReliableClientRecipe {
         return list;
     }
 
-    @Override
-    public Identifier getId() {
-        return id;
-    }
-
-    @Override
-    public boolean isVisualOnly() {
-        return true;
-    }
-
     public List<DropEntry> getDrops() {
         return drops;
     }
@@ -98,5 +85,6 @@ public class SkyblockDropsClientRecipe implements ReliableClientRecipe {
         }
     }
 
-    public record DropEntry(ItemStack stack, String internalName, String chance) {}
+    public record DropEntry(ItemStack stack, String internalName, String chance) {
+    }
 }

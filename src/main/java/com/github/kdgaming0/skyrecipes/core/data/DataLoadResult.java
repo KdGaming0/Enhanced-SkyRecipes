@@ -9,8 +9,9 @@ import java.nio.file.Path;
  * Immutable result of loading or reloading binary data.
  */
 public record DataLoadResult(
-    ItemRegistry itemRegistry,
-    ConstantsRegistry constantsRegistry,
-    Path dataPath,
-    BinaryMetadata metadata
-) {}
+        ItemRegistry itemRegistry,
+        ConstantsRegistry constantsRegistry,
+        Path dataPath,
+        BinaryMetadata metadata
+) {
+}

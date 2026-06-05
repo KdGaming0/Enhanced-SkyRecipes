@@ -1,6 +1,5 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
-import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
@@ -16,9 +15,8 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 import java.util.Map;
 
-public class SkyblockReforgeClientRecipe implements ReliableClientRecipe {
+public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
 
-    private final Identifier id;
     private final ItemStack stoneStack;
     private final ItemStack sampleItem;
     private final String reforgeName;
@@ -29,7 +27,7 @@ public class SkyblockReforgeClientRecipe implements ReliableClientRecipe {
 
     public SkyblockReforgeClientRecipe(Identifier id, ItemStack stoneStack, ItemStack sampleItem,
                                        String reforgeName, String itemTypes, Map<String, Number> costs) {
-        this.id = id;
+        super(id);
         this.stoneStack = stoneStack;
         this.sampleItem = sampleItem;
         this.reforgeName = reforgeName;
@@ -56,16 +54,6 @@ public class SkyblockReforgeClientRecipe implements ReliableClientRecipe {
     @Override
     public List<SlotContent> getResults() {
         return List.of(SlotContent.of(sampleItem));
-    }
-
-    @Override
-    public Identifier getId() {
-        return id;
-    }
-
-    @Override
-    public boolean isVisualOnly() {
-        return true;
     }
 
     public String getReforgeName() {

@@ -42,33 +42,17 @@ public enum SkyblockItemCategory {
 
     UNKNOWN;
 
-    /** Categories that render a toggle button in the RRV overlay. */
+    /**
+     * Categories that render a toggle button in the RRV overlay.
+     */
     public static final List<SkyblockItemCategory> BUTTON_CATEGORIES = List.of(
-        ARMOR, WEAPON, TOOL, ACCESSORY, PET, ENCHANTED_BOOK, MINION, EQUIPMENT, MATERIAL
+            ARMOR, WEAPON, TOOL, ACCESSORY, PET, ENCHANTED_BOOK, MINION, EQUIPMENT, MATERIAL
     );
 
     private static final Set<String> RARITY_WORDS = Set.of(
-        "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY",
-        "MYTHIC", "SPECIAL", "ULTIMATE", "DIVINE", "ADMIN", "VERY"
+            "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY",
+            "MYTHIC", "SPECIAL", "ULTIMATE", "DIVINE", "ADMIN", "VERY"
     );
-
-    /**
-     * Returns the button category that this category rolls up into.
-     * Button categories return themselves. Search-only categories map
-     * to their button parent so items appear when the corresponding
-     * button is toggled.
-     */
-    public SkyblockItemCategory getButtonCategory() {
-        return switch (this) {
-            case ARMOR, WEAPON, ACCESSORY, PET, TOOL, MINION,
-                 EQUIPMENT, MATERIAL, ENCHANTED_BOOK, UNKNOWN -> this;
-            case FISHING -> TOOL;
-            case BLOCK -> MATERIAL;
-            case CONSUMABLE, COSMETIC, PORTAL, RIFT_ITEM, FARMING,
-                 PET_ITEM, REFORGE_STONE, MISC, NPC -> MISC;
-            case DUNGEON_ITEM -> DUNGEON_ITEM; // search-only, no button rollup
-        };
-    }
 
     /**
      * Derives category from the last lore line which typically contains
@@ -118,7 +102,9 @@ public enum SkyblockItemCategory {
         return fromTypeString(sb.toString());
     }
 
-    /** Derives category from a raw type string (e.g. "SWORD", "DUNGEON HELMET"). */
+    /**
+     * Derives category from a raw type string (e.g. "SWORD", "DUNGEON HELMET").
+     */
     public static SkyblockItemCategory fromTypeString(String type) {
         if (type == null || type.isEmpty()) {
             return UNKNOWN;
@@ -195,30 +181,41 @@ public enum SkyblockItemCategory {
 
             default -> {
                 // Broad fallback: if it contains known type words
-                if (t.contains("SWORD") || t.contains("BOW") || t.contains("WAND") || t.contains("LONGSWORD")) yield WEAPON;
-                if (t.contains("HELMET") || t.contains("CHESTPLATE") || t.contains("LEGGINGS") || t.contains("BOOTS")) yield ARMOR;
-                if (t.contains("BELT") || t.contains("NECKLACE") || t.contains("CLOAK") || t.contains("GLOVES") || t.contains("BRACELET")) yield EQUIPMENT;
-                if (t.contains("ACCESSORY") || t.contains("TALISMAN") || t.contains("RING") || t.contains("ARTIFACT") || t.contains("RELIC") || t.contains("HATCESSORY") || t.contains("CARNIVAL MASK")) yield ACCESSORY;
+                if (t.contains("SWORD") || t.contains("BOW") || t.contains("WAND") || t.contains("LONGSWORD"))
+                    yield WEAPON;
+                if (t.contains("HELMET") || t.contains("CHESTPLATE") || t.contains("LEGGINGS") || t.contains("BOOTS"))
+                    yield ARMOR;
+                if (t.contains("BELT") || t.contains("NECKLACE") || t.contains("CLOAK") || t.contains("GLOVES") || t.contains("BRACELET"))
+                    yield EQUIPMENT;
+                if (t.contains("ACCESSORY") || t.contains("TALISMAN") || t.contains("RING") || t.contains("ARTIFACT") || t.contains("RELIC") || t.contains("HATCESSORY") || t.contains("CARNIVAL MASK"))
+                    yield ACCESSORY;
                 if (t.contains("PET") && !t.contains("PET ITEM")) yield PET;
                 if (t.contains("MINION")) yield MINION;
-                if (t.contains("PICKAXE") || t.contains("DRILL") || t.contains("HOE") || t.contains("AXE") || t.contains("SHOVEL") || t.contains("SHEARS") || t.contains("CHISEL") || t.contains("FARMING TOOL") || t.contains("DEPLOYABLE") || t.contains("GARDEN CHIP") || t.contains("VACUUM")) yield TOOL;
-                if (t.contains("ROD") || t.contains("BAIT") || t.contains("TROPHY") || t.contains("FISHING")) yield FISHING;
+                if (t.contains("PICKAXE") || t.contains("DRILL") || t.contains("HOE") || t.contains("AXE") || t.contains("SHOVEL") || t.contains("SHEARS") || t.contains("CHISEL") || t.contains("FARMING TOOL") || t.contains("DEPLOYABLE") || t.contains("GARDEN CHIP") || t.contains("VACUUM"))
+                    yield TOOL;
+                if (t.contains("ROD") || t.contains("BAIT") || t.contains("TROPHY") || t.contains("FISHING"))
+                    yield FISHING;
                 if (t.contains("POTION")) yield CONSUMABLE;
                 if (t.contains("BOOK") && !t.contains("ROD")) yield ENCHANTED_BOOK;
                 if (t.contains("REFORGE STONE") || t.contains("REFORGE")) yield REFORGE_STONE;
-                if (t.contains("DYE") || t.contains("SKIN") || t.contains("COSMETIC") || t.contains("MEMENTO")) yield COSMETIC;
+                if (t.contains("DYE") || t.contains("SKIN") || t.contains("COSMETIC") || t.contains("MEMENTO"))
+                    yield COSMETIC;
                 if (t.contains("PORTAL") || t.contains("TRAVEL SCROLL")) yield PORTAL;
                 if (t.contains("RIFT") && !t.contains("TIMECHARM")) yield RIFT_ITEM;
                 if (t.contains("DUNGEON") && t.contains("ITEM")) yield DUNGEON_ITEM;
-                if (t.contains("GEMSTONE") || t.contains("ORE") || t.contains("BLOCK") || t.contains("METAL") || t.contains("SALT")) yield MATERIAL;
+                if (t.contains("GEMSTONE") || t.contains("ORE") || t.contains("BLOCK") || t.contains("METAL") || t.contains("SALT"))
+                    yield MATERIAL;
                 if (t.contains("MUTATION")) yield FARMING;
-                if (t.contains("POWER STONE") || t.contains("SHARD") || t.contains("SACK") || t.contains("FOOD") || t.contains("ARROW")) yield MISC;
+                if (t.contains("POWER STONE") || t.contains("SHARD") || t.contains("SACK") || t.contains("FOOD") || t.contains("ARROW"))
+                    yield MISC;
                 yield UNKNOWN;
             }
         };
     }
 
-    /** Parse a {@code %CATEGORY} or {@code %CATEGORY/SUBTYPE} path string. */
+    /**
+     * Parse a {@code %CATEGORY} or {@code %CATEGORY/SUBTYPE} path string.
+     */
     @Nullable
     public static SkyblockItemCategory fromPath(String path) {
         if (path == null || path.isEmpty()) return null;
@@ -232,17 +229,53 @@ public enum SkyblockItemCategory {
         }
     }
 
-    /** Extract subtype from a {@code %CATEGORY/SUBTYPE} path string. */
+    /**
+     * Extract subtype from a {@code %CATEGORY/SUBTYPE} path string.
+     */
     @Nullable
     public static String subtypeFromPath(String path) {
         if (path == null) return null;
         int slash = path.indexOf('/');
         return slash >= 0 && slash + 1 < path.length()
-            ? path.substring(slash + 1).toUpperCase()
-            : null;
+                ? path.substring(slash + 1).toUpperCase()
+                : null;
     }
 
-    /** Returns a representative vanilla item ID for rendering a category icon button. */
+    private static String stripColorCodes(String text) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' && i + 1 < text.length()) {
+                i++;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * Returns the button category that this category rolls up into.
+     * Button categories return themselves. Search-only categories map
+     * to their button parent so items appear when the corresponding
+     * button is toggled.
+     */
+    public SkyblockItemCategory getButtonCategory() {
+        return switch (this) {
+            case ARMOR, WEAPON, ACCESSORY, PET, TOOL, MINION,
+                 EQUIPMENT, MATERIAL, ENCHANTED_BOOK, UNKNOWN -> this;
+            case FISHING -> TOOL;
+            case BLOCK -> MATERIAL;
+            case CONSUMABLE, COSMETIC, PORTAL, RIFT_ITEM, FARMING,
+                 PET_ITEM, REFORGE_STONE, MISC, NPC -> MISC;
+            case DUNGEON_ITEM -> DUNGEON_ITEM; // search-only, no button rollup
+        };
+    }
+
+    /**
+     * Returns a representative vanilla item ID for rendering a category icon button.
+     */
     public String getIconItemId() {
         return switch (this) {
             case WEAPON -> "minecraft:diamond_sword";
@@ -270,7 +303,9 @@ public enum SkyblockItemCategory {
         };
     }
 
-    /** Human-readable name for tooltips. */
+    /**
+     * Human-readable name for tooltips.
+     */
     public String getDisplayName() {
         return switch (this) {
             case WEAPON -> "Weapons";
@@ -316,19 +351,5 @@ public enum SkyblockItemCategory {
             case MATERIAL -> "materials";
             default -> null;
         };
-    }
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
     }
 }

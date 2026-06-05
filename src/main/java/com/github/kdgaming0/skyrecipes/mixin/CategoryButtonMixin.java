@@ -29,20 +29,17 @@ import java.util.List;
 @Mixin(value = ItemViewOverlay.class, remap = false)
 public class CategoryButtonMixin {
 
-    @Shadow private SearchBar searchbar;
-
-    @Unique
-    private List<CategoryIconButton> skyrecipes$categoryButtons;
-
-    @Unique
-    private String skyrecipes$previousQuery = "";
-
-    @Unique
-    private SkyblockItemCategory skyrecipes$previousCategory = null;
-
     @Unique
     private static final Identifier skyrecipes$ROW_ID =
-        Identifier.fromNamespaceAndPath("skyrecipes", "category_buttons_row");
+            Identifier.fromNamespaceAndPath("skyrecipes", "category_buttons_row");
+    @Shadow
+    private SearchBar searchbar;
+    @Unique
+    private List<CategoryIconButton> skyrecipes$categoryButtons;
+    @Unique
+    private String skyrecipes$previousQuery = "";
+    @Unique
+    private SkyblockItemCategory skyrecipes$previousCategory = null;
 
     @Inject(method = "placeWidgets", at = @At("TAIL"), remap = false)
     private void skyrecipes$addCategoryButtons(cc.cassian.rrv.common.overlay.AbstractRrvOverlay.ScreenContext ctx, CallbackInfo ci) {
@@ -70,10 +67,10 @@ public class CategoryButtonMixin {
             String spriteName = category.getSpriteName();
             if (spriteName == null) continue;
             CategoryIconButton btn = new CategoryIconButton(
-                x, btnY, btnSize,
-                spriteName,
-                category == active,
-                b -> skyrecipes$onToggle(category)
+                    x, btnY, btnSize,
+                    spriteName,
+                    category == active,
+                    b -> skyrecipes$onToggle(category)
             );
             btn.setToggled(category == active);
             btn.setTooltipText(category.getDisplayName());
@@ -84,7 +81,7 @@ public class CategoryButtonMixin {
 
         // Register blocking component so RRV avoids rendering over the button row
         BlockingGuiComponent rowBlocking =
-            new BlockingGuiComponent(skyrecipes$ROW_ID, startX, btnY, totalWidth, btnSize + 2);
+                new BlockingGuiComponent(skyrecipes$ROW_ID, startX, btnY, totalWidth, btnSize + 2);
         OverlayManager.INSTANCE.setGuiBlocking(rowBlocking);
     }
 

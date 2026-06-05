@@ -39,8 +39,8 @@ public final class MmapUtil {
 
             Method method = unsafeClass.getMethod("invokeCleaner", ByteBuffer.class);
             cleaner = MethodHandles.lookup()
-                .unreflect(method)
-                .bindTo(unsafe);
+                    .unreflect(method)
+                    .bindTo(unsafe);
         } catch (Exception e) {
             LOGGER.debug("Unable to bind Unsafe.invokeCleaner: {}", e.getMessage());
         }
@@ -48,7 +48,8 @@ public final class MmapUtil {
         UNSAFE = unsafe;
     }
 
-    private MmapUtil() {}
+    private MmapUtil() {
+    }
 
     /**
      * Memory-map a file as read-only and return a ByteBuffer.

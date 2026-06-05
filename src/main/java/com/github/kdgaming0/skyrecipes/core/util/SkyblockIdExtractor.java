@@ -19,13 +19,14 @@ public final class SkyblockIdExtractor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockIdExtractor.class);
 
-    private SkyblockIdExtractor() {}
+    private SkyblockIdExtractor() {
+    }
 
     /**
      * Extract the SkyBlock internal name from the given stack.
      *
      * @return the SkyBlock ID (e.g. {@code "ASPECT_OF_THE_END"}), or {@code null} if the stack
-     *         is empty, has no {@code CUSTOM_DATA}, or lacks an {@code ExtraAttributes.id} field.
+     * is empty, has no {@code CUSTOM_DATA}, or lacks an {@code ExtraAttributes.id} field.
      */
     public static String extract(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {

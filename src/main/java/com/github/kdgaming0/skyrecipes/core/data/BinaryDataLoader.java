@@ -23,11 +23,9 @@ import java.util.*;
  */
 public class BinaryDataLoader {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
-
-    private static final byte[] EXPECTED_MAGIC = new byte[] { 'S', 'K', 'Y', '2' };
     public static final int EXPECTED_SCHEMA = 4;
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
+    private static final byte[] EXPECTED_MAGIC = new byte[]{'S', 'K', 'Y', '2'};
     private ByteBuffer fileBuffer;
     private ItemRegistry itemRegistry;
     private ConstantsRegistry constantsRegistry;
@@ -70,7 +68,7 @@ public class BinaryDataLoader {
 
             if (schemaVersion != EXPECTED_SCHEMA) {
                 LOGGER.error("Binary schema version mismatch: expected {}, got {}. Data may be stale or incompatible.",
-                    EXPECTED_SCHEMA, schemaVersion);
+                        EXPECTED_SCHEMA, schemaVersion);
                 return false;
             }
 
@@ -81,7 +79,7 @@ public class BinaryDataLoader {
             }
 
             LOGGER.info("Loading binary: schema={}, items={}, sections={}, built={}",
-                schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
+                    schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
 
             // Read items section
             // Copy to byte[] because msgpack-core 0.9.8 cannot read from
@@ -98,14 +96,14 @@ public class BinaryDataLoader {
 
             long elapsed = System.currentTimeMillis() - startTime;
             LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}",
-                elapsed,
-                itemRegistry.size(),
-                constantsRegistry.getAllParents().size(),
-                constantsRegistry.getAllEssenceCosts().size(),
-                constantsRegistry.getBazaarItems().size(),
-                constantsRegistry.getAllMuseumCategories().size(),
-                constantsRegistry.getAllReforges().size(),
-                constantsRegistry.getAllReforgeStones().size()
+                    elapsed,
+                    itemRegistry.size(),
+                    constantsRegistry.getAllParents().size(),
+                    constantsRegistry.getAllEssenceCosts().size(),
+                    constantsRegistry.getBazaarItems().size(),
+                    constantsRegistry.getAllMuseumCategories().size(),
+                    constantsRegistry.getAllReforges().size(),
+                    constantsRegistry.getAllReforgeStones().size()
             );
             return true;
 
@@ -140,12 +138,12 @@ public class BinaryDataLoader {
 
             if (schemaVersion != EXPECTED_SCHEMA) {
                 LOGGER.error("Binary schema version mismatch: expected {}, got {}.",
-                    EXPECTED_SCHEMA, schemaVersion);
+                        EXPECTED_SCHEMA, schemaVersion);
                 return false;
             }
 
             LOGGER.info("Loading binary: schema={}, items={}, sections={}, built={}",
-                schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
+                    schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
 
             skip(input, itemsOffset - 64);
             byte[] itemsBytes = new byte[(int) itemsLength];
@@ -168,14 +166,14 @@ public class BinaryDataLoader {
 
             long elapsed = System.currentTimeMillis() - startTime;
             LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}",
-                elapsed,
-                itemRegistry.size(),
-                constantsRegistry.getAllParents().size(),
-                constantsRegistry.getAllEssenceCosts().size(),
-                constantsRegistry.getBazaarItems().size(),
-                constantsRegistry.getAllMuseumCategories().size(),
-                constantsRegistry.getAllReforges().size(),
-                constantsRegistry.getAllReforgeStones().size()
+                    elapsed,
+                    itemRegistry.size(),
+                    constantsRegistry.getAllParents().size(),
+                    constantsRegistry.getAllEssenceCosts().size(),
+                    constantsRegistry.getBazaarItems().size(),
+                    constantsRegistry.getAllMuseumCategories().size(),
+                    constantsRegistry.getAllReforges().size(),
+                    constantsRegistry.getAllReforgeStones().size()
             );
             return true;
 
@@ -261,6 +259,8 @@ public class BinaryDataLoader {
             List<NeuRecipe> recipes = null;
             String slayerReq = null;
             boolean vanilla = false;
+            String island = "";
+            int x = 0, y = 0, z = 0;
 
             for (int j = 0; j < mapSize; j++) {
                 String key = unpacker.unpackString();
@@ -283,11 +283,16 @@ public class BinaryDataLoader {
                         }
                     }
                     case "vanilla" -> vanilla = unpacker.unpackBoolean();
+                    case "island" -> island = unpacker.unpackString();
+                    case "x" -> x = unpacker.unpackInt();
+                    case "y" -> y = unpacker.unpackInt();
+                    case "z" -> z = unpacker.unpackInt();
                     default -> unpacker.skipValue();
                 }
             }
             items.add(new NeuItem(internalName, itemId, displayName, nbtTag, lore, damage,
-                clickCommand, craftText, infoType, info, recipe, recipes, slayerReq, vanilla));
+                    clickCommand, craftText, infoType, info, recipe, recipes, slayerReq, vanilla,
+                    island, x, y, z));
         }
         return items;
     }
@@ -355,22 +360,22 @@ public class BinaryDataLoader {
 
         return switch (type) {
             case "crafting" -> new NeuRecipe.CraftingRecipe(
-                unpackStringMap(raw),
-                raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1,
-                raw.containsKey("overrideOutputId") ? raw.get("overrideOutputId").asStringValue().asString() : ""
+                    unpackStringMap(raw),
+                    raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1,
+                    raw.containsKey("overrideOutputId") ? raw.get("overrideOutputId").asStringValue().asString() : ""
             );
             case "forge" -> new NeuRecipe.ForgeRecipe(
-                raw.containsKey("inputs") ? unpackStringList(raw.get("inputs")) : Collections.emptyList(),
-                raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1,
-                raw.containsKey("overrideOutputId") ? raw.get("overrideOutputId").asStringValue().asString() : "",
-                raw.containsKey("duration") ? raw.get("duration").asIntegerValue().asInt() : 0
+                    raw.containsKey("inputs") ? unpackStringList(raw.get("inputs")) : Collections.emptyList(),
+                    raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1,
+                    raw.containsKey("overrideOutputId") ? raw.get("overrideOutputId").asStringValue().asString() : "",
+                    raw.containsKey("duration") ? raw.get("duration").asIntegerValue().asInt() : 0
             );
             case "katgrade" -> new NeuRecipe.KatGradeRecipe(
-                raw.containsKey("coins") ? raw.get("coins").asIntegerValue().asInt() : 0,
-                raw.containsKey("time") ? raw.get("time").asIntegerValue().asInt() : 0,
-                raw.containsKey("input") ? raw.get("input").asStringValue().asString() : "",
-                raw.containsKey("output") ? raw.get("output").asStringValue().asString() : "",
-                raw.containsKey("items") ? unpackStringList(raw.get("items")) : Collections.emptyList()
+                    raw.containsKey("coins") ? raw.get("coins").asIntegerValue().asInt() : 0,
+                    raw.containsKey("time") ? raw.get("time").asIntegerValue().asInt() : 0,
+                    raw.containsKey("input") ? raw.get("input").asStringValue().asString() : "",
+                    raw.containsKey("output") ? raw.get("output").asStringValue().asString() : "",
+                    raw.containsKey("items") ? unpackStringList(raw.get("items")) : Collections.emptyList()
             );
             case "npc_shop" -> {
                 List<NeuRecipe.NpcShopRecipe.Cost> costs = new ArrayList<>();
@@ -388,9 +393,9 @@ public class BinaryDataLoader {
                     }
                 }
                 yield new NeuRecipe.NpcShopRecipe(
-                    raw.containsKey("npc") ? raw.get("npc").asStringValue().asString() : "",
-                    costs,
-                    raw.containsKey("result") ? raw.get("result").asStringValue().asString() : ""
+                        raw.containsKey("npc") ? raw.get("npc").asStringValue().asString() : "",
+                        costs,
+                        raw.containsKey("result") ? raw.get("result").asStringValue().asString() : ""
                 );
             }
             case "drops" -> {
@@ -411,9 +416,9 @@ public class BinaryDataLoader {
                 yield new NeuRecipe.DropsRecipe(drops);
             }
             case "trade" -> new NeuRecipe.TradeRecipe(
-                raw.containsKey("inputs") ? unpackStringList(raw.get("inputs")) : Collections.emptyList(),
-                raw.containsKey("output") ? raw.get("output").asStringValue().asString() : "",
-                raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1
+                    raw.containsKey("inputs") ? unpackStringList(raw.get("inputs")) : Collections.emptyList(),
+                    raw.containsKey("output") ? raw.get("output").asStringValue().asString() : "",
+                    raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1
             );
             default -> null;
         };
@@ -588,7 +593,7 @@ public class BinaryDataLoader {
                             }
                         }
                         reforgeStones.put(name, new ReforgeStoneData(
-                            internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats
+                                internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats
                         ));
                     }
                 }

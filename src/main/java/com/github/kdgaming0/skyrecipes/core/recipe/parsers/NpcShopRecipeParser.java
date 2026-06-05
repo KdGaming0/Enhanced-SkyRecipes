@@ -22,7 +22,8 @@ public final class NpcShopRecipeParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NpcShopRecipeParser.class);
 
-    private NpcShopRecipeParser() {}
+    private NpcShopRecipeParser() {
+    }
 
     /**
      * Parse an NPC shop recipe.
@@ -46,10 +47,10 @@ public final class NpcShopRecipeParser {
                 // Handle SKYBLOCK_COIN special case
                 if ("SKYBLOCK_COIN".equals(itemName)) {
                     costs.add(new SkyblockNpcShopClientRecipe.ShopCost(
-                        new ItemStack(Items.GOLD_INGOT, amount),
-                        itemName,
-                        amount,
-                        true
+                            new ItemStack(Items.GOLD_INGOT, amount),
+                            itemName,
+                            amount,
+                            true
                     ));
                 } else {
                     SlotRefParser.IngredientRef ref = SlotRefParser.parse(itemName + ":" + amount);
@@ -58,17 +59,17 @@ public final class NpcShopRecipeParser {
                     }
                     NeuItem costItem = SlotRefParser.resolve(ref, itemRegistry);
                     ItemStack costStack = costItem != null
-                        ? ItemStackBuilder.build(costItem, ref.count())
-                        : new ItemStack(Items.BARRIER, amount);
+                            ? ItemStackBuilder.build(costItem, ref.count())
+                            : new ItemStack(Items.BARRIER, amount);
                     costs.add(new SkyblockNpcShopClientRecipe.ShopCost(costStack, itemName, amount, false));
                 }
             }
 
             return new SkyblockNpcShopClientRecipe(
-                recipeId,
-                recipe.npc(),
-                costs,
-                resultStack
+                    recipeId,
+                    recipe.npc(),
+                    costs,
+                    resultStack
             );
 
         } catch (Exception e) {

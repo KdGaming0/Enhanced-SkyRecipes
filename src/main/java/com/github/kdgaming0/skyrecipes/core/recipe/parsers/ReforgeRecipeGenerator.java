@@ -24,7 +24,8 @@ public final class ReforgeRecipeGenerator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ReforgeRecipeGenerator.class);
 
-    private ReforgeRecipeGenerator() {}
+    private ReforgeRecipeGenerator() {
+    }
 
     /**
      * Generate all reforge recipes.
@@ -41,8 +42,8 @@ public final class ReforgeRecipeGenerator {
                 stoneOpt = itemRegistry.getByInternalName(stoneName);
             }
             ItemStack stoneStack = stoneOpt.isPresent()
-                ? ItemStackBuilder.build(stoneOpt.get())
-                : ItemStack.EMPTY;
+                    ? ItemStackBuilder.build(stoneOpt.get())
+                    : ItemStack.EMPTY;
 
             // Build a sample item stack for the applicable type (use a generic representative)
             ItemStack sampleItem = findSampleItem(data.itemTypes(), itemRegistry);
@@ -50,12 +51,12 @@ public final class ReforgeRecipeGenerator {
             Identifier recipeId = IdentifierUtil.skyRecipeId("reforge/", stoneName);
 
             recipes.add(new SkyblockReforgeClientRecipe(
-                recipeId,
-                stoneStack,
-                sampleItem,
-                data.reforgeName(),
-                data.itemTypes(),
-                data.reforgeCosts()
+                    recipeId,
+                    stoneStack,
+                    sampleItem,
+                    data.reforgeName(),
+                    data.itemTypes(),
+                    data.reforgeCosts()
             ));
         }
 

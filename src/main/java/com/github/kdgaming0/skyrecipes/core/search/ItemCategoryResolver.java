@@ -21,7 +21,10 @@ import java.util.regex.Pattern;
  */
 public final class ItemCategoryResolver {
 
-    private ItemCategoryResolver() {}
+    private static final Pattern MINION_PATTERN = Pattern.compile(".*_GENERATOR_\\d+");
+
+    private ItemCategoryResolver() {
+    }
 
     /**
      * Resolve the category for the given item.
@@ -38,6 +41,10 @@ public final class ItemCategoryResolver {
         }
         return inferCategoryFromItemId(item);
     }
+
+    // -----------------------------------------------------------------
+    // Private helpers
+    // -----------------------------------------------------------------
 
     /**
      * Infer a subtype string from the item for the {@code type:} search filter.
@@ -62,8 +69,8 @@ public final class ItemCategoryResolver {
         if (itemId.contains("boots") || itemId.contains("shoes")) return "boots";
         if (internalName.contains("_pet")) return "pet";
         if (internalName.contains("_accessory") || internalName.contains("_talisman")
-            || internalName.contains("_ring") || internalName.contains("_artifact")
-            || internalName.contains("_relic")) return "accessory";
+                || internalName.contains("_ring") || internalName.contains("_artifact")
+                || internalName.contains("_relic")) return "accessory";
 
         if (item.lore() != null && !item.lore().isEmpty()) {
             String last = stripColorCodes(item.lore().getLast()).toLowerCase();
@@ -80,17 +87,13 @@ public final class ItemCategoryResolver {
             if (last.endsWith(" rod") || last.endsWith(" staff")) return "rod";
             if (last.endsWith(" pet")) return "pet";
             if (last.endsWith(" accessory") || last.endsWith(" talisman") || last.endsWith(" ring")
-                || last.endsWith(" artifact") || last.endsWith(" relic")) return "accessory";
+                    || last.endsWith(" artifact") || last.endsWith(" relic")) return "accessory";
             if (last.endsWith(" minion")) return "minion";
             if (last.endsWith(" book")) return "book";
         }
 
         return null;
     }
-
-    // -----------------------------------------------------------------
-    // Private helpers
-    // -----------------------------------------------------------------
 
     private static SkyblockItemCategory inferCategoryFromItemId(NeuItem item) {
         String itemId = item.itemId();
@@ -136,15 +139,15 @@ public final class ItemCategoryResolver {
 
         // Item ID heuristics (least reliable — many functional items use skulls/heads)
         if (id.contains("sword") || id.contains("bow") || id.contains("wand")) return SkyblockItemCategory.WEAPON;
-        if (id.contains("helmet") || id.contains("chestplate") || id.contains("leggings") || id.contains("boots")) return SkyblockItemCategory.ARMOR;
-        if (id.contains("pickaxe") || id.contains("drill") || id.contains("hoe") || id.contains("axe") || id.contains("shovel")) return SkyblockItemCategory.TOOL;
+        if (id.contains("helmet") || id.contains("chestplate") || id.contains("leggings") || id.contains("boots"))
+            return SkyblockItemCategory.ARMOR;
+        if (id.contains("pickaxe") || id.contains("drill") || id.contains("hoe") || id.contains("axe") || id.contains("shovel"))
+            return SkyblockItemCategory.TOOL;
         if (id.contains("rod")) return SkyblockItemCategory.FISHING;
         if (id.contains("potion")) return SkyblockItemCategory.CONSUMABLE;
         if (id.contains("book")) return SkyblockItemCategory.ENCHANTED_BOOK;
         return SkyblockItemCategory.UNKNOWN;
     }
-
-    private static final Pattern MINION_PATTERN = Pattern.compile(".*_GENERATOR_\\d+");
 
     /**
      * Minions are identified by their internal name pattern {@code *_GENERATOR_\d+},

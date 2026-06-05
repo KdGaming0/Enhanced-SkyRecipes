@@ -11,7 +11,8 @@ import net.minecraft.resources.Identifier;
  */
 public final class IdentifierUtil {
 
-    private IdentifierUtil() {}
+    private IdentifierUtil() {
+    }
 
     /**
      * Sanitise a string so it is valid for use as an {@link Identifier} path.
@@ -26,8 +27,8 @@ public final class IdentifierUtil {
         StringBuilder sb = new StringBuilder(input.length());
         for (char c : input.toLowerCase().toCharArray()) {
             if ((c >= 'a' && c <= 'z')
-                || (c >= '0' && c <= '9')
-                || c == '/' || c == '.' || c == '_' || c == '-') {
+                    || (c >= '0' && c <= '9')
+                    || c == '/' || c == '.' || c == '_' || c == '-') {
                 sb.append(c);
             } else {
                 sb.append('_');

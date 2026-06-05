@@ -35,7 +35,8 @@ public final class ItemStackBuilder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ItemStackBuilder.class);
 
-    private ItemStackBuilder() {}
+    private ItemStackBuilder() {
+    }
 
     /**
      * Build an {@link ItemStack} from a {@link NeuItem} with default count of 1.
@@ -200,7 +201,7 @@ public final class ItemStackBuilder {
             }
         } catch (Exception e) {
             LOGGER.debug("Failed to parse minimal NBT for vanilla item {}: {}",
-                item.internalName(), e.getMessage());
+                    item.internalName(), e.getMessage());
         }
     }
 
@@ -250,7 +251,7 @@ public final class ItemStackBuilder {
                 for (String line : loreLines) {
                     if (line != null && line.contains("{") && line.matches(".*\\{[A-Z_]+\\}.*")) {
                         LOGGER.warn("Unresolved placeholder in lore for {}: {}",
-                            item.internalName(), line);
+                                item.internalName(), line);
                         break;
                     }
                 }
@@ -319,8 +320,8 @@ public final class ItemStackBuilder {
                     int[] intArray = intArrayOpt.get();
                     if (intArray.length == 4) {
                         uuid = new UUID(
-                            ((long) intArray[0] << 32) | (intArray[1] & 0xFFFFFFFFL),
-                            ((long) intArray[2] << 32) | (intArray[3] & 0xFFFFFFFFL)
+                                ((long) intArray[0] << 32) | (intArray[1] & 0xFFFFFFFFL),
+                                ((long) intArray[2] << 32) | (intArray[3] & 0xFFFFFFFFL)
                         );
                     }
                 }

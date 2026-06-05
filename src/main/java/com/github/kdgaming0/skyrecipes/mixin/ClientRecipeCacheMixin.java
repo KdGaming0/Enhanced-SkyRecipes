@@ -48,7 +48,7 @@ public class ClientRecipeCacheMixin {
             InternalRecipeManager.INSTANCE.setRecipesSynced(true);
             ci.cancel();
             org.slf4j.LoggerFactory.getLogger(ClientRecipeCacheMixin.class)
-                .debug("Cancelled redundant RRV buildRecipeCache(true) — SkyRecipes recipes already loaded");
+                    .debug("Cancelled redundant RRV buildRecipeCache(true) — SkyRecipes recipes already loaded");
         }
     }
 
@@ -61,7 +61,7 @@ public class ClientRecipeCacheMixin {
      */
     @Inject(method = "getRecipesForCraftingInput", at = @At("HEAD"), cancellable = true)
     private void skyrecipes$fastIngredientLookup(ItemStack inputStack,
-            CallbackInfoReturnable<List<ReliableClientRecipe>> cir) {
+                                                 CallbackInfoReturnable<List<ReliableClientRecipe>> cir) {
         if (inputStack.isEmpty()) {
             return;
         }
@@ -80,7 +80,7 @@ public class ClientRecipeCacheMixin {
      */
     @Inject(method = "getRecipesForCraftingOutput", at = @At("HEAD"), cancellable = true)
     private void skyrecipes$fastResultLookup(ItemStack outputStack,
-            CallbackInfoReturnable<List<ReliableClientRecipe>> cir) {
+                                             CallbackInfoReturnable<List<ReliableClientRecipe>> cir) {
         if (outputStack.isEmpty()) {
             return;
         }

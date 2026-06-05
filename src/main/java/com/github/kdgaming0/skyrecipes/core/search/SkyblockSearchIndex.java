@@ -123,16 +123,208 @@ public final class SkyblockSearchIndex {
         }
 
         this.sortedTokens = anyTokenIndex.keySet().stream()
-            .sorted()
-            .toArray(String[]::new);
+                .sorted()
+                .toArray(String[]::new);
 
         LOGGER.info("SkyblockSearchIndex built: {} items, {} distinct tokens, {} stats, {} aliases",
-            itemCount, sortedTokens.length, statIndex.size(), aliases.size());
+                itemCount, sortedTokens.length, statIndex.size(), aliases.size());
     }
 
     // -----------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------
+
+    private static BitSet resolveThreshold(TreeMap<Integer, BitSet> valueMap,
+                                           SearchQuery.FilterClause.Operator op, int value) {
+        BitSet result = new BitSet();
+        switch (op) {
+            case GT -> unionRange(result, valueMap.tailMap(value, false));
+            case LT -> unionRange(result, valueMap.headMap(value, false));
+            case GTE -> unionRange(result, valueMap.tailMap(value, true));
+            case LTE -> unionRange(result, valueMap.headMap(value, true));
+            case EQ -> {
+                BitSet bs = valueMap.get(value);
+                if (bs != null) result.or(bs);
+            }
+        }
+        return result;
+    }
+
+    private static void unionRange(BitSet target, java.util.NavigableMap<Integer, BitSet> range) {
+        for (BitSet bs : range.values()) {
+            target.or(bs);
+        }
+    }
+
+    private static <K> void addToken(Map<K, BitSet> index, K key, int itemIndex) {
+        index.computeIfAbsent(key, k -> new BitSet()).set(itemIndex);
+    }
+
+    private static void tokenize(String raw, TokenConsumer consumer) {
+        if (raw == null) return;
+        String clean = raw.toLowerCase();
+        int len = clean.length();
+        int start = -1;
+
+        for (int i = 0; i < len; i++) {
+            char c = clean.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                if (start < 0) start = i;
+            } else {
+                if (start >= 0) {
+                    if (i - start > 1) {
+                        consumer.accept(clean.substring(start, i));
+                    }
+                    start = -1;
+                }
+            }
+        }
+        if (start >= 0 && len - start > 1) {
+            consumer.accept(clean.substring(start, len));
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Query resolution
+    // -----------------------------------------------------------------
+
+    private static boolean tokenSetContainsPrefix(Set<String> tokens, String prefix) {
+        for (String t : tokens) {
+            if (t.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String stripColorCodes(String text) {
+        if (text == null) return "";
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '§' && i + 1 < text.length()) {
+                i++;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    private static String extractRarity(String lastLoreLine) {
+        String clean = stripColorCodes(lastLoreLine);
+        String[] parts = clean.split("\\s+");
+        for (String part : parts) {
+            if (part.matches("[A-Z]+")) {
+                return part.toLowerCase();
+            }
+        }
+        return null;
+    }
+
+    private static String extractSlayerType(String slayerReq) {
+        int underscore = slayerReq.indexOf('_');
+        return (underscore > 0) ? slayerReq.substring(0, underscore).toLowerCase() : null;
+    }
+
+    private static int extractSlayerLevel(String slayerReq) {
+        int underscore = slayerReq.lastIndexOf('_');
+        if (underscore < 0 || underscore + 1 >= slayerReq.length()) return 0;
+        try {
+            return Integer.parseInt(slayerReq.substring(underscore + 1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static String normalizeFilterToken(String raw) {
+        StringBuilder sb = new StringBuilder(raw.length());
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                sb.append(Character.toLowerCase(c));
+            } else if (c == ' ' || c == '_') {
+                sb.append('_');
+            }
+        }
+        return sb.toString();
+    }
+
+    private static int extractLeadingInt(String s) {
+        int i = 0;
+        while (i < s.length() && (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == ' ')) {
+            i++;
+        }
+        int start = i;
+        while (i < s.length() && Character.isDigit(s.charAt(i))) {
+            i++;
+        }
+        if (start == i) return Integer.MIN_VALUE;
+        try {
+            return Integer.parseInt(s.substring(start, i));
+        } catch (NumberFormatException e) {
+            return Integer.MIN_VALUE;
+        }
+    }
+
+    /**
+     * Extracts leading Roman numeral from a string, or null if none.
+     */
+    @Nullable
+    private static String extractLeadingRoman(String s) {
+        int i = 0;
+        while (i < s.length() && (s.charAt(i) == ' ' || s.charAt(i) == '!' || s.charAt(i) == '.')) {
+            i++;
+        }
+        int start = i;
+        while (i < s.length() && isRomanChar(s.charAt(i))) {
+            i++;
+        }
+        if (start == i) return null;
+        String roman = s.substring(start, i);
+        // Validate it's a real Roman numeral (at least 1 char, no more than 10)
+        return roman.length() <= 10 ? roman : null;
+    }
+
+    private static boolean isRomanChar(char c) {
+        return c == 'I' || c == 'V' || c == 'X' || c == 'L' || c == 'C' || c == 'D' || c == 'M';
+    }
+
+    private static int romanToInt(String roman) {
+        int result = 0;
+        int prev = 0;
+        for (int i = roman.length() - 1; i >= 0; i--) {
+            int val = switch (roman.charAt(i)) {
+                case 'I' -> 1;
+                case 'V' -> 5;
+                case 'X' -> 10;
+                case 'L' -> 50;
+                case 'C' -> 100;
+                case 'D' -> 500;
+                case 'M' -> 1000;
+                default -> 0;
+            };
+            if (val < prev) result -= val;
+            else result += val;
+            prev = val;
+        }
+        return result;
+    }
+
+    @Nullable
+    private static String toSingular(String token) {
+        if (token == null || token.length() < 4) return null;
+        if (token.endsWith("ss")) return null;
+        if (token.endsWith("es")) {
+            String base = token.substring(0, token.length() - 2);
+            return base.length() >= 3 ? base : null;
+        }
+        if (token.endsWith("s")) {
+            String base = token.substring(0, token.length() - 1);
+            return base.length() >= 3 ? base : null;
+        }
+        return null;
+    }
 
     /**
      * Filter the item list by the given query string.
@@ -145,8 +337,8 @@ public final class SkyblockSearchIndex {
      * Filter with an optional category override (used by category buttons).
      */
     public List<ItemStack> filter(String query,
-                                   @Nullable SkyblockItemCategory category,
-                                   @Nullable String subtype) {
+                                  @Nullable SkyblockItemCategory category,
+                                  @Nullable String subtype) {
         SearchQuery parsed = SearchQueryParser.parse(query);
         if (parsed.isEmpty() && category == null) {
             return new ArrayList<>(items);
@@ -224,6 +416,10 @@ public final class SkyblockSearchIndex {
         return parsed.stats().isEmpty();
     }
 
+    // -----------------------------------------------------------------
+    // Ranking
+    // -----------------------------------------------------------------
+
     /**
      * Returns the set of SkyBlock IDs that match the given query.
      */
@@ -241,10 +437,6 @@ public final class SkyblockSearchIndex {
         }
         return ids;
     }
-
-    // -----------------------------------------------------------------
-    // Query resolution
-    // -----------------------------------------------------------------
 
     private BitSet resolveQuery(SearchQuery query,
                                 @Nullable SkyblockItemCategory category,
@@ -402,6 +594,10 @@ public final class SkyblockSearchIndex {
         return result;
     }
 
+    // -----------------------------------------------------------------
+    // Index building
+    // -----------------------------------------------------------------
+
     private BitSet resolveStat(SearchQuery.StatClause stat) {
         TreeMap<Integer, BitSet> valueMap = statIndex.get(stat.statName());
         if (valueMap == null || valueMap.isEmpty()) {
@@ -521,30 +717,8 @@ public final class SkyblockSearchIndex {
         return result;
     }
 
-    private static BitSet resolveThreshold(TreeMap<Integer, BitSet> valueMap,
-                                            SearchQuery.FilterClause.Operator op, int value) {
-        BitSet result = new BitSet();
-        switch (op) {
-            case GT -> unionRange(result, valueMap.tailMap(value, false));
-            case LT -> unionRange(result, valueMap.headMap(value, false));
-            case GTE -> unionRange(result, valueMap.tailMap(value, true));
-            case LTE -> unionRange(result, valueMap.headMap(value, true));
-            case EQ -> {
-                BitSet bs = valueMap.get(value);
-                if (bs != null) result.or(bs);
-            }
-        }
-        return result;
-    }
-
-    private static void unionRange(BitSet target, java.util.NavigableMap<Integer, BitSet> range) {
-        for (BitSet bs : range.values()) {
-            target.or(bs);
-        }
-    }
-
     // -----------------------------------------------------------------
-    // Ranking
+    // Token helpers
     // -----------------------------------------------------------------
 
     private List<ItemStack> rankToList(SearchQuery query, BitSet candidates) {
@@ -562,10 +736,10 @@ public final class SkyblockSearchIndex {
             // Tier 3: prefix-only (single keyword, no other constraints)
             BitSet prefixMatches = new BitSet();
             if (query.keywords().size() == 1
-                && query.stats().isEmpty()
-                && query.filters().isEmpty()
-                && query.booleanFlags().isEmpty()
-                && query.categoryPath() == null) {
+                    && query.stats().isEmpty()
+                    && query.filters().isEmpty()
+                    && query.booleanFlags().isEmpty()
+                    && query.categoryPath() == null) {
                 prefixMatches.or(resolvePrefixUnion(query.keywords().getFirst().token()));
                 prefixMatches.and(candidates);
                 prefixMatches.andNot(nameMatches);
@@ -650,6 +824,10 @@ public final class SkyblockSearchIndex {
         }
     }
 
+    // -----------------------------------------------------------------
+    // Static helpers
+    // -----------------------------------------------------------------
+
     private void addSortedByStat(BitSet bits, List<ItemStack> out, SearchQuery.StatClause stat) {
         int card = bits.cardinality();
         if (card == 0) return;
@@ -662,7 +840,7 @@ public final class SkyblockSearchIndex {
 
         int[] values = statValuesPerItem.get(stat.statName());
         boolean desc = stat.op() == SearchQuery.StatClause.Operator.GT
-                    || stat.op() == SearchQuery.StatClause.Operator.GTE;
+                || stat.op() == SearchQuery.StatClause.Operator.GTE;
 
         Integer[] boxed = new Integer[card];
         for (int i = 0; i < card; i++) boxed[i] = indices[i];
@@ -681,10 +859,6 @@ public final class SkyblockSearchIndex {
             out.add(items.get(i));
         }
     }
-
-    // -----------------------------------------------------------------
-    // Index building
-    // -----------------------------------------------------------------
 
     private void indexItem(int itemIndex, ItemStack stack, ConstantsRegistry constantsRegistry) {
         String itemId = SkyblockIdExtractor.extract(stack);
@@ -961,7 +1135,7 @@ public final class SkyblockSearchIndex {
                         if (itemTokens != null) itemTokens.add("catacombs");
                         addToken(catacombsTypeIndex, "catacombs", itemIndex);
                         TreeMap<Integer, BitSet> levelMap = catacombsLevelIndex
-                            .computeIfAbsent("catacombs", k -> new TreeMap<>());
+                                .computeIfAbsent("catacombs", k -> new TreeMap<>());
                         levelMap.computeIfAbsent(level, k -> new BitSet()).set(itemIndex);
                     }
                 }
@@ -984,9 +1158,10 @@ public final class SkyblockSearchIndex {
                         if (itemTokens != null) itemTokens.add("catacombs");
                         addToken(catacombsTypeIndex, "catacombs", itemIndex);
                         TreeMap<Integer, BitSet> levelMap = catacombsLevelIndex
-                            .computeIfAbsent("catacombs", k -> new TreeMap<>());
+                                .computeIfAbsent("catacombs", k -> new TreeMap<>());
                         levelMap.computeIfAbsent(level, k -> new BitSet()).set(itemIndex);
-                    } catch (NumberFormatException ignored) {}
+                    } catch (NumberFormatException ignored) {
+                    }
                 }
             }
         }
@@ -1061,10 +1236,6 @@ public final class SkyblockSearchIndex {
         }
     }
 
-    // -----------------------------------------------------------------
-    // Token helpers
-    // -----------------------------------------------------------------
-
     private void addNameToken(String token, int itemIndex) {
         if (token.length() <= 1) return;
         addToken(nameTokenIndex, token, itemIndex);
@@ -1074,77 +1245,6 @@ public final class SkyblockSearchIndex {
     private void addAnyToken(String token, int itemIndex) {
         if (token.length() <= 1) return;
         addToken(anyTokenIndex, token, itemIndex);
-    }
-
-    private static <K> void addToken(Map<K, BitSet> index, K key, int itemIndex) {
-        index.computeIfAbsent(key, k -> new BitSet()).set(itemIndex);
-    }
-
-    private static void tokenize(String raw, TokenConsumer consumer) {
-        if (raw == null) return;
-        String clean = raw.toLowerCase();
-        int len = clean.length();
-        int start = -1;
-
-        for (int i = 0; i < len; i++) {
-            char c = clean.charAt(i);
-            if (Character.isLetterOrDigit(c)) {
-                if (start < 0) start = i;
-            } else {
-                if (start >= 0) {
-                    if (i - start > 1) {
-                        consumer.accept(clean.substring(start, i));
-                    }
-                    start = -1;
-                }
-            }
-        }
-        if (start >= 0 && len - start > 1) {
-            consumer.accept(clean.substring(start, len));
-        }
-    }
-
-    @FunctionalInterface
-    private interface TokenConsumer {
-        void accept(String token);
-    }
-
-    // -----------------------------------------------------------------
-    // Static helpers
-    // -----------------------------------------------------------------
-
-    private static boolean tokenSetContainsPrefix(Set<String> tokens, String prefix) {
-        for (String t : tokens) {
-            if (t.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
-    }
-
-    private static String extractRarity(String lastLoreLine) {
-        String clean = stripColorCodes(lastLoreLine);
-        String[] parts = clean.split("\\s+");
-        for (String part : parts) {
-            if (part.matches("[A-Z]+")) {
-                return part.toLowerCase();
-            }
-        }
-        return null;
     }
 
     private void indexSlayerRequirements(int itemIndex, NeuItem neuItem, Set<String> itemTokens) {
@@ -1219,110 +1319,13 @@ public final class SkyblockSearchIndex {
             if (itemTokens != null) itemTokens.add(composite);
 
             TreeMap<Integer, BitSet> levelMap = slayerLevelIndex
-                .computeIfAbsent(slayerType, k -> new TreeMap<>());
+                    .computeIfAbsent(slayerType, k -> new TreeMap<>());
             levelMap.computeIfAbsent(slayerLevel, k -> new BitSet()).set(itemIndex);
         }
     }
 
-    private static String extractSlayerType(String slayerReq) {
-        int underscore = slayerReq.indexOf('_');
-        return (underscore > 0) ? slayerReq.substring(0, underscore).toLowerCase() : null;
-    }
-
-    private static int extractSlayerLevel(String slayerReq) {
-        int underscore = slayerReq.lastIndexOf('_');
-        if (underscore < 0 || underscore + 1 >= slayerReq.length()) return 0;
-        try {
-            return Integer.parseInt(slayerReq.substring(underscore + 1));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    private static String normalizeFilterToken(String raw) {
-        StringBuilder sb = new StringBuilder(raw.length());
-        for (int i = 0; i < raw.length(); i++) {
-            char c = raw.charAt(i);
-            if (Character.isLetterOrDigit(c)) {
-                sb.append(Character.toLowerCase(c));
-            } else if (c == ' ' || c == '_') {
-                sb.append('_');
-            }
-        }
-        return sb.toString();
-    }
-
-    private static int extractLeadingInt(String s) {
-        int i = 0;
-        while (i < s.length() && (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == ' ')) {
-            i++;
-        }
-        int start = i;
-        while (i < s.length() && Character.isDigit(s.charAt(i))) {
-            i++;
-        }
-        if (start == i) return Integer.MIN_VALUE;
-        try {
-            return Integer.parseInt(s.substring(start, i));
-        } catch (NumberFormatException e) {
-            return Integer.MIN_VALUE;
-        }
-    }
-
-    /** Extracts leading Roman numeral from a string, or null if none. */
-    @Nullable
-    private static String extractLeadingRoman(String s) {
-        int i = 0;
-        while (i < s.length() && (s.charAt(i) == ' ' || s.charAt(i) == '!' || s.charAt(i) == '.')) {
-            i++;
-        }
-        int start = i;
-        while (i < s.length() && isRomanChar(s.charAt(i))) {
-            i++;
-        }
-        if (start == i) return null;
-        String roman = s.substring(start, i);
-        // Validate it's a real Roman numeral (at least 1 char, no more than 10)
-        return roman.length() <= 10 ? roman : null;
-    }
-
-    private static boolean isRomanChar(char c) {
-        return c == 'I' || c == 'V' || c == 'X' || c == 'L' || c == 'C' || c == 'D' || c == 'M';
-    }
-
-    private static int romanToInt(String roman) {
-        int result = 0;
-        int prev = 0;
-        for (int i = roman.length() - 1; i >= 0; i--) {
-            int val = switch (roman.charAt(i)) {
-                case 'I' -> 1;
-                case 'V' -> 5;
-                case 'X' -> 10;
-                case 'L' -> 50;
-                case 'C' -> 100;
-                case 'D' -> 500;
-                case 'M' -> 1000;
-                default -> 0;
-            };
-            if (val < prev) result -= val;
-            else result += val;
-            prev = val;
-        }
-        return result;
-    }
-
-    @Nullable
-    private static String toSingular(String token) {
-        if (token == null || token.length() < 4) return null;
-        if (token.endsWith("ss")) return null;
-        if (token.endsWith("es")) {
-            String base = token.substring(0, token.length() - 2);
-            return base.length() >= 3 ? base : null;
-        }
-        if (token.endsWith("s")) {
-            String base = token.substring(0, token.length() - 1);
-            return base.length() >= 3 ? base : null;
-        }
-        return null;
+    @FunctionalInterface
+    private interface TokenConsumer {
+        void accept(String token);
     }
 }

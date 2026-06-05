@@ -60,7 +60,7 @@ public class ItemFiltersMixin {
 
     @Inject(method = "defaultFilter", at = @At("HEAD"), cancellable = true, remap = false)
     private static void skyrecipes$skyblockSearchFilter(String query,
-            CallbackInfoReturnable<List<ItemStack>> cir) {
+                                                        CallbackInfoReturnable<List<ItemStack>> cir) {
         var index = SkyRecipesClientPlugin.getSearchIndex();
         if (index == null) {
             return;

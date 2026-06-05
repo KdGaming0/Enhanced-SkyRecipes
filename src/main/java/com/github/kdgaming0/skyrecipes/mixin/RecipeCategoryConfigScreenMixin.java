@@ -20,10 +20,10 @@ import java.util.stream.Stream;
 public class RecipeCategoryConfigScreenMixin {
 
     @Redirect(method = "init",
-        at = @At(value = "INVOKE", target = "Ljava/util/Collection;stream()Ljava/util/stream/Stream;"))
+            at = @At(value = "INVOKE", target = "Ljava/util/Collection;stream()Ljava/util/stream/Stream;"))
     private Stream<RecipeCategoryConfig.ConfiguredRecipeCategory> skyrecipes$filterVanillaCategories(
             Collection<RecipeCategoryConfig.ConfiguredRecipeCategory> collection) {
         return collection.stream()
-            .filter(cat -> !cat.id().getNamespace().equals("minecraft"));
+                .filter(cat -> !cat.id().getNamespace().equals("minecraft"));
     }
 }

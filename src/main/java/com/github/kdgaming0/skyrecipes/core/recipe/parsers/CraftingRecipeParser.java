@@ -1,12 +1,12 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.parsers;
 
-import cc.cassian.rrv.common.builtin.crafting.CraftingClientRecipe;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockCraftingClientRecipe;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
@@ -23,12 +23,13 @@ public final class CraftingRecipeParser {
     private static final Logger LOGGER = LoggerFactory.getLogger(CraftingRecipeParser.class);
 
     private static final Map<String, Integer> SLOT_INDEX = Map.of(
-        "A1", 0, "A2", 1, "A3", 2,
-        "B1", 3, "B2", 4, "B3", 5,
-        "C1", 6, "C2", 7, "C3", 8
+            "A1", 0, "A2", 1, "A3", 2,
+            "B1", 3, "B2", 4, "B3", 5,
+            "C1", 6, "C2", 7, "C3", 8
     );
 
-    private CraftingRecipeParser() {}
+    private CraftingRecipeParser() {
+    }
 
     /**
      * Parse a crafting recipe into an RRV client recipe.
@@ -38,7 +39,7 @@ public final class CraftingRecipeParser {
      * @param itemRegistry For resolving ingredient and output items
      * @return A CraftingClientRecipe, or null if parsing fails
      */
-    public static CraftingClientRecipe parse(NeuItem item, NeuRecipe.CraftingRecipe recipe, ItemRegistry itemRegistry) {
+    public static SkyblockCraftingClientRecipe parse(NeuItem item, NeuRecipe.CraftingRecipe recipe, ItemRegistry itemRegistry) {
         try {
             Identifier recipeId = IdentifierUtil.skyRecipeId("crafting/", item.internalName());
 
@@ -72,9 +73,9 @@ public final class CraftingRecipeParser {
 
             ItemStack resultStack = ItemStackBuilder.build(outputItem, recipe.count());
 
-            return new CraftingClientRecipe.Builder(recipeId, ingredients)
-                .setResult(SlotContent.of(resultStack))
-                .build();
+            String craftText = item.craftText();
+            return new SkyblockCraftingClientRecipe(recipeId, ingredients,
+                    SlotContent.of(resultStack), craftText);
 
         } catch (Exception e) {
             LOGGER.warn("Failed to parse crafting recipe for {}: {}", item.internalName(), e.getMessage());

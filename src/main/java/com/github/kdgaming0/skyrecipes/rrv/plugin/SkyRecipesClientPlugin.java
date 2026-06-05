@@ -5,6 +5,7 @@ import cc.cassian.rrv.api.recipe.ItemView;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.client.recipe.ClientRecipeCache;
 import cc.cassian.rrv.common.config.Configs;
+import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
@@ -14,9 +15,8 @@ import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
-import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
-import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.mixin.EditBoxAccessor;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -62,69 +62,172 @@ import java.util.concurrent.CompletableFuture;
  */
 public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin {
 
+    /**
+     * Alias map exposed for {@link com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete}.
+     */
+    public static final Map<String, String> ALIASES;
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyRecipesClientPlugin.class);
-
-    /** ----------------------------------------------------------------------
-     *  Runtime discovery of RRV's private handleClientRecipe method.
-     *  If this fails (RRV renamed/refactored it), we fall back to the stable
-     *  provider path and the game continues to work.
-     * ---------------------------------------------------------------------- */
+    /**
+     * ----------------------------------------------------------------------
+     * Runtime discovery of RRV's private handleClientRecipe method.
+     * If this fails (RRV renamed/refactored it), we fall back to the stable
+     * provider path and the game continues to work.
+     * ----------------------------------------------------------------------
+     */
     private static final MethodHandle INJECT_RECIPE;
     private static final boolean DIRECT_INJECTION_AVAILABLE;
+    /**
+     * True after the RRV recipe cache has been successfully built with SkyRecipes recipes.
+     */
+    private static volatile boolean recipesReady = false;
+    /**
+     * Search index for SkyBlock item filtering. Built after stacks. Invalidated on data change.
+     */
+    private static volatile SkyblockSearchIndex searchIndex = null;
+
     static {
         MethodHandle h = null;
         try {
             java.lang.reflect.Method m = ClientRecipeCache.class.getDeclaredMethod(
-                "handleClientRecipe",
-                Identifier.class,
-                ReliableClientRecipe.class,
-                int.class,
-                boolean.class
+                    "handleClientRecipe",
+                    Identifier.class,
+                    ReliableClientRecipe.class,
+                    int.class,
+                    boolean.class
             );
             m.setAccessible(true);
             h = MethodHandles.lookup().unreflect(m);
             LOGGER.debug("RRV internal API 'handleClientRecipe' bound successfully.");
         } catch (Exception e) {
             LOGGER.warn("SkyRecipes: RRV internal API 'handleClientRecipe' not found ({}). "
-                + "Falling back to provider-only mode. Recipe display may be delayed.",
-                e.getClass().getSimpleName());
+                            + "Falling back to provider-only mode. Recipe display may be delayed.",
+                    e.getClass().getSimpleName());
         }
         INJECT_RECIPE = h;
         DIRECT_INJECTION_AVAILABLE = (h != null);
     }
 
-    /** True after the RRV recipe cache has been successfully built with SkyRecipes recipes. */
-    private static volatile boolean recipesReady = false;
+    static {
+        Map<String, String> map = new HashMap<>();
+        map.put("aote", "ASPECT_OF_THE_END");
+        map.put("aotv", "ASPECT_OF_THE_VOID");
+        map.put("juju", "JUJU_SHORTBOW");
+        map.put("livid", "LIVID_DAGGER");
+        map.put("fs", "FLOWER_OF_TRUTH");
+        map.put("yeti", "YETI_SWORD");
+        map.put("term", "TERMINATOR");
+        map.put("hype", "HYPERION");
+        map.put("aotd", "ASPECT_OF_THE_DRAGON");
+        map.put("bonemerang", "BONE_BOOMERANG");
+        map.put("daed", "DAEDALUS_AXE");
+        map.put("gdrag", "GOLDEN_DRAGON");
+        map.put("edrag", "ENDER_DRAGON_PET");
+        map.put("wither", "WITHER_SHIELD_SCROLL");
+        map.put("sf", "SHADOW_FURY");
+        map.put("valk", "VALKYRIE");
+        map.put("astrea", "ASTREA");
+        map.put("scs", "SCORPION_FOIL");
+        map.put("spirit", "SPIRIT_SCEPTRE");
+        map.put("giant", "GIANTS_SWORD");
+        map.put("midas", "MIDAS_SWORD");
+        map.put("pooch", "POOCH_SWORD");
+        map.put("reef", "REEF_SCALES");
+        map.put("rod", "SPEEDSTER_ROD");
+        map.put("inferno", "INFERNO_ROD");
+        map.put("hell", "HELLFIRE_ROD");
+        map.put("soul", "SOUL_WHIP");
+        map.put("wand", "WAND_OF_RESTORATION");
+        map.put("ice", "ICE_SPRAY_WAND");
+        map.put("plasma", "PLASMAFLUX_POWER_ORB");
+        map.put("overflux", "OVERFLUX_POWER_ORB");
+        map.put("manaflux", "MANAFLUX_POWER_ORB");
+        map.put("rory", "RORY");
+        map.put("boo", "BOO_STAFF");
+        ALIASES = Collections.unmodifiableMap(map);
+    }
 
-    /** True after stack-sensitives have been registered. */
+    /**
+     * True after stack-sensitives have been registered.
+     */
     private volatile boolean stacksReady = false;
-
-    /** True after startup finalization to prevent duplicate work. */
+    /**
+     * True after startup finalization to prevent duplicate work.
+     */
     private volatile boolean startupFinalized = false;
-
-    /** True for the very first injection; false after a data reload. */
+    /**
+     * True for the very first injection; false after a data reload.
+     */
     private volatile boolean firstInjection = true;
-
-    /** Cache for the raw (unfiltered) recipe generation result. Invalidated on data change. */
+    /**
+     * Cache for the raw (unfiltered) recipe generation result. Invalidated on data change.
+     */
     private volatile RecipeResult cachedResult = null;
-
-    /** Cached ItemStacks for stack-sensitive registration. Built lazily. Invalidated on data change. */
+    /**
+     * Cached ItemStacks for stack-sensitive registration. Built lazily. Invalidated on data change.
+     */
     private volatile List<ItemStack> cachedStacks = null;
-
-    /** Search index for SkyBlock item filtering. Built after stacks. Invalidated on data change. */
-    private static volatile SkyblockSearchIndex searchIndex = null;
-
-    /** Tracks the background recipe-generation task so we never start two in parallel. */
+    /**
+     * Tracks the background recipe-generation task so we never start two in parallel.
+     */
     private volatile CompletableFuture<?> pendingRecipeGen = null;
-
-    /** Tracks the background stack-building task so we never start two in parallel. */
+    /**
+     * Tracks the background stack-building task so we never start two in parallel.
+     */
     private volatile CompletableFuture<?> pendingStackBuild = null;
-
-    /** True after {@link ClientLifecycleEvents#CLIENT_STARTED} fires. */
+    /**
+     * True after {@link ClientLifecycleEvents#CLIENT_STARTED} fires.
+     */
     private volatile boolean clientStarted = false;
-
-    /** True while a background retry loop is waiting for components to bind. */
+    /**
+     * True while a background retry loop is waiting for components to bind.
+     */
     private volatile boolean startupRetryInProgress = false;
+    private boolean wasRightArrowDown = false;
+    private boolean wasTabDown = false;
+
+    /**
+     * Check if Minecraft data components are bound and safe to use.
+     *
+     * <p>During early client init, {@link net.minecraft.core.Holder.Reference#components()}
+     * may throw because component binding happens after registry freeze. This test creates
+     * a dummy stack to verify the component system is fully initialized.</p>
+     */
+    private static boolean areComponentsBound() {
+        try {
+            ItemStack test = new ItemStack(Items.DIAMOND);
+            test.set(DataComponents.CUSTOM_NAME, Component.literal("test"));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Returns the current SkyBlock search index, or {@code null} if it has not been
+     * built yet (data not loaded or still processing).
+     */
+    public static SkyblockSearchIndex getSearchIndex() {
+        return searchIndex;
+    }
+
+    private static Item resolveAliasItem(com.github.kdgaming0.skyrecipes.core.model.NeuItem neuItem) {
+        String itemId = neuItem.itemId();
+        if (itemId == null || itemId.isEmpty()) {
+            return null;
+        }
+        net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.tryParse(itemId);
+        if (id == null) {
+            return null;
+        }
+        return BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+    }
+
+    /**
+     * Exposed to the mixin that skips redundant RRV cache rebuilds.
+     */
+    public static boolean areRecipesReady() {
+        return recipesReady;
+    }
 
     @Override
     public void onIntegrationInitialize() {
@@ -143,15 +246,15 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         // Exclude vanilla Minecraft recipe categories from RRV.
         // SkyBlock recipes use minecraft:crafting; all other vanilla categories are hidden.
         ItemView.excludeRecipeTypes(
-            Identifier.fromNamespaceAndPath("minecraft", "furnace_smelting"),
-            Identifier.fromNamespaceAndPath("minecraft", "furnace_blasting"),
-            Identifier.fromNamespaceAndPath("minecraft", "furnace_smoking"),
-            Identifier.fromNamespaceAndPath("minecraft", "campfire_cooking"),
-            Identifier.fromNamespaceAndPath("minecraft", "brewing"),
-            Identifier.fromNamespaceAndPath("minecraft", "smithing"),
-            Identifier.fromNamespaceAndPath("minecraft", "stonecutting"),
-            Identifier.fromNamespaceAndPath("minecraft", "fuel"),
-            Identifier.fromNamespaceAndPath("minecraft", "anvil_combining")
+                Identifier.fromNamespaceAndPath("minecraft", "furnace_smelting"),
+                Identifier.fromNamespaceAndPath("minecraft", "furnace_blasting"),
+                Identifier.fromNamespaceAndPath("minecraft", "furnace_smoking"),
+                Identifier.fromNamespaceAndPath("minecraft", "campfire_cooking"),
+                Identifier.fromNamespaceAndPath("minecraft", "brewing"),
+                Identifier.fromNamespaceAndPath("minecraft", "smithing"),
+                Identifier.fromNamespaceAndPath("minecraft", "stonecutting"),
+                Identifier.fromNamespaceAndPath("minecraft", "fuel"),
+                Identifier.fromNamespaceAndPath("minecraft", "anvil_combining")
         );
 
         // Fallback provider — RRV calls this on every buildRecipeCache.
@@ -193,7 +296,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         LOGGER.info("SkyRecipes RRV client plugin initialized");
     }
 
-    /** Invalidate all caches and reset state. Called when data changes. */
+    /**
+     * Invalidate all caches and reset state. Called when data changes.
+     */
     private void invalidateCaches() {
         cachedResult = null;
         cachedStacks = null;
@@ -203,23 +308,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         startupFinalized = false;
         pendingRecipeGen = null;
         pendingStackBuild = null;
-    }
-
-    /**
-     * Check if Minecraft data components are bound and safe to use.
-     *
-     * <p>During early client init, {@link net.minecraft.core.Holder.Reference#components()}
-     * may throw because component binding happens after registry freeze. This test creates
-     * a dummy stack to verify the component system is fully initialized.</p>
-     */
-    private static boolean areComponentsBound() {
-        try {
-            ItemStack test = new ItemStack(Items.DIAMOND);
-            test.set(DataComponents.CUSTOM_NAME, Component.literal("test"));
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     /**
@@ -255,7 +343,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
     }
 
-    /** Start generating recipes on a background thread if not already running. */
+    /**
+     * Start generating recipes on a background thread if not already running.
+     */
     private void startBackgroundRecipes() {
         if (!SkyRecipes.isDataReady()) return;
         if (cachedResult != null) return;
@@ -273,7 +363,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                     mc.execute(() -> {
                         cachedResult = result;
                         LOGGER.info("Background recipe generation complete: {} recipes",
-                            result.recipes().size());
+                                result.recipes().size());
                         tryFinalizeStartup(mc);
                     });
                 }
@@ -281,7 +371,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
     }
 
-    /** Start building ItemStacks on a background thread if not already running. */
+    /**
+     * Start building ItemStacks on a background thread if not already running.
+     */
     private void startBackgroundStacks() {
         if (!SkyRecipes.isDataReady()) return;
         if (cachedStacks != null) return;
@@ -328,8 +420,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
             // Build family resolver and rebuild parallel SkyBlock-ID index
             FamilyResolver familyResolver = new FamilyResolver(
-                SkyRecipes.getConstantsRegistry(),
-                SkyRecipes.getItemRegistry()
+                    SkyRecipes.getConstantsRegistry(),
+                    SkyRecipes.getItemRegistry()
             );
             SkyblockRecipeCache.setFamilyResolver(familyResolver);
             SkyblockRecipeCache.rebuild(recipes);
@@ -339,7 +431,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             firstInjection = false;
 
             LOGGER.info("SkyRecipes startup complete: {} recipes injected into RRV",
-                recipes.size());
+                    recipes.size());
         } catch (Throwable t) {
             LOGGER.error("Failed to inject recipes into RRV", t);
             // Even if injection fails, mark ready so the provider can serve recipes
@@ -350,7 +442,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         }
     }
 
-    /** Direct cache injection via MethodHandle. Must run on the main thread. */
+    /**
+     * Direct cache injection via MethodHandle. Must run on the main thread.
+     */
     private void injectDirectly(List<ReliableClientRecipe> recipes) throws Throwable {
         ClientRecipeCache cache = ClientRecipeCache.INSTANCE;
 
@@ -368,7 +462,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         Configs.CATEGORIES.addNewCategories();
     }
 
-    /** Generate all recipes. Returns null on failure. */
+    /**
+     * Generate all recipes. Returns null on failure.
+     */
     private RecipeResult generateRecipes() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) return null;
@@ -382,7 +478,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         }
     }
 
-    /** Build ItemStacks for all NeuItems. Safe to call from any thread once components are bound. */
+    /**
+     * Build ItemStacks for all NeuItems. Safe to call from any thread once components are bound.
+     */
     private List<ItemStack> buildAllStacks() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         List<ItemStack> stacks = new ArrayList<>();
@@ -402,53 +500,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             }
         }
         return stacks;
-    }
-
-    /**
-     * Pre-computed sort key for NeuItems. Groups family members together and
-     * orders tiered items numerically (e.g. Minion I before Minion XII).
-     */
-    private record ItemSortKey(String familyBase, int tier, String cleanDisplayName, String internalName)
-            implements Comparable<ItemSortKey> {
-
-        static ItemSortKey of(NeuItem item) {
-            String name = item.internalName() != null ? item.internalName() : "";
-            String display = item.displayName() != null ? item.displayName() : "";
-            return new ItemSortKey(
-                com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractBaseName(name),
-                com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractTier(name),
-                stripColorCodes(display),
-                name
-            );
-        }
-
-        @Override
-        public int compareTo(ItemSortKey other) {
-            int c = this.familyBase.compareTo(other.familyBase);
-            if (c != 0) return c;
-
-            c = Integer.compare(this.tier, other.tier);
-            if (c != 0) return c;
-
-            c = this.cleanDisplayName.compareTo(other.cleanDisplayName);
-            if (c != 0) return c;
-
-            return this.internalName.compareTo(other.internalName);
-        }
-
-        private static String stripColorCodes(String text) {
-            if (text == null || text.isEmpty()) return "";
-            StringBuilder sb = new StringBuilder(text.length());
-            for (int i = 0; i < text.length(); i++) {
-                char c = text.charAt(i);
-                if (c == '§' && i + 1 < text.length()) {
-                    i++;
-                } else {
-                    sb.append(c);
-                }
-            }
-            return sb.toString().trim();
-        }
     }
 
     /**
@@ -498,54 +549,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         }
     }
 
-    /**
-     * Returns the current SkyBlock search index, or {@code null} if it has not been
-     * built yet (data not loaded or still processing).
-     */
-    public static SkyblockSearchIndex getSearchIndex() {
-        return searchIndex;
-    }
-
-    /** Alias map exposed for {@link com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete}. */
-    public static final Map<String, String> ALIASES;
-    static {
-        Map<String, String> map = new HashMap<>();
-        map.put("aote", "ASPECT_OF_THE_END");
-        map.put("aotv", "ASPECT_OF_THE_VOID");
-        map.put("juju", "JUJU_SHORTBOW");
-        map.put("livid", "LIVID_DAGGER");
-        map.put("fs", "FLOWER_OF_TRUTH");
-        map.put("yeti", "YETI_SWORD");
-        map.put("term", "TERMINATOR");
-        map.put("hype", "HYPERION");
-        map.put("aotd", "ASPECT_OF_THE_DRAGON");
-        map.put("bonemerang", "BONE_BOOMERANG");
-        map.put("daed", "DAEDALUS_AXE");
-        map.put("gdrag", "GOLDEN_DRAGON");
-        map.put("edrag", "ENDER_DRAGON_PET");
-        map.put("wither", "WITHER_SHIELD_SCROLL");
-        map.put("sf", "SHADOW_FURY");
-        map.put("valk", "VALKYRIE");
-        map.put("astrea", "ASTREA");
-        map.put("scs", "SCORPION_FOIL");
-        map.put("spirit", "SPIRIT_SCEPTRE");
-        map.put("giant", "GIANTS_SWORD");
-        map.put("midas", "MIDAS_SWORD");
-        map.put("pooch", "POOCH_SWORD");
-        map.put("reef", "REEF_SCALES");
-        map.put("rod", "SPEEDSTER_ROD");
-        map.put("inferno", "INFERNO_ROD");
-        map.put("hell", "HELLFIRE_ROD");
-        map.put("soul", "SOUL_WHIP");
-        map.put("wand", "WAND_OF_RESTORATION");
-        map.put("ice", "ICE_SPRAY_WAND");
-        map.put("plasma", "PLASMAFLUX_POWER_ORB");
-        map.put("overflux", "OVERFLUX_POWER_ORB");
-        map.put("manaflux", "MANAFLUX_POWER_ORB");
-        map.put("rory", "RORY");
-        map.put("boo", "BOO_STAFF");
-        ALIASES = Collections.unmodifiableMap(map);
-    }
+    // ── Autocomplete suggestion commit (Right Arrow / Tab) ─────────────────────
 
     private void registerAliases() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
@@ -564,28 +568,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             });
         }
     }
-
-    private static Item resolveAliasItem(com.github.kdgaming0.skyrecipes.core.model.NeuItem neuItem) {
-        String itemId = neuItem.itemId();
-        if (itemId == null || itemId.isEmpty()) {
-            return null;
-        }
-        net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.tryParse(itemId);
-        if (id == null) {
-            return null;
-        }
-        return BuiltInRegistries.ITEM.getOptional(id).orElse(null);
-    }
-
-    /** Exposed to the mixin that skips redundant RRV cache rebuilds. */
-    public static boolean areRecipesReady() {
-        return recipesReady;
-    }
-
-    // ── Autocomplete suggestion commit (Right Arrow / Tab) ─────────────────────
-
-    private boolean wasRightArrowDown = false;
-    private boolean wasTabDown = false;
 
     private void handleSearchBarSuggestionCommit(Minecraft client) {
         if (client.screen == null) return;
@@ -611,5 +593,52 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
         wasRightArrowDown = rightDown;
         wasTabDown = tabDown;
+    }
+
+    /**
+     * Pre-computed sort key for NeuItems. Groups family members together and
+     * orders tiered items numerically (e.g. Minion I before Minion XII).
+     */
+    private record ItemSortKey(String familyBase, int tier, String cleanDisplayName, String internalName)
+            implements Comparable<ItemSortKey> {
+
+        static ItemSortKey of(NeuItem item) {
+            String name = item.internalName() != null ? item.internalName() : "";
+            String display = item.displayName() != null ? item.displayName() : "";
+            return new ItemSortKey(
+                    com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractBaseName(name),
+                    com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractTier(name),
+                    stripColorCodes(display),
+                    name
+            );
+        }
+
+        private static String stripColorCodes(String text) {
+            if (text == null || text.isEmpty()) return "";
+            StringBuilder sb = new StringBuilder(text.length());
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (c == '§' && i + 1 < text.length()) {
+                    i++;
+                } else {
+                    sb.append(c);
+                }
+            }
+            return sb.toString().trim();
+        }
+
+        @Override
+        public int compareTo(ItemSortKey other) {
+            int c = this.familyBase.compareTo(other.familyBase);
+            if (c != 0) return c;
+
+            c = Integer.compare(this.tier, other.tier);
+            if (c != 0) return c;
+
+            c = this.cleanDisplayName.compareTo(other.cleanDisplayName);
+            if (c != 0) return c;
+
+            return this.internalName.compareTo(other.internalName);
+        }
     }
 }

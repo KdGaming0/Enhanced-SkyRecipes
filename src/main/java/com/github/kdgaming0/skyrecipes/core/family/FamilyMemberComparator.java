@@ -16,7 +16,8 @@ public final class FamilyMemberComparator implements Comparator<String> {
 
     public static final FamilyMemberComparator INSTANCE = new FamilyMemberComparator();
 
-    private FamilyMemberComparator() {}
+    private FamilyMemberComparator() {
+    }
 
     @Override
     public int compare(String a, String b) {

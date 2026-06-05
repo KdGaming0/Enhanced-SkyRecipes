@@ -8,22 +8,38 @@ package com.github.kdgaming0.skyrecipes.core.family;
  * because the ingredient index already captures upgrade chains naturally.</p>
  */
 public enum FamilyType {
-    /** Numeric or semicolon-tiered families: minions, pets, enchantments, perfect armor,
-     *  tools, runes, campfire talismans, drills, etc. */
+    /**
+     * Numeric or semicolon-tiered families: minions, pets, enchantments, perfect armor,
+     * tools, runes, campfire talismans, drills, etc.
+     */
     TIERED,
-    /** Accessory upgrade chains: TALISMAN → RING → ARTIFACT → RELIC. */
+    /**
+     * Accessory upgrade chains: TALISMAN → RING → ARTIFACT → RELIC.
+     */
     ACCESSORY_CHAIN,
-    /** Starred dungeon items: BASE → STARRED_BASE. */
+    /**
+     * Starred dungeon items: BASE → STARRED_BASE.
+     */
     STARRED,
-    /** One base item that branches into multiple named variants. */
+    /**
+     * One base item that branches into multiple named variants.
+     */
     BRANCHING,
-    /** Armor set pieces (HELMET/CHESTPLATE/LEGGINGS/BOOTS) — do not expand. */
+    /**
+     * Armor set pieces (HELMET/CHESTPLATE/LEGGINGS/BOOTS) — do not expand.
+     */
     ARMOR_SET,
-    /** Vanilla block color variants (WOOL, BANNER, etc.) — do not expand. */
+    /**
+     * Vanilla block color variants (WOOL, BANNER, etc.) — do not expand.
+     */
     COLOR_VARIANT,
-    /** Thematically related items that are not craftable upgrades — do not expand. */
+    /**
+     * Thematically related items that are not craftable upgrades — do not expand.
+     */
     COLLECTION,
-    /** Item has no family or an unregistered family — do not expand. */
+    /**
+     * Item has no family or an unregistered family — do not expand.
+     */
     SINGLE;
 
     /**

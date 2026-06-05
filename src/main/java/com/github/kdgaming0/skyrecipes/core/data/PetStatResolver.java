@@ -26,16 +26,24 @@ public final class PetStatResolver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PetStatResolver.class);
 
-    /** Matches stat-name placeholders like {@code {STRENGTH}} or {@code {SEA_CREATURE_CHANCE}}. */
+    /**
+     * Matches stat-name placeholders like {@code {STRENGTH}} or {@code {SEA_CREATURE_CHANCE}}.
+     */
     private static final Pattern STAT_PLACEHOLDER = Pattern.compile("\\{([A-Z][A-Z_]+)}");
 
-    /** Matches numeric placeholders like {@code {0}}, {@code {1}}. */
+    /**
+     * Matches numeric placeholders like {@code {0}}, {@code {1}}.
+     */
     private static final Pattern INDEX_PLACEHOLDER = Pattern.compile("\\{(\\d+)}");
 
-    /** Matches the level placeholder in display names. */
+    /**
+     * Matches the level placeholder in display names.
+     */
     private static final Pattern LEVEL_PLACEHOLDER = Pattern.compile("\\{LVL}");
 
-    /** The stat level to display. Using max level keeps things simple and matches what most players want to see. */
+    /**
+     * The stat level to display. Using max level keeps things simple and matches what most players want to see.
+     */
     private static final int DISPLAY_LEVEL = 100;
 
     /**
@@ -44,7 +52,7 @@ public final class PetStatResolver {
      * is the rarity index: 0=COMMON, 1=UNCOMMON, 2=RARE, 3=EPIC, 4=LEGENDARY, 5=MYTHIC.
      */
     private static final String[] RARITY_SUFFIX_TO_NAME = {
-        "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC"
+            "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC"
     };
 
     private final Map<String, Map<String, LevelStats>> petStats;
@@ -93,66 +101,6 @@ public final class PetStatResolver {
         LOGGER.info("Loaded petnums for {} pets", result.size());
         return new PetStatResolver(Collections.unmodifiableMap(result));
     }
-
-    /**
-     * Returns resolved display name and lore for a pet item, or {@code null} if the item
-     * is not a pet or no petnums data exists for it.
-     *
-     * <p>The returned array has the display name at index 0 and the resolved lore list at index 1.
-     * If this method returns non-null, the caller should use these resolved strings instead of
-     * the raw {@link NeuItem} values.</p>
-     */
-    public ResolvedStrings resolve(NeuItem item) {
-        String internalName = item.internalName();
-        if (internalName == null || internalName.isEmpty()) {
-            return null;
-        }
-
-        PetIdentity identity = parsePetIdentity(internalName);
-        if (identity == null) {
-            return null;
-        }
-
-        Map<String, LevelStats> rarityMap = petStats.get(identity.petName);
-        if (rarityMap == null) {
-            return null;
-        }
-
-        LevelStats stats = rarityMap.get(identity.rarityName);
-        if (stats == null) {
-            return null;
-        }
-
-        String resolvedName = item.displayName();
-        if (resolvedName != null && !resolvedName.isEmpty()) {
-            resolvedName = LEVEL_PLACEHOLDER.matcher(resolvedName)
-                .replaceAll(String.valueOf(DISPLAY_LEVEL));
-        }
-
-        List<String> resolvedLore = item.lore();
-        if (resolvedLore != null && !resolvedLore.isEmpty()) {
-            List<String> newLore = new ArrayList<>(resolvedLore.size());
-            for (String line : resolvedLore) {
-                newLore.add(resolveLine(line, stats));
-            }
-            resolvedLore = newLore;
-        } else if (resolvedLore == null) {
-            resolvedLore = List.of();
-        }
-
-        return new ResolvedStrings(resolvedName, resolvedLore);
-    }
-
-    /**
-     * Returns whether any petnums data has been loaded.
-     */
-    public boolean isLoaded() {
-        return !petStats.isEmpty();
-    }
-
-    // -----------------------------------------------------------------
-    // Internal helpers
-    // -----------------------------------------------------------------
 
     private static PetIdentity parsePetIdentity(String internalName) {
         int semi = internalName.lastIndexOf(';');
@@ -217,6 +165,10 @@ public final class PetStatResolver {
         return sb.toString();
     }
 
+    // -----------------------------------------------------------------
+    // Internal helpers
+    // -----------------------------------------------------------------
+
     private static String formatStat(double value) {
         if (value == Math.floor(value) && !Double.isInfinite(value)) {
             return String.valueOf((long) value);
@@ -263,6 +215,62 @@ public final class PetStatResolver {
         return new LevelStats(statNums, otherNums);
     }
 
+    /**
+     * Returns resolved display name and lore for a pet item, or {@code null} if the item
+     * is not a pet or no petnums data exists for it.
+     *
+     * <p>The returned array has the display name at index 0 and the resolved lore list at index 1.
+     * If this method returns non-null, the caller should use these resolved strings instead of
+     * the raw {@link NeuItem} values.</p>
+     */
+    public ResolvedStrings resolve(NeuItem item) {
+        String internalName = item.internalName();
+        if (internalName == null || internalName.isEmpty()) {
+            return null;
+        }
+
+        PetIdentity identity = parsePetIdentity(internalName);
+        if (identity == null) {
+            return null;
+        }
+
+        Map<String, LevelStats> rarityMap = petStats.get(identity.petName);
+        if (rarityMap == null) {
+            return null;
+        }
+
+        LevelStats stats = rarityMap.get(identity.rarityName);
+        if (stats == null) {
+            return null;
+        }
+
+        String resolvedName = item.displayName();
+        if (resolvedName != null && !resolvedName.isEmpty()) {
+            resolvedName = LEVEL_PLACEHOLDER.matcher(resolvedName)
+                    .replaceAll(String.valueOf(DISPLAY_LEVEL));
+        }
+
+        List<String> resolvedLore = item.lore();
+        if (resolvedLore != null && !resolvedLore.isEmpty()) {
+            List<String> newLore = new ArrayList<>(resolvedLore.size());
+            for (String line : resolvedLore) {
+                newLore.add(resolveLine(line, stats));
+            }
+            resolvedLore = newLore;
+        } else if (resolvedLore == null) {
+            resolvedLore = List.of();
+        }
+
+        return new ResolvedStrings(resolvedName, resolvedLore);
+    }
+
+    /**
+     * Returns whether any petnums data has been loaded.
+     */
+    public boolean isLoaded() {
+        return !petStats.isEmpty();
+    }
+
     // -----------------------------------------------------------------
     // Data classes
     // -----------------------------------------------------------------
@@ -270,15 +278,18 @@ public final class PetStatResolver {
     /**
      * Holds the resolved stat values for a single pet at a specific rarity and level.
      */
-    private record LevelStats(Map<String, Double> statNums, List<Double> otherNums) {}
+    private record LevelStats(Map<String, Double> statNums, List<Double> otherNums) {
+    }
 
     /**
      * Extracted pet identity from an internal name like {@code "LION;4"}.
      */
-    private record PetIdentity(String petName, String rarityName) {}
+    private record PetIdentity(String petName, String rarityName) {
+    }
 
     /**
      * Result of resolving placeholders for a single item.
      */
-    public record ResolvedStrings(String displayName, List<String> lore) {}
+    public record ResolvedStrings(String displayName, List<String> lore) {
+    }
 }

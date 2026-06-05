@@ -22,7 +22,8 @@ public final class WikiInfoRecipeBuilder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WikiInfoRecipeBuilder.class);
 
-    private WikiInfoRecipeBuilder() {}
+    private WikiInfoRecipeBuilder() {
+    }
 
     /**
      * Build wiki info recipes for an item.

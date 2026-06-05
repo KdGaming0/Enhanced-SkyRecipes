@@ -53,7 +53,8 @@ public final class MobPreviewController {
         MOB_MAP.put("HOGLIN", EntityType.HOGLIN);
     }
 
-    private MobPreviewController() {}
+    private MobPreviewController() {
+    }
 
     /**
      * Create a preview entity for the given mob identifier.

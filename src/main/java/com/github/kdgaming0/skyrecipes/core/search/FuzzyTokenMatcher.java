@@ -10,7 +10,8 @@ package com.github.kdgaming0.skyrecipes.core.search;
  */
 public final class FuzzyTokenMatcher {
 
-    private FuzzyTokenMatcher() {}
+    private FuzzyTokenMatcher() {
+    }
 
     /**
      * Compute the Damerau–Levenshtein distance between two strings.
@@ -35,8 +36,12 @@ public final class FuzzyTokenMatcher {
 
         // Ensure s is the shorter string to minimise space
         if (m > n) {
-            String tmpStr = s; s = t; t = tmpStr;
-            int tmpLen = m; m = n; n = tmpLen;
+            String tmpStr = s;
+            s = t;
+            t = tmpStr;
+            int tmpLen = m;
+            m = n;
+            n = tmpLen;
         }
 
         int maxDist = m + 1;

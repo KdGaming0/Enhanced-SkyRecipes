@@ -16,11 +16,11 @@ import java.util.Set;
  * Empty queries return the full item list.</p>
  */
 public record SearchQuery(
-    List<KeywordClause> keywords,
-    List<StatClause> stats,
-    List<FilterClause> filters,
-    @Nullable CategoryPath categoryPath,
-    Set<String> booleanFlags
+        List<KeywordClause> keywords,
+        List<StatClause> stats,
+        List<FilterClause> filters,
+        @Nullable CategoryPath categoryPath,
+        Set<String> booleanFlags
 ) {
 
     public SearchQuery {
@@ -32,13 +32,14 @@ public record SearchQuery(
 
     public boolean isEmpty() {
         return keywords.isEmpty()
-            && stats.isEmpty()
-            && filters.isEmpty()
-            && categoryPath == null
-            && booleanFlags.isEmpty();
+                && stats.isEmpty()
+                && filters.isEmpty()
+                && categoryPath == null
+                && booleanFlags.isEmpty();
     }
 
-    public record KeywordClause(String token) {}
+    public record KeywordClause(String token) {
+    }
 
     public record StatClause(String statName, Operator op, int value) {
         public enum Operator {
@@ -51,10 +52,6 @@ public record SearchQuery(
      */
     public record FilterClause(String key, Operator op,
                                @Nullable String stringValue, int intValue) {
-        public enum Operator {
-            EQ, GT, LT, GTE, LTE
-        }
-
         public static FilterClause of(String key, String stringValue) {
             return new FilterClause(key, Operator.EQ, stringValue, 0);
         }
@@ -70,10 +67,15 @@ public record SearchQuery(
         public static FilterClause of(String key, Operator op, String stringValue, int intValue) {
             return new FilterClause(key, op, stringValue, intValue);
         }
+
+        public enum Operator {
+            EQ, GT, LT, GTE, LTE
+        }
     }
 
     /**
      * Category path from {@code %CATEGORY} or {@code %CATEGORY/SUBTYPE} syntax.
      */
-    public record CategoryPath(SkyblockItemCategory category, @Nullable String subtype) {}
+    public record CategoryPath(SkyblockItemCategory category, @Nullable String subtype) {
+    }
 }

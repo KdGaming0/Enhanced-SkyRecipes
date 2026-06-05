@@ -1,6 +1,5 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
-import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
@@ -14,16 +13,15 @@ import java.util.List;
 /**
  * RRV client recipe for SkyBlock forge (timed crafting) recipes.
  */
-public class SkyblockForgeClientRecipe implements ReliableClientRecipe {
+public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
 
-    private final Identifier id;
     private final List<ForgeIngredient> inputs;
     private final ItemStack output;
     private final int durationSeconds;
 
     public SkyblockForgeClientRecipe(Identifier id, List<ForgeIngredient> inputs,
                                      ItemStack output, int durationSeconds) {
-        this.id = id;
+        super(id);
         this.inputs = inputs;
         this.output = output;
         this.durationSeconds = durationSeconds;
@@ -56,16 +54,6 @@ public class SkyblockForgeClientRecipe implements ReliableClientRecipe {
         return List.of(SlotContent.of(output));
     }
 
-    @Override
-    public Identifier getId() {
-        return id;
-    }
-
-    @Override
-    public boolean isVisualOnly() {
-        return true;
-    }
-
     public int getDurationSeconds() {
         return durationSeconds;
     }
@@ -94,5 +82,6 @@ public class SkyblockForgeClientRecipe implements ReliableClientRecipe {
     /**
      * A single forge input ingredient.
      */
-    public record ForgeIngredient(ItemStack stack, String internalName, int count) {}
+    public record ForgeIngredient(ItemStack stack, String internalName, int count) {
+    }
 }

@@ -20,7 +20,8 @@ public final class ForgeRecipeParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ForgeRecipeParser.class);
 
-    private ForgeRecipeParser() {}
+    private ForgeRecipeParser() {
+    }
 
     /**
      * Parse a forge recipe.
@@ -49,9 +50,9 @@ public final class ForgeRecipeParser {
                 NeuItem ingredientItem = SlotRefParser.resolve(ref, itemRegistry);
                 if (ingredientItem != null) {
                     inputs.add(new SkyblockForgeClientRecipe.ForgeIngredient(
-                        ItemStackBuilder.build(ingredientItem, ref.count()),
-                        ref.internalName(),
-                        ref.count()
+                            ItemStackBuilder.build(ingredientItem, ref.count()),
+                            ref.internalName(),
+                            ref.count()
                     ));
                 } else {
                     LOGGER.debug("Unknown forge ingredient '{}' for recipe {}", ref.internalName(), recipeId);
@@ -59,10 +60,10 @@ public final class ForgeRecipeParser {
             }
 
             return new SkyblockForgeClientRecipe(
-                recipeId,
-                inputs,
-                ItemStackBuilder.build(outputItem, recipe.count()),
-                recipe.duration()
+                    recipeId,
+                    inputs,
+                    ItemStackBuilder.build(outputItem, recipe.count()),
+                    recipe.duration()
             );
 
         } catch (Exception e) {

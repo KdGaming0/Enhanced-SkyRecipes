@@ -20,9 +20,6 @@ import java.util.function.Consumer;
 public class RuntimeDataManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RuntimeDataManager.class);
-
-    public enum State { UNINITIALIZED, LOADING, READY, ERROR }
-
     private final Path dataDir;
     private final Path cacheDir;
     private final Path dataPath;
@@ -30,12 +27,10 @@ public class RuntimeDataManager {
     private final BinaryDataLoader loader;
     private final RuntimeUpdateService updateService;
     private final List<Consumer<DataLoadResult>> dataReadyCallbacks = new CopyOnWriteArrayList<>();
-
     private volatile State state = State.UNINITIALIZED;
     private ItemRegistry itemRegistry;
     private ConstantsRegistry constantsRegistry;
     private BinaryMetadata currentMetadata;
-
     public RuntimeDataManager(Path dataDir, Path cacheDir) {
         this.dataDir = dataDir;
         this.cacheDir = cacheDir;
@@ -44,8 +39,6 @@ public class RuntimeDataManager {
         this.loader = new BinaryDataLoader();
         this.updateService = new RuntimeUpdateService(dataDir, cacheDir, this::onDataReloaded);
     }
-
-    // ---- Lifecycle ----
 
     /**
      * Attempt a warm start by loading an existing binary from disk.
@@ -67,7 +60,7 @@ public class RuntimeDataManager {
             BinaryMetadata metadata = BinaryMetadata.read(metaPath);
             if (!metadata.isCompatibleWith(BinaryDataLoader.EXPECTED_SCHEMA)) {
                 LOGGER.warn("Existing binary has incompatible schema version {}. Recompiling.",
-                    metadata.schemaVersion());
+                        metadata.schemaVersion());
                 state = State.UNINITIALIZED;
                 return false;
             }
@@ -94,6 +87,8 @@ public class RuntimeDataManager {
             return false;
         }
     }
+
+    // ---- Lifecycle ----
 
     /**
      * Launch with an ETag-first check: compare remote ETag to local metadata
@@ -197,11 +192,11 @@ public class RuntimeDataManager {
         state = State.UNINITIALIZED;
     }
 
-    // ---- Getters ----
-
     public State getState() {
         return state;
     }
+
+    // ---- Getters ----
 
     public ItemRegistry getItemRegistry() {
         return itemRegistry;
@@ -227,11 +222,11 @@ public class RuntimeDataManager {
         return updateService;
     }
 
-    // ---- Internal ----
-
     private void onDataReloaded(Path newDataPath, Path newMetaPath) {
         reloadData(newDataPath, newMetaPath);
     }
+
+    // ---- Internal ----
 
     private void loadCompiledData(Path tempPath, Path tempMeta) {
         try {
@@ -253,9 +248,9 @@ public class RuntimeDataManager {
             // Move to final location for warm starts
             try {
                 java.nio.file.Files.move(tempPath, dataPath,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 java.nio.file.Files.move(tempMeta, metaPath,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 LOGGER.info("Moved compiled files to final location: {}", dataPath);
             } catch (IOException moveEx) {
                 LOGGER.warn("Failed to move compiled files to final location, keeping at temp path", moveEx);
@@ -289,4 +284,6 @@ public class RuntimeDataManager {
     private DataLoadResult createResult() {
         return new DataLoadResult(itemRegistry, constantsRegistry, dataPath, currentMetadata);
     }
+
+    public enum State {UNINITIALIZED, LOADING, READY, ERROR}
 }

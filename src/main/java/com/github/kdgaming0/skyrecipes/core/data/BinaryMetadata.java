@@ -15,17 +15,17 @@ import java.nio.file.Path;
  * Stored as JSON alongside the binary for human-readable version tracking.
  */
 public record BinaryMetadata(
-    int schemaVersion,
-    long buildTimestamp,
-    int itemCount,
-    String etag,
-    String commitHash,
-    String sourceUrl
+        int schemaVersion,
+        long buildTimestamp,
+        int itemCount,
+        String etag,
+        String commitHash,
+        String sourceUrl
 ) {
 
     private static final Gson GSON = new GsonBuilder()
-        .setPrettyPrinting()
-        .create();
+            .setPrettyPrinting()
+            .create();
 
     /**
      * Read metadata from a JSON file.

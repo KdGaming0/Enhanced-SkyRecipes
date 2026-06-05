@@ -23,11 +23,20 @@ import java.util.stream.Collectors;
  */
 public final class SkyblockRecipeCache {
 
+    private static final Comparator<ReliableClientRecipe> RECIPE_COMPARATOR = (a, b) -> {
+        int tierA = getResultTier(a);
+        int tierB = getResultTier(b);
+        if (tierA != tierB) {
+            return Integer.compare(tierA, tierB);
+        }
+        return a.getId().toString().compareTo(b.getId().toString());
+    };
     private static volatile Map<String, List<ReliableClientRecipe>> byIngredientId = Map.of();
     private static volatile Map<String, List<ReliableClientRecipe>> byResultId = Map.of();
     private static volatile FamilyResolver familyResolver;
 
-    private SkyblockRecipeCache() {}
+    private SkyblockRecipeCache() {
+    }
 
     /**
      * Set the family resolver used for result-lookup expansion.
@@ -78,15 +87,15 @@ public final class SkyblockRecipeCache {
         }
 
         byIngredientId = byIngredient.entrySet().stream()
-            .collect(Collectors.toUnmodifiableMap(
-                Map.Entry::getKey,
-                e -> sortRecipes(List.copyOf(e.getValue()))
-            ));
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey,
+                        e -> sortRecipes(List.copyOf(e.getValue()))
+                ));
         byResultId = byResult.entrySet().stream()
-            .collect(Collectors.toUnmodifiableMap(
-                Map.Entry::getKey,
-                e -> sortRecipes(List.copyOf(e.getValue()))
-            ));
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey,
+                        e -> sortRecipes(List.copyOf(e.getValue()))
+                ));
     }
 
     /**
@@ -101,15 +110,6 @@ public final class SkyblockRecipeCache {
         sorted.sort(RECIPE_COMPARATOR);
         return sorted;
     }
-
-    private static final Comparator<ReliableClientRecipe> RECIPE_COMPARATOR = (a, b) -> {
-        int tierA = getResultTier(a);
-        int tierB = getResultTier(b);
-        if (tierA != tierB) {
-            return Integer.compare(tierA, tierB);
-        }
-        return a.getId().toString().compareTo(b.getId().toString());
-    };
 
     private static int getResultTier(ReliableClientRecipe recipe) {
         for (SlotContent slot : recipe.getResults()) {
@@ -130,7 +130,7 @@ public final class SkyblockRecipeCache {
      * Look up recipes that use the given stack as an ingredient.
      *
      * @return a <b>mutable</b> list of matching recipes, or {@code null} if the stack is not
-     *         a SkyBlock item (caller should fall back to RRV's native lookup).
+     * a SkyBlock item (caller should fall back to RRV's native lookup).
      */
     public static List<ReliableClientRecipe> getRecipesForIngredient(ItemStack stack) {
         String id = SkyblockIdExtractor.extract(stack);
@@ -149,7 +149,7 @@ public final class SkyblockRecipeCache {
      * in the recipe view.</p>
      *
      * @return a <b>mutable</b> list of matching recipes, or {@code null} if the stack is not
-     *         a SkyBlock item (caller should fall back to RRV's native lookup).
+     * a SkyBlock item (caller should fall back to RRV's native lookup).
      */
     public static List<ReliableClientRecipe> getRecipesForResult(ItemStack stack) {
         String id = SkyblockIdExtractor.extract(stack);

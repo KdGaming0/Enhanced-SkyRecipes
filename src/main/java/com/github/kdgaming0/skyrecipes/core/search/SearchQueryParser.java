@@ -3,14 +3,7 @@ package com.github.kdgaming0.skyrecipes.core.search;
 import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Zero-allocation direct-scan parser for the search query bar.
@@ -33,34 +26,127 @@ import java.util.Set;
  */
 public final class SearchQueryParser {
 
-    private SearchQueryParser() {}
-
+    /**
+     * Fallback canonical stat names used when runtime NEU data is not yet loaded.
+     * This set is merged with compile-time-generated stats from the binary at runtime.
+     */
+    public static final Set<String> CANONICAL_STAT_NAMES = Set.of(
+            "mining_speed", "mining_fortune", "attack_speed", "crit_chance", "crit_damage",
+            "health", "defense", "strength", "intelligence", "sea_creature_chance",
+            "fishing_speed", "fishing_fortune", "farming_fortune", "foraging_fortune",
+            "block_fortune", "pristine", "speed", "magic_find", "breaking_power",
+            "true_defense", "vitality", "mending", "trophy_chance", "pet_luck",
+            "bonus_pest_chance", "heat_resistance", "pressure_resistance", "rift_time",
+            "ability_damage", "ferocity", "health_regen", "mining_wisdom", "farming_wisdom",
+            "damage", "combat_wisdom", "treasure_chance", "magical_power", "rift_damage",
+            "gemstone_fortune", "crux_fortune", "crop_fortune", "hunter_fortune",
+            "fig_fortune", "mana_regen", "max_speed", "minion_speed", "double_hook_chance",
+            "global_fortune", "global_wisdom", "taming_wisdom", "social_wisdom",
+            "fishing_wisdom", "foraging_wisdom", "walk_speed", "visitor_cooldown",
+            "pickaxe_ability_cooldown", "mining_spread", "absorption",
+            // Additional stats discovered from NEU gear lore
+            "alchemy_wisdom", "hunting_wisdom", "enchanting_wisdom", "carpentry_wisdom",
+            "runecrafting_wisdom", "cold_resistance", "respiration", "fear", "tracking",
+            "pull", "sweep", "swing_range", "hearts", "ore_fortune", "dwarven_metal_fortune",
+            "gemstone_spread", "overbloom", "wheat_fortune", "carrot_fortune", "potato_fortune",
+            "pumpkin_fortune", "sugar_cane_fortune", "melon_slice_fortune", "cactus_fortune",
+            "cocoa_beans_fortune", "mushroom_fortune", "nether_wart_fortune",
+            "sunflower_fortune", "moonflower_fortune", "wild_rose_fortune",
+            "mangrove_fortune"
+    );
     private static final SearchQuery EMPTY = new SearchQuery(List.of(), List.of(), List.of(), null, Set.of());
 
     private static final Map<String, String> FILTER_KEY_ALIASES = Map.ofEntries(
-        Map.entry("r", "rarity"), Map.entry("rarity", "rarity"),
-        Map.entry("t", "type"), Map.entry("type", "type"),
-        Map.entry("sl", "slayer"), Map.entry("slayer", "slayer"),
-        Map.entry("sk", "skill"), Map.entry("skill", "skill"),
-        Map.entry("cata", "catacombs"), Map.entry("catacombs", "catacombs")
+            Map.entry("r", "rarity"), Map.entry("rarity", "rarity"),
+            Map.entry("t", "type"), Map.entry("type", "type"),
+            Map.entry("sl", "slayer"), Map.entry("slayer", "slayer"),
+            Map.entry("sk", "skill"), Map.entry("skill", "skill"),
+            Map.entry("cata", "catacombs"), Map.entry("catacombs", "catacombs")
     );
 
     private static final Set<String> BOOLEAN_FLAGS = Set.of(
-        "soulbound", "dungeon", "rift", "vanilla",
-        "bazaar", "craftable", "forgeable", "npc", "pet", "accessory"
+            "soulbound", "dungeon", "rift", "vanilla",
+            "bazaar", "craftable", "forgeable", "npc", "pet", "accessory"
     );
 
     private static final Map<String, String> RARITY_ALIASES = Map.ofEntries(
-        Map.entry("c", "common"), Map.entry("com", "common"),
-        Map.entry("u", "uncommon"), Map.entry("unc", "uncommon"),
-        Map.entry("ra", "rare"),
-        Map.entry("ep", "epic"),
-        Map.entry("l", "legendary"), Map.entry("leg", "legendary"),
-        Map.entry("m", "mythic"), Map.entry("myth", "mythic"),
-        Map.entry("sp", "special"),
-        Map.entry("ult", "ultimate"),
-        Map.entry("div", "divine")
+            Map.entry("c", "common"), Map.entry("com", "common"),
+            Map.entry("u", "uncommon"), Map.entry("unc", "uncommon"),
+            Map.entry("ra", "rare"),
+            Map.entry("ep", "epic"),
+            Map.entry("l", "legendary"), Map.entry("leg", "legendary"),
+            Map.entry("m", "mythic"), Map.entry("myth", "mythic"),
+            Map.entry("sp", "special"),
+            Map.entry("ult", "ultimate"),
+            Map.entry("div", "divine")
     );
+    private static final Map<String, String> STAT_ALIASES = Map.ofEntries(
+            Map.entry("ms", "mining_speed"),
+            Map.entry("mf", "mining_fortune"),
+            Map.entry("mfort", "mining_fortune"),
+            Map.entry("as", "attack_speed"),
+            Map.entry("aspd", "attack_speed"),
+            Map.entry("cc", "crit_chance"),
+            Map.entry("cd", "crit_damage"),
+            Map.entry("hp", "health"),
+            Map.entry("def", "defense"),
+            Map.entry("str", "strength"),
+            Map.entry("int", "intelligence"),
+            Map.entry("mana", "intelligence"),
+            Map.entry("sc", "sea_creature_chance"),
+            Map.entry("scc", "sea_creature_chance"),
+            Map.entry("fs", "fishing_speed"),
+            Map.entry("fspd", "fishing_speed"),
+            Map.entry("ff", "fishing_fortune"),
+            Map.entry("ffor", "farming_fortune"),
+            Map.entry("forgfort", "foraging_fortune"),
+            Map.entry("foraf", "foraging_fortune"),
+            Map.entry("bf", "block_fortune"),
+            Map.entry("pristine", "pristine"),
+            Map.entry("speed", "speed"),
+            Map.entry("spd", "speed"),
+            Map.entry("walk_speed", "speed"),
+            Map.entry("mgf", "magic_find"),
+            Map.entry("bc", "breaking_power"),
+            Map.entry("td", "true_defense"),
+            Map.entry("vit", "vitality"),
+            Map.entry("mending", "mending"),
+            Map.entry("tc", "trophy_chance"),
+            Map.entry("pl", "pet_luck"),
+            Map.entry("bpc", "bonus_pest_chance"),
+            Map.entry("heat", "heat_resistance"),
+            Map.entry("pres", "pressure_resistance"),
+            Map.entry("rt", "rift_time"),
+            Map.entry("ab", "ability_damage"),
+            Map.entry("fer", "ferocity"),
+            Map.entry("hr", "health_regen"),
+            Map.entry("mw", "mining_wisdom"),
+            Map.entry("fw", "farming_wisdom"),
+            Map.entry("dmg", "damage")
+    );
+
+    // -- Category path parsing -------------------------------------------------
+    /**
+     * Reverse lookup: canonical stat name → set of aliases.
+     */
+    private static final Map<String, Set<String>> STAT_ALIAS_REVERSE;
+
+    // -- Filter parsing --------------------------------------------------------
+    /**
+     * Runtime-populated stat names from the compiled NEU binary. Null until data loads.
+     */
+    private static volatile Set<String> runtimeKnownStats = null;
+
+    static {
+        Map<String, Set<String>> reverse = new HashMap<>();
+        for (Map.Entry<String, String> e : STAT_ALIASES.entrySet()) {
+            reverse.computeIfAbsent(e.getValue(), k -> new HashSet<>()).add(e.getKey());
+        }
+        STAT_ALIAS_REVERSE = Collections.unmodifiableMap(reverse);
+    }
+
+    private SearchQueryParser() {
+    }
 
     public static SearchQuery parse(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -134,15 +220,13 @@ public final class SearchQueryParser {
         }
 
         return new SearchQuery(
-            keywords != null ? keywords : List.of(),
-            stats != null ? stats : List.of(),
-            filters != null ? filters : List.of(),
-            categoryPath,
-            booleanFlags != null ? booleanFlags : Set.of()
+                keywords != null ? keywords : List.of(),
+                stats != null ? stats : List.of(),
+                filters != null ? filters : List.of(),
+                categoryPath,
+                booleanFlags != null ? booleanFlags : Set.of()
         );
     }
-
-    // -- Category path parsing -------------------------------------------------
 
     @Nullable
     private static SearchQuery.CategoryPath tryParseCategory(String token) {
@@ -160,7 +244,7 @@ public final class SearchQueryParser {
         return new SearchQuery.CategoryPath(cat, sub);
     }
 
-    // -- Filter parsing --------------------------------------------------------
+    // -- Stat parsing ----------------------------------------------------------
 
     @Nullable
     private static SearchQuery.FilterClause tryParseFilter(String token) {
@@ -214,8 +298,8 @@ public final class SearchQueryParser {
                 if (i + 1 < token.length() && token.charAt(i + 1) == '=') {
                     numStr = token.substring(i + 2);
                     op = (c == '>')
-                        ? SearchQuery.FilterClause.Operator.GTE
-                        : SearchQuery.FilterClause.Operator.LTE;
+                            ? SearchQuery.FilterClause.Operator.GTE
+                            : SearchQuery.FilterClause.Operator.LTE;
                 } else {
                     numStr = token.substring(i + 1);
                     op = switch (c) {
@@ -256,10 +340,6 @@ public final class SearchQueryParser {
         return lower;
     }
 
-    private record OpParse(SearchQuery.FilterClause.Operator op, String stringValue, int intValue) {}
-
-    // -- Stat parsing ----------------------------------------------------------
-
     @Nullable
     private static SearchQuery.StatClause tryParseStat(String token) {
         int opPos = -1;
@@ -287,8 +367,8 @@ public final class SearchQueryParser {
         if (opPos + 1 < token.length() && token.charAt(opPos + 1) == '=') {
             valueStr = token.substring(opPos + 2);
             op = (opChar == '>')
-                ? SearchQuery.StatClause.Operator.GTE
-                : SearchQuery.StatClause.Operator.LTE;
+                    ? SearchQuery.StatClause.Operator.GTE
+                    : SearchQuery.StatClause.Operator.LTE;
         } else {
             valueStr = token.substring(opPos + 1);
             op = switch (opChar) {
@@ -311,83 +391,6 @@ public final class SearchQueryParser {
         }
     }
 
-    private static final Map<String, String> STAT_ALIASES = Map.ofEntries(
-        Map.entry("ms", "mining_speed"),
-        Map.entry("mf", "mining_fortune"),
-        Map.entry("mfort", "mining_fortune"),
-        Map.entry("as", "attack_speed"),
-        Map.entry("aspd", "attack_speed"),
-        Map.entry("cc", "crit_chance"),
-        Map.entry("cd", "crit_damage"),
-        Map.entry("hp", "health"),
-        Map.entry("def", "defense"),
-        Map.entry("str", "strength"),
-        Map.entry("int", "intelligence"),
-        Map.entry("mana", "intelligence"),
-        Map.entry("sc", "sea_creature_chance"),
-        Map.entry("scc", "sea_creature_chance"),
-        Map.entry("fs", "fishing_speed"),
-        Map.entry("fspd", "fishing_speed"),
-        Map.entry("ff", "fishing_fortune"),
-        Map.entry("ffor", "farming_fortune"),
-        Map.entry("forgfort", "foraging_fortune"),
-        Map.entry("foraf", "foraging_fortune"),
-        Map.entry("bf", "block_fortune"),
-        Map.entry("pristine", "pristine"),
-        Map.entry("speed", "speed"),
-        Map.entry("spd", "speed"),
-        Map.entry("walk_speed", "speed"),
-        Map.entry("mgf", "magic_find"),
-        Map.entry("bc", "breaking_power"),
-        Map.entry("td", "true_defense"),
-        Map.entry("vit", "vitality"),
-        Map.entry("mending", "mending"),
-        Map.entry("tc", "trophy_chance"),
-        Map.entry("pl", "pet_luck"),
-        Map.entry("bpc", "bonus_pest_chance"),
-        Map.entry("heat", "heat_resistance"),
-        Map.entry("pres", "pressure_resistance"),
-        Map.entry("rt", "rift_time"),
-        Map.entry("ab", "ability_damage"),
-        Map.entry("fer", "ferocity"),
-        Map.entry("hr", "health_regen"),
-        Map.entry("mw", "mining_wisdom"),
-        Map.entry("fw", "farming_wisdom"),
-        Map.entry("dmg", "damage")
-    );
-
-    /**
-     * Fallback canonical stat names used when runtime NEU data is not yet loaded.
-     * This set is merged with compile-time-generated stats from the binary at runtime.
-     */
-    public static final Set<String> CANONICAL_STAT_NAMES = Set.of(
-        "mining_speed", "mining_fortune", "attack_speed", "crit_chance", "crit_damage",
-        "health", "defense", "strength", "intelligence", "sea_creature_chance",
-        "fishing_speed", "fishing_fortune", "farming_fortune", "foraging_fortune",
-        "block_fortune", "pristine", "speed", "magic_find", "breaking_power",
-        "true_defense", "vitality", "mending", "trophy_chance", "pet_luck",
-        "bonus_pest_chance", "heat_resistance", "pressure_resistance", "rift_time",
-        "ability_damage", "ferocity", "health_regen", "mining_wisdom", "farming_wisdom",
-        "damage", "combat_wisdom", "treasure_chance", "magical_power", "rift_damage",
-        "gemstone_fortune", "crux_fortune", "crop_fortune", "hunter_fortune",
-        "fig_fortune", "mana_regen", "max_speed", "minion_speed", "double_hook_chance",
-        "global_fortune", "global_wisdom", "taming_wisdom", "social_wisdom",
-        "fishing_wisdom", "foraging_wisdom", "walk_speed", "visitor_cooldown",
-        "pickaxe_ability_cooldown", "mining_spread", "absorption",
-        // Additional stats discovered from NEU gear lore
-        "alchemy_wisdom", "hunting_wisdom", "enchanting_wisdom", "carpentry_wisdom",
-        "runecrafting_wisdom", "cold_resistance", "respiration", "fear", "tracking",
-        "pull", "sweep", "swing_range", "hearts", "ore_fortune", "dwarven_metal_fortune",
-        "gemstone_spread", "overbloom", "wheat_fortune", "carrot_fortune", "potato_fortune",
-        "pumpkin_fortune", "sugar_cane_fortune", "melon_slice_fortune", "cactus_fortune",
-        "cocoa_beans_fortune", "mushroom_fortune", "nether_wart_fortune",
-        "sunflower_fortune", "moonflower_fortune", "wild_rose_fortune",
-        "mangrove_fortune"
-    );
-
-    /** Runtime-populated stat names from the compiled NEU binary. Null until data loads. */
-    private static volatile Set<String> runtimeKnownStats = null;
-
     /**
      * Set the runtime-known stats from the compiled NEU binary.
      * Call this once after {@link com.github.kdgaming0.skyrecipes.core.data.BinaryDataLoader}
@@ -403,16 +406,6 @@ public final class SearchQueryParser {
      */
     public static Set<String> getKnownStats() {
         return runtimeKnownStats != null ? runtimeKnownStats : CANONICAL_STAT_NAMES;
-    }
-
-    /** Reverse lookup: canonical stat name → set of aliases. */
-    private static final Map<String, Set<String>> STAT_ALIAS_REVERSE;
-    static {
-        Map<String, Set<String>> reverse = new HashMap<>();
-        for (Map.Entry<String, String> e : STAT_ALIASES.entrySet()) {
-            reverse.computeIfAbsent(e.getValue(), k -> new HashSet<>()).add(e.getKey());
-        }
-        STAT_ALIAS_REVERSE = Collections.unmodifiableMap(reverse);
     }
 
     /**
@@ -438,8 +431,6 @@ public final class SearchQueryParser {
         if ("walk_speed".equals(normalized)) return "speed";
         return normalized;
     }
-
-    // -- Keyword splitting -----------------------------------------------------
 
     private static List<String> splitOnNonAlphanumeric(String token) {
         List<String> parts = new ArrayList<>(4);
@@ -467,5 +458,10 @@ public final class SearchQueryParser {
         }
 
         return parts.isEmpty() ? List.of(token) : parts;
+    }
+
+    // -- Keyword splitting -----------------------------------------------------
+
+    private record OpParse(SearchQuery.FilterClause.Operator op, String stringValue, int intValue) {
     }
 }

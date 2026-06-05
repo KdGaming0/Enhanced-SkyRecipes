@@ -23,7 +23,38 @@ import java.util.List;
 @Mixin(value = ItemViewOverlay.class, remap = false)
 public class SearchBarMixin {
 
-    @Shadow private SearchBar searchbar;
+    @Shadow
+    private SearchBar searchbar;
+
+    /**
+     * Computes the ghost-text suffix for a search suggestion.
+     *
+     * @param query     what the user has typed
+     * @param fullMatch the complete matched text (e.g. "Aspect of the End")
+     * @return the part of {@code fullMatch} that follows {@code query}, or null if
+     * {@code fullMatch} does not start with {@code query} (case-insensitive)
+     */
+    private static String computeSuggestionSuffix(String query, String fullMatch) {
+        String q = query.toLowerCase();
+        String fm = fullMatch.toLowerCase();
+        if (!fm.startsWith(q)) {
+            return null;
+        }
+        return fullMatch.substring(query.length());
+    }
+
+    private static boolean looksLikeMath(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '+' || c == '*' || c == '/' || c == '^' || c == '%' || c == '=') {
+                return true;
+            }
+            if (c == '-' && i > 0 && Character.isDigit(s.charAt(i - 1))) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     @Inject(method = "updateQuery", at = @At("TAIL"), remap = false)
     private void skyrecipes$setSearchSuggestion(String newQuery, CallbackInfo ci) {
@@ -62,35 +93,5 @@ public class SearchBarMixin {
         } else {
             searchbar.setSuggestion(null);
         }
-    }
-
-    /**
-     * Computes the ghost-text suffix for a search suggestion.
-     *
-     * @param query     what the user has typed
-     * @param fullMatch the complete matched text (e.g. "Aspect of the End")
-     * @return the part of {@code fullMatch} that follows {@code query}, or null if
-     *         {@code fullMatch} does not start with {@code query} (case-insensitive)
-     */
-    private static String computeSuggestionSuffix(String query, String fullMatch) {
-        String q = query.toLowerCase();
-        String fm = fullMatch.toLowerCase();
-        if (!fm.startsWith(q)) {
-            return null;
-        }
-        return fullMatch.substring(query.length());
-    }
-
-    private static boolean looksLikeMath(String s) {
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '+' || c == '*' || c == '/' || c == '^' || c == '%' || c == '=') {
-                return true;
-            }
-            if (c == '-' && i > 0 && Character.isDigit(s.charAt(i - 1))) {
-                return true;
-            }
-        }
-        return false;
     }
 }

@@ -12,9 +12,11 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class CategoryState {
 
-    @Nullable private static SkyblockItemCategory buttonCategory = null;
+    @Nullable
+    private static SkyblockItemCategory buttonCategory = null;
 
-    private CategoryState() {}
+    private CategoryState() {
+    }
 
     @Nullable
     public static SkyblockItemCategory getButtonCategory() {

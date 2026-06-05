@@ -8,7 +8,8 @@ package com.github.kdgaming0.skyrecipes.core.util;
  */
 public final class LegacyItemIdMapper {
 
-    private LegacyItemIdMapper() {}
+    private LegacyItemIdMapper() {
+    }
 
     /**
      * Map a legacy item ID and damage value to a modern item ID.

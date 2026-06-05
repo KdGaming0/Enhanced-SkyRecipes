@@ -18,7 +18,8 @@ public final class TradeRecipeParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TradeRecipeParser.class);
 
-    private TradeRecipeParser() {}
+    private TradeRecipeParser() {
+    }
 
     /**
      * Parse a trade recipe.
@@ -44,9 +45,9 @@ public final class TradeRecipeParser {
             ItemStack outputStack = ItemStackBuilder.build(outputItem, recipe.count());
 
             return new SkyblockTradeClientRecipe(
-                recipeId,
-                inputStack,
-                outputStack
+                    recipeId,
+                    inputStack,
+                    outputStack
             );
 
         } catch (Exception e) {

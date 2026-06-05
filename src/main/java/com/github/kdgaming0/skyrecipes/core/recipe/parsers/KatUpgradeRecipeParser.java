@@ -22,7 +22,8 @@ public final class KatUpgradeRecipeParser {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KatUpgradeRecipeParser.class);
 
-    private KatUpgradeRecipeParser() {}
+    private KatUpgradeRecipeParser() {
+    }
 
     /**
      * Parse a katgrade recipe.
@@ -51,12 +52,12 @@ public final class KatUpgradeRecipeParser {
             }
 
             return new SkyblockKatUpgradeClientRecipe(
-                recipeId,
-                inputStack,
-                outputStack,
-                recipe.coins(),
-                recipe.time(),
-                itemCosts
+                    recipeId,
+                    inputStack,
+                    outputStack,
+                    recipe.coins(),
+                    recipe.time(),
+                    itemCosts
             );
 
         } catch (Exception e) {

@@ -20,44 +20,48 @@ public final class ConstantsRegistry {
     private final Map<String, String> museumCategories;
     private final Map<String, ReforgeData> reforges;
     private final Map<String, ReforgeStoneData> reforgeStones;
-    /** Compile-time-generated whitelist of stat names observed in NEU gear item lore. */
+    /**
+     * Compile-time-generated whitelist of stat names observed in NEU gear item lore.
+     */
     private final Set<String> knownStats;
-    /** Reverse map: reforge name → stone internal name. */
+    /**
+     * Reverse map: reforge name → stone internal name.
+     */
     private final Map<String, String> reforgeNameToStone;
 
     public ConstantsRegistry(
-        Map<String, List<String>> parents,
-        Map<String, EssenceUpgradeData> essenceCosts,
-        Set<String> bazaarItems,
-        Map<String, String> museumCategories
+            Map<String, List<String>> parents,
+            Map<String, EssenceUpgradeData> essenceCosts,
+            Set<String> bazaarItems,
+            Map<String, String> museumCategories
     ) {
         this(parents, essenceCosts, bazaarItems, museumCategories,
-             Collections.emptyMap(), Collections.emptyMap(),
-             Set.of(), Collections.emptyMap());
+                Collections.emptyMap(), Collections.emptyMap(),
+                Set.of(), Collections.emptyMap());
     }
 
     public ConstantsRegistry(
-        Map<String, List<String>> parents,
-        Map<String, EssenceUpgradeData> essenceCosts,
-        Set<String> bazaarItems,
-        Map<String, String> museumCategories,
-        Map<String, ReforgeData> reforges,
-        Map<String, ReforgeStoneData> reforgeStones
+            Map<String, List<String>> parents,
+            Map<String, EssenceUpgradeData> essenceCosts,
+            Set<String> bazaarItems,
+            Map<String, String> museumCategories,
+            Map<String, ReforgeData> reforges,
+            Map<String, ReforgeStoneData> reforgeStones
     ) {
         this(parents, essenceCosts, bazaarItems, museumCategories,
-             reforges, reforgeStones,
-             Set.of(), Collections.emptyMap());
+                reforges, reforgeStones,
+                Set.of(), Collections.emptyMap());
     }
 
     public ConstantsRegistry(
-        Map<String, List<String>> parents,
-        Map<String, EssenceUpgradeData> essenceCosts,
-        Set<String> bazaarItems,
-        Map<String, String> museumCategories,
-        Map<String, ReforgeData> reforges,
-        Map<String, ReforgeStoneData> reforgeStones,
-        Set<String> knownStats,
-        Map<String, String> reforgeNameToStone
+            Map<String, List<String>> parents,
+            Map<String, EssenceUpgradeData> essenceCosts,
+            Set<String> bazaarItems,
+            Map<String, String> museumCategories,
+            Map<String, ReforgeData> reforges,
+            Map<String, ReforgeStoneData> reforgeStones,
+            Set<String> knownStats,
+            Map<String, String> reforgeNameToStone
     ) {
         this.parents = parents != null ? Collections.unmodifiableMap(parents) : Collections.emptyMap();
         this.essenceCosts = essenceCosts != null ? Collections.unmodifiableMap(essenceCosts) : Collections.emptyMap();
