@@ -23,10 +23,6 @@ public record MobRenderDefinition(
         @Nullable String helmetItemId,
         @Nullable MobRenderDefinition rider) {
 
-    public boolean isArmorStandSkull() {
-        return "ArmorStand".equals(entityKind) && helmetItemId != null;
-    }
-
     @Nullable
     public static MobRenderDefinition parse(@Nullable JsonObject obj) {
         return parseRecursive(obj);
@@ -77,6 +73,10 @@ public record MobRenderDefinition(
 
     private static <T> T firstNonNull(T first, T second) {
         return first != null ? first : second;
+    }
+
+    public boolean isArmorStandSkull() {
+        return "ArmorStand".equals(entityKind) && helmetItemId != null;
     }
 
     private static final class ModifierScan {

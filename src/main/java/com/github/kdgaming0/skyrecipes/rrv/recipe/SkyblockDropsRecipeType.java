@@ -20,7 +20,8 @@ public final class SkyblockDropsRecipeType implements ReliableClientRecipeType {
     private static final Identifier BACKGROUND = Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/mob_drops.png");
     private static final ItemStack ICON = new ItemStack(Items.IRON_SWORD);
 
-    private SkyblockDropsRecipeType() {}
+    private SkyblockDropsRecipeType() {
+    }
 
     @Override
     public Component getDisplayName() {

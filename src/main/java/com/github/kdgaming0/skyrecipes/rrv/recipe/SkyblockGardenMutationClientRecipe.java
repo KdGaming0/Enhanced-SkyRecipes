@@ -20,12 +20,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * RRV client recipe for a single Garden mutation layout.
@@ -77,8 +72,10 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     private final Map<Integer, SlotContent> gridSlots;
     private final List<SlotContent> ingredientList;
     private final List<SlotContent> resultList;
-    @Nullable private List<Component> cachedTooltip;
-    @Nullable private Component cachedName;
+    @Nullable
+    private List<Component> cachedTooltip;
+    @Nullable
+    private Component cachedName;
 
     public SkyblockGardenMutationClientRecipe(Identifier id, GardenMutation mutation,
                                               ItemRegistry itemRegistry, List<String> wikiUrls) {
@@ -92,10 +89,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     }
 
     // ── grid construction ─────────────────────────────────────────────────────
-
-    private record GridData(Map<Integer, SlotContent> slots, List<SlotContent> ingredients,
-                            List<SlotContent> results) {
-    }
 
     private static GridData buildGrid(GardenMutation mutation, ItemRegistry itemRegistry) {
         Map<Integer, SlotContent> slots = new HashMap<>();
@@ -157,7 +150,101 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         };
     }
 
+    private static void drawMultiBlockBorder(GuiGraphicsExtractor gfx, int r1, int c1, int r2, int c2,
+                                             boolean isTarget) {
+        int color = isTarget ? DASH_TARGET_COLOR : DASH_INGREDIENT_COLOR;
+        int x1 = GRID_ORIGIN_X + c1 * SLOT_SIZE;
+        int y1 = GRID_ORIGIN_Y + r1 * SLOT_SIZE;
+        int x2 = GRID_ORIGIN_X + (c2 + 1) * SLOT_SIZE;
+        int y2 = GRID_ORIGIN_Y + (r2 + 1) * SLOT_SIZE;
+
+        drawDashedRect(gfx, x1, y1, x2, y2, color);
+        renderDimensionLabel(gfx, r2, c2, c2 - c1 + 1, r2 - r1 + 1);
+    }
+
     // ── RRV contract ──────────────────────────────────────────────────────────
+
+    private static void renderDimensionLabel(GuiGraphicsExtractor gfx, int lastRow, int lastCol,
+                                             int width, int height) {
+        if (width < 2 || height < 2) {
+            return;
+        }
+        var font = Minecraft.getInstance().font;
+        Component label = Component.literal(width + "×" + height);
+        int textWidth = font.width(label);
+        int x = GRID_ORIGIN_X + (lastCol + 1) * SLOT_SIZE - textWidth - 3;
+        int y = GRID_ORIGIN_Y + (lastRow + 1) * SLOT_SIZE - font.lineHeight - 2;
+        gfx.text(font, label, x, y, 0xFFCCDDFF, true);
+    }
+
+    private static void markCovered(boolean[][] covered, int r1, int c1, int r2, int c2) {
+        for (int r = r1; r <= r2; r++) {
+            for (int c = c1; c <= c2; c++) {
+                if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+                    covered[r][c] = true;
+                }
+            }
+        }
+    }
+
+    private static boolean isCovered(boolean[][] covered, int r, int c) {
+        return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE && covered[r][c];
+    }
+
+    private static void drawDashedRect(GuiGraphicsExtractor gfx, int x1, int y1, int x2, int y2, int color) {
+        drawDashedLineH(gfx, x1, x2, y1, color);
+        drawDashedLineH(gfx, x1, x2, y2 - DASH_STROKE + 1, color);
+        drawDashedLineV(gfx, x1, y1, y2, color);
+        drawDashedLineV(gfx, x2 - DASH_STROKE + 1, y1, y2, color);
+    }
+
+    // ── rendering ─────────────────────────────────────────────────────────────
+
+    private static void drawDashedLineH(GuiGraphicsExtractor gfx, int x1, int x2, int y, int color) {
+        int x = x1;
+        boolean on = true;
+        while (x < x2) {
+            int len = on ? DASH_ON : DASH_OFF;
+            int end = Math.min(x + len, x2);
+            if (on) {
+                gfx.fill(x, y, end, y + DASH_STROKE, color);
+            }
+            x = end;
+            on = !on;
+        }
+    }
+
+    private static void drawDashedLineV(GuiGraphicsExtractor gfx, int x, int y1, int y2, int color) {
+        int y = y1;
+        boolean on = true;
+        while (y < y2) {
+            int len = on ? DASH_ON : DASH_OFF;
+            int end = Math.min(y + len, y2);
+            if (on) {
+                gfx.fill(x, y, x + DASH_STROKE, end, color);
+            }
+            y = end;
+            on = !on;
+        }
+    }
+
+    // ── base-item border (1px solid — always drawn) ───────────────────────────
+
+    private static String rarityColorCode(String rarity) {
+        return switch (rarity != null ? rarity.toUpperCase() : "") {
+            case "UNCOMMON" -> "§a";
+            case "RARE" -> "§9";
+            case "EPIC" -> "§5";
+            case "LEGENDARY" -> "§6";
+            case "MYTHIC" -> "§d";
+            case "DIVINE" -> "§b";
+            case "SPECIAL" -> "§c";
+            case "ADMIN" -> "§4";
+            default -> "§f";
+        };
+    }
+
+    // ── multi-block borders (2px dashed — cropSize-based) ─────────────────────
 
     @Override
     public ReliableClientRecipeType getType() {
@@ -181,8 +268,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     public List<SlotContent> getResults() {
         return resultList;
     }
-
-    // ── rendering ─────────────────────────────────────────────────────────────
 
     @Override
     public void renderRecipe(RecipeViewScreen screen, RecipePosition pos,
@@ -228,14 +313,14 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         maintainButtons(screen, pos);
     }
 
+    // ── dashed line drawing ───────────────────────────────────────────────────
+
     @Override
     public void renderOverlay(RecipeViewScreen screen, RecipePosition pos,
                               GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         renderMultiBlockBorders(graphics);
         renderBaseItemBorder(graphics);
     }
-
-    // ── base-item border (1px solid — always drawn) ───────────────────────────
 
     private void renderBaseItemBorder(GuiGraphicsExtractor gfx) {
         int offset = (GRID_SIZE - mutation.gridSize()) / 2;
@@ -271,8 +356,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         gfx.fill(x1, y1, x1 + 1, y2, TARGET_BORDER_COLOR);
         gfx.fill(x2 - 1, y1, x2, y2, TARGET_BORDER_COLOR);
     }
-
-    // ── multi-block borders (2px dashed — cropSize-based) ─────────────────────
 
     private void renderMultiBlockBorders(GuiGraphicsExtractor gfx) {
         boolean[][] covered = new boolean[GRID_SIZE][GRID_SIZE];
@@ -312,88 +395,12 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
                 if (cs == null || (cs.width() <= 1 && cs.height() <= 1)) continue;
 
                 // This is the top-left of a new instance — extend by crop dimensions.
-                int bottom = Math.min(top  + cs.height() - 1, GRID_SIZE - 1);
-                int right  = Math.min(left + cs.width()  - 1, GRID_SIZE - 1);
+                int bottom = Math.min(top + cs.height() - 1, GRID_SIZE - 1);
+                int right = Math.min(left + cs.width() - 1, GRID_SIZE - 1);
 
                 drawMultiBlockBorder(gfx, top, left, bottom, right, false);
                 markCovered(covered, top, left, bottom, right);
             }
-        }
-    }
-
-    private static void drawMultiBlockBorder(GuiGraphicsExtractor gfx, int r1, int c1, int r2, int c2,
-                                             boolean isTarget) {
-        int color = isTarget ? DASH_TARGET_COLOR : DASH_INGREDIENT_COLOR;
-        int x1 = GRID_ORIGIN_X + c1 * SLOT_SIZE;
-        int y1 = GRID_ORIGIN_Y + r1 * SLOT_SIZE;
-        int x2 = GRID_ORIGIN_X + (c2 + 1) * SLOT_SIZE;
-        int y2 = GRID_ORIGIN_Y + (r2 + 1) * SLOT_SIZE;
-
-        drawDashedRect(gfx, x1, y1, x2, y2, color);
-        renderDimensionLabel(gfx, r2, c2, c2 - c1 + 1, r2 - r1 + 1);
-    }
-
-    private static void renderDimensionLabel(GuiGraphicsExtractor gfx, int lastRow, int lastCol,
-                                             int width, int height) {
-        if (width < 2 || height < 2) {
-            return;
-        }
-        var font = Minecraft.getInstance().font;
-        Component label = Component.literal(width + "×" + height);
-        int textWidth = font.width(label);
-        int x = GRID_ORIGIN_X + (lastCol + 1) * SLOT_SIZE - textWidth - 3;
-        int y = GRID_ORIGIN_Y + (lastRow + 1) * SLOT_SIZE - font.lineHeight - 2;
-        gfx.text(font, label, x, y, 0xFFCCDDFF, true);
-    }
-
-    private static void markCovered(boolean[][] covered, int r1, int c1, int r2, int c2) {
-        for (int r = r1; r <= r2; r++) {
-            for (int c = c1; c <= c2; c++) {
-                if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
-                    covered[r][c] = true;
-                }
-            }
-        }
-    }
-
-    private static boolean isCovered(boolean[][] covered, int r, int c) {
-        return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE && covered[r][c];
-    }
-
-    // ── dashed line drawing ───────────────────────────────────────────────────
-
-    private static void drawDashedRect(GuiGraphicsExtractor gfx, int x1, int y1, int x2, int y2, int color) {
-        drawDashedLineH(gfx, x1, x2, y1, color);
-        drawDashedLineH(gfx, x1, x2, y2 - DASH_STROKE + 1, color);
-        drawDashedLineV(gfx, x1, y1, y2, color);
-        drawDashedLineV(gfx, x2 - DASH_STROKE + 1, y1, y2, color);
-    }
-
-    private static void drawDashedLineH(GuiGraphicsExtractor gfx, int x1, int x2, int y, int color) {
-        int x = x1;
-        boolean on = true;
-        while (x < x2) {
-            int len = on ? DASH_ON : DASH_OFF;
-            int end = Math.min(x + len, x2);
-            if (on) {
-                gfx.fill(x, y, end, y + DASH_STROKE, color);
-            }
-            x = end;
-            on = !on;
-        }
-    }
-
-    private static void drawDashedLineV(GuiGraphicsExtractor gfx, int x, int y1, int y2, int color) {
-        int y = y1;
-        boolean on = true;
-        while (y < y2) {
-            int len = on ? DASH_ON : DASH_OFF;
-            int end = Math.min(y + len, y2);
-            if (on) {
-                gfx.fill(x, y, x + DASH_STROKE, end, color);
-            }
-            y = end;
-            on = !on;
         }
     }
 
@@ -408,22 +415,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         return cachedName;
     }
 
-    private static String rarityColorCode(String rarity) {
-        return switch (rarity != null ? rarity.toUpperCase() : "") {
-            case "UNCOMMON" -> "§a";
-            case "RARE" -> "§9";
-            case "EPIC" -> "§5";
-            case "LEGENDARY" -> "§6";
-            case "MYTHIC" -> "§d";
-            case "DIVINE" -> "§b";
-            case "SPECIAL" -> "§c";
-            case "ADMIN" -> "§4";
-            default -> "§f";
-        };
-    }
-
-    // ── tooltip ───────────────────────────────────────────────────────────────
-
     private List<Component> getTooltip() {
         if (cachedTooltip != null) {
             return cachedTooltip;
@@ -431,6 +422,8 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         cachedTooltip = buildTooltip();
         return cachedTooltip;
     }
+
+    // ── tooltip ───────────────────────────────────────────────────────────────
 
     private List<Component> buildTooltip() {
         List<Component> lines = new ArrayList<>();
@@ -490,11 +483,15 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         return Collections.unmodifiableList(lines);
     }
 
-    // ── buttons ───────────────────────────────────────────────────────────────
-
     @Override
     @Nullable
     protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
         return addWikiButton(screen, pos);
+    }
+
+    // ── buttons ───────────────────────────────────────────────────────────────
+
+    private record GridData(Map<Integer, SlotContent> slots, List<SlotContent> ingredients,
+                            List<SlotContent> results) {
     }
 }

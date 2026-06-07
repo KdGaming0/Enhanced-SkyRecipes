@@ -30,6 +30,48 @@ public class MobPreviewController {
         this.preview = preview;
     }
 
+    @Nullable
+    private static LivingEntity spawnForLayer(ClientLevel level, @Nullable EntityType<?> type) {
+        if (type == null) return null;
+        Entity entity = type.create(level, EntitySpawnReason.LOAD);
+        if (!(entity instanceof LivingEntity living)) return null;
+        living.setYBodyRot(30.0F);
+        living.setYHeadRot(30.0F);
+        return living;
+    }
+
+    /**
+     * Legacy static helper for reforge recipes.
+     */
+    public static LivingEntity createVillager() {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.level == null) return null;
+        try {
+            var entity = net.minecraft.world.entity.EntityType.VILLAGER.create(mc.level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+            if (entity instanceof LivingEntity living) {
+                living.setPos(0, 0, 0);
+                living.yRotO = 0;
+                living.setYRot(0);
+                return living;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return null;
+    }
+
+    /**
+     * Legacy static helper for reforge recipes.
+     */
+    public static void disposeEntity(LivingEntity entity) {
+        if (entity != null) {
+            try {
+                entity.remove(Entity.RemovalReason.DISCARDED);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     public void init() {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
@@ -51,49 +93,11 @@ public class MobPreviewController {
         }
     }
 
-    @Nullable
-    private static LivingEntity spawnForLayer(ClientLevel level, @Nullable EntityType<?> type) {
-        if (type == null) return null;
-        Entity entity = type.create(level, EntitySpawnReason.LOAD);
-        if (!(entity instanceof LivingEntity living)) return null;
-        living.setYBodyRot(30.0F);
-        living.setYHeadRot(30.0F);
-        return living;
-    }
-
     public void fade() {
         for (LivingEntity entity : entityStack) {
             entity.remove(Entity.RemovalReason.DISCARDED);
         }
         entityStack.clear();
-    }
-
-    /** Legacy static helper for reforge recipes. */
-    public static LivingEntity createVillager() {
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.level == null) return null;
-        try {
-            var entity = net.minecraft.world.entity.EntityType.VILLAGER.create(mc.level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
-            if (entity instanceof LivingEntity living) {
-                living.setPos(0, 0, 0);
-                living.yRotO = 0;
-                living.setYRot(0);
-                return living;
-            }
-        } catch (Exception e) {
-            // ignore
-        }
-        return null;
-    }
-
-    /** Legacy static helper for reforge recipes. */
-    public static void disposeEntity(LivingEntity entity) {
-        if (entity != null) {
-            try {
-                entity.remove(Entity.RemovalReason.DISCARDED);
-            } catch (Exception ignored) {
-            }
-        }
     }
 
     public void tick() {

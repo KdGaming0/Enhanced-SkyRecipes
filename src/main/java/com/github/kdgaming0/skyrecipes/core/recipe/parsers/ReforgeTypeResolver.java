@@ -14,9 +14,6 @@ import java.util.*;
  */
 public final class ReforgeTypeResolver {
 
-    private ReforgeTypeResolver() {
-    }
-
     /**
      * Forward mapping: lore type (e.g. "SWORD") → list of reforge type strings it matches.
      */
@@ -69,14 +66,17 @@ public final class ReforgeTypeResolver {
             Map.entry("WAND", List.of("SWORD", "SWORD/ROD")),
             Map.entry("DUNGEON WAND", List.of("SWORD", "SWORD/ROD"))
     );
-
-    /** Reverse index: reforge type → lore types. Built once for O(1) lookups. */
+    /**
+     * Reverse index: reforge type → lore types. Built once for O(1) lookups.
+     */
     private static final Map<String, List<String>> REFORGE_TYPE_TO_LORE_TYPES = buildReverseIndex();
-
     private static final Set<String> RARITY_WORDS = Set.of(
             "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY",
             "MYTHIC", "SPECIAL", "ULTIMATE", "DIVINE", "ADMIN", "VERY"
     );
+
+    private ReforgeTypeResolver() {
+    }
 
     private static Map<String, List<String>> buildReverseIndex() {
         Map<String, List<String>> map = new HashMap<>();

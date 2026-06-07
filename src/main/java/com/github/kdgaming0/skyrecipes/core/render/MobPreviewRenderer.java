@@ -2,9 +2,9 @@ package com.github.kdgaming0.skyrecipes.core.render;
 
 import cc.cassian.rrv.common.rendering.RrvGuiRenderHelper;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
+import com.github.kdgaming0.skyrecipes.core.mob.MobPreview;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
-import com.github.kdgaming0.skyrecipes.core.mob.MobPreview;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -33,13 +33,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class MobPreviewRenderer {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MobPreviewRenderer.class);
-
     // RRV entity_loot preview box coordinates (relative to recipe card)
     public static final int BOX_LEFT = 70;
     public static final int BOX_TOP = 20;
     public static final int BOX_SIZE = 28;
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(MobPreviewRenderer.class);
     // Inner render bounds for vanilla entities (28×28, centered in the 32×32 box)
     private static final int RENDER_LEFT = 71;
     private static final int RENDER_TOP = 20;
@@ -56,9 +54,12 @@ public final class MobPreviewRenderer {
 
     private static final Set<String> LOGGED_SKIN_FAILURES = ConcurrentHashMap.newKeySet();
 
-    private MobPreviewRenderer() {}
+    private MobPreviewRenderer() {
+    }
 
-    /** Legacy single-entity render for reforge recipes. */
+    /**
+     * Legacy single-entity render for reforge recipes.
+     */
     public static void render(GuiGraphicsExtractor graphics, LivingEntity entity,
                               int x, int y, float scale, float rotationY) {
         if (entity == null || graphics == null) return;
@@ -91,8 +92,10 @@ public final class MobPreviewRenderer {
                               List<LivingEntity> entityStack,
                               int animTick, float partialTicks) {
         boolean rendered = switch (preview.kind()) {
-            case VANILLA_ENTITY -> renderVanilla(topEntity(entityStack), gfx, recipeLeft, recipeTop, animTick, partialTicks);
-            case PLAYER_WITH_SKIN -> renderPlayerSkin(preview.skinPath(), gfx, recipeLeft, recipeTop, animTick, partialTicks);
+            case VANILLA_ENTITY ->
+                    renderVanilla(topEntity(entityStack), gfx, recipeLeft, recipeTop, animTick, partialTicks);
+            case PLAYER_WITH_SKIN ->
+                    renderPlayerSkin(preview.skinPath(), gfx, recipeLeft, recipeTop, animTick, partialTicks);
             case SKULL_ITEM -> renderSkull(preview.helmetItemId(), gfx, recipeLeft, recipeTop);
             case COMPOSITE -> renderComposite(preview, gfx, recipeLeft, recipeTop, entityStack, animTick, partialTicks);
         };

@@ -27,7 +27,9 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
 
     private static final int ARROW_X = 62;
     private static final int ARROW_Y = 22;
-    /** Hit-box for the requirement tooltip. Made wide so it catches the moved "!" easily. */
+    /**
+     * Hit-box for the requirement tooltip. Made wide so it catches the moved "!" easily.
+     */
     private static final int ARROW_HIT_W = 32;
     private static final int ARROW_HIT_H = 20;
 
@@ -41,7 +43,8 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
     private final SlotContent result;
     private final String craftText;
     private final boolean hasCraftText;
-    @Nullable private Component cachedTooltipLine;
+    @Nullable
+    private Component cachedTooltipLine;
 
     public SkyblockCraftingClientRecipe(Identifier id, Map<Integer, SlotContent> ingredients,
                                         SlotContent result, String craftText, List<String> wikiUrls) {
@@ -50,6 +53,13 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
         this.result = result;
         this.craftText = craftText != null ? craftText : "";
         this.hasCraftText = !this.craftText.isEmpty();
+    }
+
+    private static void sendViewRecipeCommand(String itemId) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && mc.getConnection() != null) {
+            mc.getConnection().sendCommand("viewrecipe " + itemId);
+        }
     }
 
     @Override
@@ -139,12 +149,5 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
             return null;
         }
         return SkyblockIdExtractor.extract(contents.getFirst());
-    }
-
-    private static void sendViewRecipeCommand(String itemId) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && mc.getConnection() != null) {
-            mc.getConnection().sendCommand("viewrecipe " + itemId);
-        }
     }
 }

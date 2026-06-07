@@ -15,7 +15,8 @@ public final class HypixelItemsRegistry {
     private static volatile Map<String, Map<String, Integer>> baseStats = Map.of();
     private static volatile Map<String, Map<String, int[]>> tieredStats = Map.of();
 
-    private HypixelItemsRegistry() {}
+    private HypixelItemsRegistry() {
+    }
 
     /**
      * Replaces all stored data atomically.
@@ -25,13 +26,17 @@ public final class HypixelItemsRegistry {
         tieredStats = snapshot.tieredStats();
     }
 
-    /** Clears all data. */
+    /**
+     * Clears all data.
+     */
     public static void clear() {
         baseStats = Map.of();
         tieredStats = Map.of();
     }
 
-    /** Returns {@code true} if the registry has been populated. */
+    /**
+     * Returns {@code true} if the registry has been populated.
+     */
     public static boolean isLoaded() {
         return !tieredStats.isEmpty() || !baseStats.isEmpty();
     }

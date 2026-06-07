@@ -40,12 +40,12 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     private static final int BUTTON_GAP = 4;
 
     private final NeuItem neuItem;
-    private volatile SlotContent lazyDisplayItem;
     private final String rawDisplayName;
-    private volatile Component lazyTitle;
     private final List<Component> infoLines;
     private final boolean isNpc;
     private final String npcDisplayName;
+    private volatile SlotContent lazyDisplayItem;
+    private volatile Component lazyTitle;
 
     public SkyblockInfoClientRecipe(Identifier id, NeuItem neuItem,
                                     String displayName, List<Component> infoLines,
@@ -63,6 +63,39 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         this.infoLines = infoLines != null ? List.copyOf(infoLines) : List.of();
         this.isNpc = isNpc;
         this.npcDisplayName = npcDisplayName != null ? npcDisplayName : "";
+    }
+
+    private static String stripFormatting(String raw) {
+        String clean = raw.replaceAll("§[0-9a-fk-orA-FK-OR]", "");
+        if (clean.endsWith(" (NPC)")) {
+            clean = clean.substring(0, clean.length() - 6);
+        }
+        return clean.trim();
+    }
+
+    /**
+     * Truncates a component to fit within {@link #TEXT_MAX_WIDTH} using a trailing ellipsis.
+     */
+    private static Component ellipsizeTitle(Component component) {
+        var font = Minecraft.getInstance().font;
+        if (font.width(component) <= TEXT_MAX_WIDTH) {
+            return component;
+        }
+        String ellipsis = "…";
+        int avail = TEXT_MAX_WIDTH - font.width(Component.literal(ellipsis));
+        String raw = component.getString();
+        int lo = 0, hi = raw.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            String sub = raw.substring(0, mid);
+            Component test = LegacyStringParser.parse(sub);
+            if (font.width(test) <= avail) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return LegacyStringParser.parse(raw.substring(0, lo) + "§r" + ellipsis);
     }
 
     /**
@@ -173,38 +206,5 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         if (mc.player != null && mc.getConnection() != null) {
             mc.getConnection().sendCommand("shnav " + stripFormatting(npcDisplayName));
         }
-    }
-
-    private static String stripFormatting(String raw) {
-        String clean = raw.replaceAll("§[0-9a-fk-orA-FK-OR]", "");
-        if (clean.endsWith(" (NPC)")) {
-            clean = clean.substring(0, clean.length() - 6);
-        }
-        return clean.trim();
-    }
-
-    /**
-     * Truncates a component to fit within {@link #TEXT_MAX_WIDTH} using a trailing ellipsis.
-     */
-    private static Component ellipsizeTitle(Component component) {
-        var font = Minecraft.getInstance().font;
-        if (font.width(component) <= TEXT_MAX_WIDTH) {
-            return component;
-        }
-        String ellipsis = "…";
-        int avail = TEXT_MAX_WIDTH - font.width(Component.literal(ellipsis));
-        String raw = component.getString();
-        int lo = 0, hi = raw.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            String sub = raw.substring(0, mid);
-            Component test = LegacyStringParser.parse(sub);
-            if (font.width(test) <= avail) {
-                lo = mid;
-            } else {
-                hi = mid - 1;
-            }
-        }
-        return LegacyStringParser.parse(raw.substring(0, lo) + "§r" + ellipsis);
     }
 }

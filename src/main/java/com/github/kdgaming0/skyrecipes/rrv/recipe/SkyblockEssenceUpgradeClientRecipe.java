@@ -71,6 +71,18 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         this.essenceAmount = essenceAmount;
     }
 
+    private static void drawCompact(net.minecraft.client.gui.Font font, GuiGraphicsExtractor graphics,
+                                    String text, int slotX, int slotY) {
+        Component cmp = Component.literal(text);
+        int textWidth = font.width(cmp);
+        int x = slotX + 17 - textWidth;
+        int y = slotY + 9;
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(0.0f, 0.0f);
+        graphics.text(font, cmp, x, y, 0xFFFFFFFF, true);
+        graphics.pose().popMatrix();
+    }
+
     @Override
     public ReliableClientRecipeType getType() {
         return SkyblockEssenceUpgradeRecipeType.INSTANCE;
@@ -201,18 +213,6 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
             }
             gridIdx++;
         }
-    }
-
-    private static void drawCompact(net.minecraft.client.gui.Font font, GuiGraphicsExtractor graphics,
-                                    String text, int slotX, int slotY) {
-        Component cmp = Component.literal(text);
-        int textWidth = font.width(cmp);
-        int x = slotX + 17 - textWidth;
-        int y = slotY + 9;
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(0.0f, 0.0f);
-        graphics.text(font, cmp, x, y, 0xFFFFFFFF, true);
-        graphics.pose().popMatrix();
     }
 
     @Override

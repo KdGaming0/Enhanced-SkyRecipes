@@ -89,12 +89,12 @@ public class SkyblockTradeClientRecipe extends AbstractSkyblockClientRecipe {
         int btnX = pos.left() + WIKI_BUTTON_X_OFFSET;
         int btnY = pos.top() + WIKI_BUTTON_Y_OFFSET;
         Button wikiButton = Button.builder(Component.literal("W"), b -> {
-            try {
-                Util.getPlatform().openUri(URI.create(url));
-            } catch (Exception e) {
-                // ignore
-            }
-        }).pos(btnX, btnY).size(12, 12)
+                    try {
+                        Util.getPlatform().openUri(URI.create(url));
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                }).pos(btnX, btnY).size(12, 12)
                 .tooltip(Tooltip.create(Component.literal("Open Wiki")))
                 .build();
         screen.addRecipeWidget(wikiButton);

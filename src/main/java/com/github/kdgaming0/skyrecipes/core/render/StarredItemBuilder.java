@@ -30,13 +30,17 @@ import java.util.Map;
  */
 public final class StarredItemBuilder {
 
-    /** Default 2 % scaling per star used when no tiered table exists. */
+    /**
+     * Default 2 % scaling per star used when no tiered table exists.
+     */
     private static final double PERCENT_PER_STAR = 0.02;
 
     private static final String DELTA_COLOR = "§a";
     private static final String DELTA_BRACKETS = "§8";
 
-    /** Maps NEU lore stat labels to Hypixel API stat keys (UPPER_SNAKE). */
+    /**
+     * Maps NEU lore stat labels to Hypixel API stat keys (UPPER_SNAKE).
+     */
     private static final Map<String, String> STAT_TO_API_KEY = Map.ofEntries(
             Map.entry("Damage", "DAMAGE"),
             Map.entry("Strength", "STRENGTH"),
@@ -59,7 +63,9 @@ public final class StarredItemBuilder {
             Map.entry("Ability Damage", "ABILITY_DAMAGE")
     );
 
-    /** Stat labels that can appear in NEU lore lines (longest first for greedy matching). */
+    /**
+     * Stat labels that can appear in NEU lore lines (longest first for greedy matching).
+     */
     private static final List<String> STAT_LABELS = List.copyOf(STAT_TO_API_KEY.keySet());
 
     private StarredItemBuilder() {
@@ -225,8 +231,8 @@ public final class StarredItemBuilder {
     // ── Lore line rewriting ─────────────────────────────────────────────────
 
     private static Component rewriteStatLine(Component line,
-                                              Map<String, Integer> after,
-                                              @Nullable Map<String, Integer> before) {
+                                             Map<String, Integer> after,
+                                             @Nullable Map<String, Integer> before) {
         String raw = line.getString();
 
         for (Map.Entry<String, Integer> entry : after.entrySet()) {

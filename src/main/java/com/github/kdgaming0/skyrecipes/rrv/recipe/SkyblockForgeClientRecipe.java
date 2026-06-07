@@ -34,7 +34,8 @@ public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
     private final String craftText;
     private final boolean hasCraftText;
     private final AnimationTicker flameTicker;
-    @Nullable private Component cachedTooltipLine;
+    @Nullable
+    private Component cachedTooltipLine;
 
     public SkyblockForgeClientRecipe(Identifier id, List<ForgeIngredient> inputs,
                                      ItemStack output, int durationSeconds,

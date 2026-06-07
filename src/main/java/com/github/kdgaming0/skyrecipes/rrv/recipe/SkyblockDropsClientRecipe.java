@@ -41,8 +41,10 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
     private final String[] chances;
     private final List<SlotContent> drops;
     private final MobPreviewController previewController;
-    @Nullable private final RecipeViewMenu.AdditionalStackModifier[] chanceModifiers;
-    @Nullable private Component cachedMobName;
+    @Nullable
+    private final RecipeViewMenu.AdditionalStackModifier[] chanceModifiers;
+    @Nullable
+    private Component cachedMobName;
 
     public SkyblockDropsClientRecipe(Identifier id, String mobName, String renderRef,
                                      List<DropEntry> drops, String[] chances,
@@ -72,6 +74,21 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
         if (LOGGED_UNRESOLVED.add(key)) {
             LOGGER.debug("Unresolved drop-recipe render ref '{}' — placeholder will be drawn.", key);
         }
+    }
+
+    private static Component ellipsize(String text, int maxWidth) {
+        var font = Minecraft.getInstance().font;
+        if (font.width(text) <= maxWidth) {
+            return Component.literal(text);
+        }
+        String ellipsis = "…";
+        int avail = maxWidth - font.width(ellipsis);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            if (font.width(sb.toString() + text.charAt(i)) > avail) break;
+            sb.append(text.charAt(i));
+        }
+        return Component.literal(sb + ellipsis);
     }
 
     @Nullable
@@ -193,31 +210,16 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
         int btnX = pos.left() + pos.width() - 16;
         int btnY = pos.top() + pos.height() - 16;
         Button wikiButton = Button.builder(Component.literal("W"), b -> {
-            try {
-                Util.getPlatform().openUri(URI.create(url));
-            } catch (Exception e) {
-                // ignore
-            }
-        }).pos(btnX, btnY).size(12, 12)
+                    try {
+                        Util.getPlatform().openUri(URI.create(url));
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                }).pos(btnX, btnY).size(12, 12)
                 .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Open Wiki")))
                 .build();
         screen.addRecipeWidget(wikiButton);
         return wikiButton;
-    }
-
-    private static Component ellipsize(String text, int maxWidth) {
-        var font = Minecraft.getInstance().font;
-        if (font.width(text) <= maxWidth) {
-            return Component.literal(text);
-        }
-        String ellipsis = "…";
-        int avail = maxWidth - font.width(ellipsis);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            if (font.width(sb.toString() + text.charAt(i)) > avail) break;
-            sb.append(text.charAt(i));
-        }
-        return Component.literal(sb + ellipsis);
     }
 
     public List<DropEntry> getDrops() {

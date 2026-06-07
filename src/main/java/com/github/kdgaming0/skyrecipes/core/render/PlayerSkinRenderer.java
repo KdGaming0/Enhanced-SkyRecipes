@@ -27,7 +27,8 @@ public final class PlayerSkinRenderer {
     private static boolean playerModelLookupFailed;
     private static boolean modelFailureLogged;
 
-    private PlayerSkinRenderer() {}
+    private PlayerSkinRenderer() {
+    }
 
     /**
      * Renders a player skin at the given screen coordinates.

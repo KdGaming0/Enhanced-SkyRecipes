@@ -19,6 +19,7 @@ public class SkyblockCraftingRecipeType implements ReliableClientRecipeType {
 
     public static final SkyblockCraftingRecipeType INSTANCE = new SkyblockCraftingRecipeType();
     private static final Identifier ID = Identifier.fromNamespaceAndPath("skyrecipes", "crafting");
+    private static final Identifier BACKGROUND = ReliableRecipeViewer.of("textures/gui/type/crafting_bordered.png");
 
     @Override
     public Component getDisplayName() {
@@ -34,8 +35,6 @@ public class SkyblockCraftingRecipeType implements ReliableClientRecipeType {
     public int getDisplayHeight() {
         return 60;
     }
-
-    private static final Identifier BACKGROUND = ReliableRecipeViewer.of("textures/gui/type/crafting_bordered.png");
 
     @Override
     public Identifier getGuiTexture() {

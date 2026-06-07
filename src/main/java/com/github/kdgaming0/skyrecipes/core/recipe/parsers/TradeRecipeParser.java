@@ -11,8 +11,6 @@ import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-
 /**
  * Parses NEU trade recipes (barter/trade exchanges).
  */

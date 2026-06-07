@@ -2,6 +2,7 @@ package com.github.kdgaming0.skyrecipes.core.hypixel;
 
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,13 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import org.jetbrains.annotations.Nullable;
+import java.util.*;
 
 /**
  * Fetches {@code /v2/resources/skyblock/items} from the Hypixel public API.
@@ -34,7 +29,8 @@ public final class HypixelItemsFetcher {
     private static final String ENDPOINT = "https://api.hypixel.net/v2/resources/skyblock/items";
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
-    private HypixelItemsFetcher() {}
+    private HypixelItemsFetcher() {
+    }
 
     /**
      * Fetches and parses the Hypixel items endpoint.

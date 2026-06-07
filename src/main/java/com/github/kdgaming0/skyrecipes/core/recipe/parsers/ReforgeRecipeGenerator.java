@@ -132,8 +132,8 @@ public final class ReforgeRecipeGenerator {
      * matching lore types are resolved.</p>
      */
     private static List<String> computeResultNames(String itemTypes,
-                                                     Map<String, List<NeuItem>> itemsByLoreType,
-                                                     Map<String, NeuItem> itemsByInternalName) {
+                                                   Map<String, List<NeuItem>> itemsByLoreType,
+                                                   Map<String, NeuItem> itemsByInternalName) {
         if (itemTypes == null || itemTypes.isEmpty()) {
             return List.of();
         }

@@ -28,7 +28,8 @@ public final class MobSkinRegistry {
     private static final Map<String, Boolean> FAILED = new ConcurrentHashMap<>();
     private static final String PREFIX = "skyrecipes/mobskin/";
 
-    private MobSkinRegistry() {}
+    private MobSkinRegistry() {
+    }
 
     /**
      * Get or create a GPU texture for the given NEU skin path.
@@ -116,7 +117,9 @@ public final class MobSkinRegistry {
         return image;
     }
 
-    /** Converts a 64×32 legacy skin to the modern 64×64 format. */
+    /**
+     * Converts a 64×32 legacy skin to the modern 64×64 format.
+     */
     private static NativeImage convertLegacySkin(NativeImage image) {
         NativeImage newImage = new NativeImage(64, 64, true);
         newImage.copyFrom(image);
@@ -139,7 +142,9 @@ public final class MobSkinRegistry {
         return newImage;
     }
 
-    /** Forces alpha = 255 for every pixel in the given rectangle. */
+    /**
+     * Forces alpha = 255 for every pixel in the given rectangle.
+     */
     private static void setNoAlpha(NativeImage image, int x1, int y1, int x2, int y2) {
         for (int x = x1; x < x2; x++) {
             for (int y = y1; y < y2; y++) {

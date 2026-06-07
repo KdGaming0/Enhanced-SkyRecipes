@@ -31,6 +31,7 @@ public class RuntimeDataManager {
     private ItemRegistry itemRegistry;
     private ConstantsRegistry constantsRegistry;
     private BinaryMetadata currentMetadata;
+
     public RuntimeDataManager(Path dataDir, Path cacheDir) {
         this.dataDir = dataDir;
         this.cacheDir = cacheDir;

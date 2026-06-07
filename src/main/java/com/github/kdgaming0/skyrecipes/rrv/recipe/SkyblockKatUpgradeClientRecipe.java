@@ -43,13 +43,17 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
      *  All coordinates are relative to the 152×96 recipe card.
      * ═══════════════════════════════════════════════════════════════ */
 
-    /** Slider position and size. */
+    /**
+     * Slider position and size.
+     */
     private static final int SLIDER_X = 16;
     private static final int SLIDER_Y = 60;
     private static final int SLIDER_WIDTH = 120;
     private static final int SLIDER_HEIGHT = 20;
 
-    /** Duration text vertical position (centred horizontally). */
+    /**
+     * Duration text vertical position (centred horizontally).
+     */
     private static final int DURATION_Y = 44;
 
     // -----------------------------------------------------------------
@@ -72,16 +76,18 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
     private final NeuItem outputItem;
     private final int inputTier;
     private final int outputTier;
-    private ItemStack input;
-    private ItemStack output;
     private final long baseCoins;
     private final int timeSeconds;
     private final List<ItemStack> itemCosts;
+    private ItemStack input;
+    private ItemStack output;
     private ItemStack coinStack;
 
     private int petLevel = 0;
-    @Nullable private PetLevelSlider levelSlider;
-    @Nullable private RecipeViewScreen screenRef;
+    @Nullable
+    private PetLevelSlider levelSlider;
+    @Nullable
+    private RecipeViewScreen screenRef;
 
     public SkyblockKatUpgradeClientRecipe(Identifier id,
                                           NeuItem inputItem, ItemStack input,
@@ -101,6 +107,20 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         this.outputTier = extractTier(outputItem);
 
         this.coinStack = buildCoinStack(0);
+    }
+
+    private static int extractTier(NeuItem neuItem) {
+        if (neuItem == null) return 0;
+        String internalName = neuItem.internalName();
+        if (internalName == null || internalName.isEmpty()) return 0;
+        int semi = internalName.lastIndexOf(';');
+        if (semi < 0 || semi == internalName.length() - 1) return 0;
+        try {
+            int tier = Integer.parseInt(internalName.substring(semi + 1));
+            return Math.max(0, Math.min(RARITY_OFFSETS.length - 1, tier));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     @Override
@@ -203,6 +223,10 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         return timeSeconds;
     }
 
+    // -----------------------------------------------------------------
+    // Pet level handling
+    // -----------------------------------------------------------------
+
     public Component getDurationText() {
         int seconds = timeSeconds % 60;
         int minutes = (timeSeconds / 60) % 66;
@@ -218,10 +242,6 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         sb.append(seconds).append("s");
         return Component.literal(sb.toString());
     }
-
-    // -----------------------------------------------------------------
-    // Pet level handling
-    // -----------------------------------------------------------------
 
     private void setPetLevel(int level) {
         if (level == petLevel) return;
@@ -287,6 +307,10 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         return stack;
     }
 
+    // -----------------------------------------------------------------
+    // Tier / level / coin math
+    // -----------------------------------------------------------------
+
     private void updateSlotItems(RecipeViewScreen screen) {
         RecipeViewMenu menu = screen.getMenu();
         List<ReliableClientRecipe> display = menu.getCurrentDisplay();
@@ -302,27 +326,9 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         int slotCount = getType().getSlotCount();
         var container = menu.getViewContainer();
         int base = recipeIndex * slotCount;
-        container.setItem(base + 0, input);
+        container.setItem(base, input);
         container.setItem(base + 7, output);
         container.setItem(base + COIN_SLOT_INDEX, coinStack);
-    }
-
-    // -----------------------------------------------------------------
-    // Tier / level / coin math
-    // -----------------------------------------------------------------
-
-    private static int extractTier(NeuItem neuItem) {
-        if (neuItem == null) return 0;
-        String internalName = neuItem.internalName();
-        if (internalName == null || internalName.isEmpty()) return 0;
-        int semi = internalName.lastIndexOf(';');
-        if (semi < 0 || semi == internalName.length() - 1) return 0;
-        try {
-            int tier = Integer.parseInt(internalName.substring(semi + 1));
-            return Math.max(0, Math.min(RARITY_OFFSETS.length - 1, tier));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 
     private int computeOutputLevel(int inputLevel) {

@@ -1,9 +1,9 @@
 package com.github.kdgaming0.skyrecipes.core.registry;
 
+import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.model.EssenceUpgradeData;
 import com.github.kdgaming0.skyrecipes.core.model.ReforgeData;
 import com.github.kdgaming0.skyrecipes.core.model.ReforgeStoneData;
-import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 
 import java.util.Collections;
 import java.util.List;

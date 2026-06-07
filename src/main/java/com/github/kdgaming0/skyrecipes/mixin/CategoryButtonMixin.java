@@ -108,7 +108,7 @@ public class CategoryButtonMixin {
         boolean queryChanged = !newQuery.equals(skyrecipes$previousQuery);
         boolean categoryChanged = CategoryState.getButtonCategory() != skyrecipes$previousCategory;
         if (queryChanged || categoryChanged) {
-            ((AbstractRrvItemListOverlayAccessor) (Object) this).skyrecipes$setStartIndex(0);
+            ((AbstractRrvItemListOverlayAccessor) this).skyrecipes$setStartIndex(0);
         }
     }
 }

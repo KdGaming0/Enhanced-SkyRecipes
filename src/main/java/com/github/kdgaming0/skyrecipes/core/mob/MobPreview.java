@@ -21,8 +21,6 @@ public record MobPreview(
         @Nullable String helmetItemId,
         @Nullable MobPreview rider) {
 
-    public enum Kind { VANILLA_ENTITY, PLAYER_WITH_SKIN, SKULL_ITEM, COMPOSITE }
-
     public static MobPreview vanilla(EntityType<?> type) {
         return new MobPreview(Kind.VANILLA_ENTITY, type, null, null, null);
     }
@@ -48,4 +46,6 @@ public record MobPreview(
             default -> false;
         };
     }
+
+    public enum Kind {VANILLA_ENTITY, PLAYER_WITH_SKIN, SKULL_ITEM, COMPOSITE}
 }

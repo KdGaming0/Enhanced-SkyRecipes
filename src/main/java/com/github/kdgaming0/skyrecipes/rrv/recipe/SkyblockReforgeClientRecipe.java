@@ -103,10 +103,154 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
 
     // ── ReliableClientRecipe core ──────────────────────────────────────────────
 
+    /**
+     * Splits {@code text} into lines that each fit within {@code maxWidth} pixels.
+     * Prefers word boundaries; falls back to mid-word splits. Preserves leading
+     * § colour/formatting codes across line breaks.
+     */
+    private static List<String> wrapText(Font font, String text, int maxWidth) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isEmpty()) {
+            return lines;
+        }
+
+        String remaining = text;
+        String activeCodes = "";
+
+        while (!remaining.isEmpty()) {
+            // Absorb leading codes on this segment
+            String leading = extractLeadingCodes(remaining);
+            if (!leading.isEmpty()) {
+                activeCodes = updateActiveCodes(activeCodes, leading);
+            }
+            String content = remaining.substring(leading.length());
+
+            String prefix = activeCodes;
+            int prefixVis = font.width(prefix); // should be 0, but safe
+            int fit = fitLength(font, prefix + content, maxWidth);
+            int contentFit = Math.max(1, fit - prefix.length());
+
+            int splitAt = contentFit;
+            if (contentFit < content.length()) {
+                while (splitAt > 0 && content.charAt(splitAt - 1) != ' ') {
+                    splitAt--;
+                }
+                if (splitAt == 0) {
+                    splitAt = contentFit; // force mid-word
+                }
+            }
+
+            String line = (prefix + content.substring(0, splitAt)).stripTrailing();
+            if (!line.isEmpty()) {
+                lines.add(line);
+            }
+
+            activeCodes = updateActiveCodes(activeCodes, content.substring(0, splitAt));
+            remaining = content.substring(splitAt).stripLeading();
+        }
+
+        return lines;
+    }
+
+    /**
+     * Returns the §-code prefix at the start of {@code text}, if any.
+     */
+    private static String extractLeadingCodes(String text) {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        while (i + 1 < text.length() && text.charAt(i) == '§') {
+            sb.append(text.charAt(i));
+            sb.append(text.charAt(i + 1));
+            i += 2;
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Recomputes the active colour/formatting codes after consuming {@code text}.
+     */
+    private static String updateActiveCodes(String current, String text) {
+        String combined = current + text;
+        String color = null;
+        boolean bold = false, italic = false, under = false, strike = false, obf = false;
+
+        for (int i = 0; i + 1 < combined.length(); i++) {
+            if (combined.charAt(i) == '§') {
+                char c = combined.charAt(i + 1);
+                switch (c) {
+                    case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                         'a', 'b', 'c', 'd', 'e', 'f',
+                         'A', 'B', 'C', 'D', 'E', 'F' -> color = String.valueOf(c);
+                    case 'k', 'K' -> obf = true;
+                    case 'l', 'L' -> bold = true;
+                    case 'm', 'M' -> strike = true;
+                    case 'n', 'N' -> under = true;
+                    case 'o', 'O' -> italic = true;
+                    case 'r', 'R' -> {
+                        color = null;
+                        bold = italic = under = strike = obf = false;
+                    }
+                }
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (color != null) sb.append('§').append(color);
+        if (obf) sb.append("§k");
+        if (bold) sb.append("§l");
+        if (strike) sb.append("§m");
+        if (under) sb.append("§n");
+        if (italic) sb.append("§o");
+        return sb.toString();
+    }
+
+    /**
+     * Binary-search the number of leading characters of {@code text} that fit.
+     */
+    private static int fitLength(Font font, String text, int maxWidth) {
+        if (font.width(text) <= maxWidth) {
+            return text.length();
+        }
+        int lo = 0, hi = text.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if (font.width(text.substring(0, mid)) <= maxWidth) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return lo;
+    }
+
+    private static String formatStatName(String key) {
+        String[] parts = key.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) sb.append(' ');
+            String part = parts[i];
+            if (part.isEmpty()) continue;
+            sb.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) sb.append(part.substring(1).toLowerCase());
+        }
+        return sb.toString();
+    }
+
+    private static String formatStatValue(double value) {
+        if (value == (int) value) {
+            return String.valueOf((int) value);
+        }
+        return String.valueOf(value);
+    }
+
+    // ── Rendering ──────────────────────────────────────────────────────────────
+
     @Override
     public ReliableClientRecipeType getType() {
         return SkyblockReforgeRecipeType.INSTANCE;
     }
+
+    // ── Cached text builders ───────────────────────────────────────────────────
 
     @Override
     public void bindSlots(RecipeViewMenu.SlotFillContext ctx) {
@@ -130,6 +274,8 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         }
         return cachedResults.isEmpty() ? List.of() : List.of(cachedResults);
     }
+
+    // ── Text wrapping ──────────────────────────────────────────────────────────
 
     @Override
     public boolean redirectsAsResult(ItemStack stack) {
@@ -155,8 +301,6 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         }
         return false;
     }
-
-    // ── Rendering ──────────────────────────────────────────────────────────────
 
     @Override
     public void renderRecipe(RecipeViewScreen screen, RecipePosition pos,
@@ -235,14 +379,14 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         maintainButtons(screen, pos);
     }
 
-    // ── Cached text builders ───────────────────────────────────────────────────
-
     private String getNameString() {
         if (cachedName == null) {
             cachedName = "§e" + reforgeName + " §7- " + rarityColorCode() + rarity;
         }
         return cachedName;
     }
+
+    // ── Result building ────────────────────────────────────────────────────────
 
     private String getSubtitleString() {
         if (cachedSubtitle == null) {
@@ -257,6 +401,8 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         return cachedSubtitle;
     }
 
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
     private List<String> getStatStrings() {
         if (cachedStatStrings == null) {
             List<String> lines = new ArrayList<>(stats.size());
@@ -269,124 +415,6 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         }
         return cachedStatStrings;
     }
-
-    // ── Text wrapping ──────────────────────────────────────────────────────────
-
-    /**
-     * Splits {@code text} into lines that each fit within {@code maxWidth} pixels.
-     * Prefers word boundaries; falls back to mid-word splits. Preserves leading
-     * § colour/formatting codes across line breaks.
-     */
-    private static List<String> wrapText(Font font, String text, int maxWidth) {
-        List<String> lines = new ArrayList<>();
-        if (text == null || text.isEmpty()) {
-            return lines;
-        }
-
-        String remaining = text;
-        String activeCodes = "";
-
-        while (!remaining.isEmpty()) {
-            // Absorb leading codes on this segment
-            String leading = extractLeadingCodes(remaining);
-            if (!leading.isEmpty()) {
-                activeCodes = updateActiveCodes(activeCodes, leading);
-            }
-            String content = remaining.substring(leading.length());
-
-            String prefix = activeCodes;
-            int prefixVis = font.width(prefix); // should be 0, but safe
-            int fit = fitLength(font, prefix + content, maxWidth);
-            int contentFit = Math.max(1, fit - prefix.length());
-
-            int splitAt = contentFit;
-            if (contentFit < content.length()) {
-                while (splitAt > 0 && content.charAt(splitAt - 1) != ' ') {
-                    splitAt--;
-                }
-                if (splitAt == 0) {
-                    splitAt = contentFit; // force mid-word
-                }
-            }
-
-            String line = (prefix + content.substring(0, splitAt)).stripTrailing();
-            if (!line.isEmpty()) {
-                lines.add(line);
-            }
-
-            activeCodes = updateActiveCodes(activeCodes, content.substring(0, splitAt));
-            remaining = content.substring(splitAt).stripLeading();
-        }
-
-        return lines;
-    }
-
-    /** Returns the §-code prefix at the start of {@code text}, if any. */
-    private static String extractLeadingCodes(String text) {
-        StringBuilder sb = new StringBuilder();
-        int i = 0;
-        while (i + 1 < text.length() && text.charAt(i) == '§') {
-            sb.append(text.charAt(i));
-            sb.append(text.charAt(i + 1));
-            i += 2;
-        }
-        return sb.toString();
-    }
-
-    /** Recomputes the active colour/formatting codes after consuming {@code text}. */
-    private static String updateActiveCodes(String current, String text) {
-        String combined = current + text;
-        String color = null;
-        boolean bold = false, italic = false, under = false, strike = false, obf = false;
-
-        for (int i = 0; i + 1 < combined.length(); i++) {
-            if (combined.charAt(i) == '§') {
-                char c = combined.charAt(i + 1);
-                switch (c) {
-                    case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                         'a', 'b', 'c', 'd', 'e', 'f',
-                         'A', 'B', 'C', 'D', 'E', 'F' -> color = String.valueOf(c);
-                    case 'k', 'K' -> obf = true;
-                    case 'l', 'L' -> bold = true;
-                    case 'm', 'M' -> strike = true;
-                    case 'n', 'N' -> under = true;
-                    case 'o', 'O' -> italic = true;
-                    case 'r', 'R' -> {
-                        color = null;
-                        bold = italic = under = strike = obf = false;
-                    }
-                }
-            }
-        }
-
-        StringBuilder sb = new StringBuilder();
-        if (color != null) sb.append('§').append(color);
-        if (obf) sb.append("§k");
-        if (bold) sb.append("§l");
-        if (strike) sb.append("§m");
-        if (under) sb.append("§n");
-        if (italic) sb.append("§o");
-        return sb.toString();
-    }
-
-    /** Binary-search the number of leading characters of {@code text} that fit. */
-    private static int fitLength(Font font, String text, int maxWidth) {
-        if (font.width(text) <= maxWidth) {
-            return text.length();
-        }
-        int lo = 0, hi = text.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            if (font.width(text.substring(0, mid)) <= maxWidth) {
-                lo = mid;
-            } else {
-                hi = mid - 1;
-            }
-        }
-        return lo;
-    }
-
-    // ── Result building ────────────────────────────────────────────────────────
 
     private SlotContent buildResults() {
         if (resultInternalNames.isEmpty()) {
@@ -413,8 +441,6 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         return stacks.isEmpty() ? SlotContent.of() : SlotContent.of(stacks);
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
-
     private String rarityColorCode() {
         return switch (rarity) {
             case "COMMON" -> "§f";
@@ -430,26 +456,6 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
             case "ADMIN" -> "§4";
             default -> "§7";
         };
-    }
-
-    private static String formatStatName(String key) {
-        String[] parts = key.split("_");
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < parts.length; i++) {
-            if (i > 0) sb.append(' ');
-            String part = parts[i];
-            if (part.isEmpty()) continue;
-            sb.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) sb.append(part.substring(1).toLowerCase());
-        }
-        return sb.toString();
-    }
-
-    private static String formatStatValue(double value) {
-        if (value == (int) value) {
-            return String.valueOf((int) value);
-        }
-        return String.valueOf(value);
     }
 
     // ── Getters ────────────────────────────────────────────────────────────────

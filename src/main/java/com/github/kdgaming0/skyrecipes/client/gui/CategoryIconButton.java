@@ -33,6 +33,7 @@ public final class CategoryIconButton extends AbstractButton {
     private final Identifier spriteToggledHighlighted;
     private final PressHandler pressHandler;
     private boolean toggled;
+
     /**
      * @param x            left position in screen pixels
      * @param y            top position in screen pixels

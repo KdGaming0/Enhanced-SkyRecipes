@@ -5,7 +5,6 @@ import com.google.gson.GsonBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
@@ -25,9 +24,12 @@ public final class HypixelItemsCache {
     private static final long CACHE_TTL_MS = 24L * 60L * 60L * 1_000L;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private HypixelItemsCache() {}
+    private HypixelItemsCache() {
+    }
 
-    /** Returns {@code true} when the cache file exists and is newer than the TTL. */
+    /**
+     * Returns {@code true} when the cache file exists and is newer than the TTL.
+     */
     public static boolean isFresh(Path cacheFile) {
         try {
             if (!Files.exists(cacheFile)) return false;
@@ -38,7 +40,9 @@ public final class HypixelItemsCache {
         }
     }
 
-    /** Loads the cached snapshot, or {@code null} on failure. */
+    /**
+     * Loads the cached snapshot, or {@code null} on failure.
+     */
     public static HypixelItemsSnapshot tryLoad(Path cacheFile) {
         try (Reader reader = Files.newBufferedReader(cacheFile, StandardCharsets.UTF_8)) {
             return GSON.fromJson(reader, HypixelItemsSnapshot.class);
@@ -48,7 +52,9 @@ public final class HypixelItemsCache {
         }
     }
 
-    /** Writes the snapshot atomically. */
+    /**
+     * Writes the snapshot atomically.
+     */
     public static void save(Path cacheFile, HypixelItemsSnapshot data) {
         try {
             Files.createDirectories(cacheFile.getParent());

@@ -14,7 +14,8 @@ public final class MobPreviewResolver {
     private static final Logger LOGGER = LoggerFactory.getLogger(MobPreviewResolver.class);
     private static final String NEU_PREFIX = "@neurepo:";
 
-    private MobPreviewResolver() {}
+    private MobPreviewResolver() {
+    }
 
     @Nullable
     public static MobPreview resolve(@Nullable String renderRef, ConstantsRegistry constantsRegistry) {

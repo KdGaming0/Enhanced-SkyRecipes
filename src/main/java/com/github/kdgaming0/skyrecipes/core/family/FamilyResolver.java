@@ -406,7 +406,7 @@ public final class FamilyResolver {
         int semi = id.lastIndexOf(';');
         if (semi != -1 && semi < id.length() - 1) {
             String suffix = id.substring(semi + 1);
-            if (isAllDigits(suffix)) return true;
+            return isAllDigits(suffix);
         }
         return false;
     }

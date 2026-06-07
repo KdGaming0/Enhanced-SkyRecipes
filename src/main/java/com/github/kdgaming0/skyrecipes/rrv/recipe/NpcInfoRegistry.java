@@ -13,7 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class NpcInfoRegistry {
     private static final Map<String, SkyblockInfoClientRecipe> REGISTRY = new ConcurrentHashMap<>();
 
-    private NpcInfoRegistry() {}
+    private NpcInfoRegistry() {
+    }
 
     public static void register(String npcInternalName, SkyblockInfoClientRecipe recipe) {
         if (npcInternalName != null && !npcInternalName.isEmpty()) {

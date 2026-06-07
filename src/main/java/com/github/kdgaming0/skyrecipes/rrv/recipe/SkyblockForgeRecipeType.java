@@ -15,6 +15,7 @@ public class SkyblockForgeRecipeType implements ReliableClientRecipeType {
     public static final SkyblockForgeRecipeType INSTANCE = new SkyblockForgeRecipeType();
 
     private static final Identifier ID = Identifier.fromNamespaceAndPath("skyrecipes", "forge");
+    private static final Identifier BACKGROUND = Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/forge.png");
 
     @Override
     public Component getDisplayName() {
@@ -30,8 +31,6 @@ public class SkyblockForgeRecipeType implements ReliableClientRecipeType {
     public int getDisplayHeight() {
         return 58;
     }
-
-    private static final Identifier BACKGROUND = Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/forge.png");
 
     @Override
     public Identifier getGuiTexture() {

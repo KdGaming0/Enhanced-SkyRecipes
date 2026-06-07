@@ -20,7 +20,8 @@ import java.util.List;
  */
 public final class RecipeViewOpener {
 
-    private RecipeViewOpener() {}
+    private RecipeViewOpener() {
+    }
 
     public static void open(ReliableClientRecipe recipe) {
         LocalPlayer player = Minecraft.getInstance().player;

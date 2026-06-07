@@ -1,7 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
-import com.github.kdgaming0.skyrecipes.core.model.*;
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
+import com.github.kdgaming0.skyrecipes.core.model.*;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -41,7 +41,7 @@ public class BinaryDataCompiler {
 
     // ---- Legacy build-time entrypoint (kept for compatibility) ----
 
-    public static void main(String[] args) throws Exception {
+    static void main(String[] args) throws Exception {
         String outputDir = args.length > 0 ? args[0] : "build/generated/skyrecipes/data";
         String cacheDir = System.getProperty("skyrecipes.cacheDir",
                 System.getProperty("user.home") + "/.gradle/skyrecipes-cache");
@@ -851,15 +851,17 @@ public class BinaryDataCompiler {
             }
 
             packer.packString("recipe");
-            if (item.recipe() instanceof NeuRecipe.CraftingRecipe c) {
-                packer.packMapHeader(3 + c.grid().size());
+            if (item.recipe() instanceof NeuRecipe.CraftingRecipe(
+                    Map<String, String> grid, int count, String overrideOutputId
+            )) {
+                packer.packMapHeader(3 + grid.size());
                 packer.packString("_type");
                 packer.packString("crafting");
                 packer.packString("count");
-                packer.packInt(c.count());
+                packer.packInt(count);
                 packer.packString("overrideOutputId");
-                packer.packString(c.overrideOutputId());
-                for (Map.Entry<String, String> slot : c.grid().entrySet()) {
+                packer.packString(overrideOutputId);
+                for (Map.Entry<String, String> slot : grid.entrySet()) {
                     packer.packString(slot.getKey());
                     packer.packString(slot.getValue());
                 }

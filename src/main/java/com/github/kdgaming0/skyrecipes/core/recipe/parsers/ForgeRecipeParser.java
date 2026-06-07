@@ -60,10 +60,10 @@ public final class ForgeRecipeParser {
             }
 
             List<String> wikiUrls = ("WIKI_URL".equals(item.infoType()) && item.info() != null)
-                ? item.info()
-                : List.of();
+                    ? item.info()
+                    : List.of();
 
-        return new SkyblockForgeClientRecipe(
+            return new SkyblockForgeClientRecipe(
                     recipeId,
                     inputs,
                     ItemStackBuilder.build(outputItem, recipe.count()),

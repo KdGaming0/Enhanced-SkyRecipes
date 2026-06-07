@@ -33,11 +33,12 @@ public final class VanillaEntityNames {
         alias("SiNelverfish", EntityType.SILVERFISH);
     }
 
+    private VanillaEntityNames() {
+    }
+
     private static void alias(String neuName, EntityType<?> type) {
         ALIASES.put(neuName, type);
     }
-
-    private VanillaEntityNames() {}
 
     @Nullable
     public static EntityType<?> resolve(String neuName) {

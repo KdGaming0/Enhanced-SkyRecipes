@@ -11,8 +11,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.List;
-
 /**
  * Hides RRV's "Share Recipe" button on every recipe.
  * Sharing does not function on Hypixel (no server-side recipe sync),

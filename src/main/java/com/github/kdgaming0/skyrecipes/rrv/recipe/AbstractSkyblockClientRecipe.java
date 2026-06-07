@@ -23,10 +23,12 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
 
     protected final Identifier id;
     protected final List<String> wikiUrls;
-    @Nullable private Button wikiButton;
+    @Nullable
+    private Button wikiButton;
 
     private boolean buttonsDirty = true;
-    @Nullable private AbstractWidget sentinelWidget;
+    @Nullable
+    private AbstractWidget sentinelWidget;
 
     protected AbstractSkyblockClientRecipe(Identifier id) {
         this(id, List.of());
@@ -118,12 +120,12 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
         int btnX = pos.left() + getType().getDisplayWidth() - 16;
         int btnY = pos.top() + getType().getDisplayHeight() - 16;
         wikiButton = Button.builder(Component.literal("W"), b -> {
-            try {
-                Util.getPlatform().openUri(URI.create(url));
-            } catch (Exception e) {
-                // ignore
-            }
-        }).pos(btnX, btnY).size(12, 12)
+                    try {
+                        Util.getPlatform().openUri(URI.create(url));
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                }).pos(btnX, btnY).size(12, 12)
                 .tooltip(Tooltip.create(Component.literal("Open Wiki")))
                 .build();
         screen.addRecipeWidget(wikiButton);

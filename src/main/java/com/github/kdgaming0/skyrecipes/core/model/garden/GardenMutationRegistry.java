@@ -27,12 +27,6 @@ public final class GardenMutationRegistry {
     }
 
     /**
-     * Size of a multi-block crop in the garden grid.
-     */
-    public record CropSize(int width, int height) {
-    }
-
-    /**
      * Load mutation data from the classpath resource. Safe to call multiple times.
      */
     public static synchronized void load() {
@@ -172,5 +166,11 @@ public final class GardenMutationRegistry {
 
     private static String getString(JsonObject obj, String key, String defaultValue) {
         return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsString() : defaultValue;
+    }
+
+    /**
+     * Size of a multi-block crop in the garden grid.
+     */
+    public record CropSize(int width, int height) {
     }
 }
