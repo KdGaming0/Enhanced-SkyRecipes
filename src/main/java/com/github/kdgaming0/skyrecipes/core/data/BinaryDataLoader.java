@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
 import com.github.kdgaming0.skyrecipes.core.model.*;
+import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import org.msgpack.core.MessagePack;
@@ -23,7 +24,7 @@ import java.util.*;
  */
 public class BinaryDataLoader {
 
-    public static final int EXPECTED_SCHEMA = 4;
+    public static final int EXPECTED_SCHEMA = 7;
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
     private static final byte[] EXPECTED_MAGIC = new byte[]{'S', 'K', 'Y', '2'};
     private ByteBuffer fileBuffer;
@@ -95,7 +96,7 @@ public class BinaryDataLoader {
             this.constantsRegistry = unpackConstants(constantsBytes);
 
             long elapsed = System.currentTimeMillis() - startTime;
-            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}",
+            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}, MobDefs: {}, MobSkins: {}",
                     elapsed,
                     itemRegistry.size(),
                     constantsRegistry.getAllParents().size(),
@@ -103,7 +104,9 @@ public class BinaryDataLoader {
                     constantsRegistry.getBazaarItems().size(),
                     constantsRegistry.getAllMuseumCategories().size(),
                     constantsRegistry.getAllReforges().size(),
-                    constantsRegistry.getAllReforgeStones().size()
+                    constantsRegistry.getAllReforgeStones().size(),
+                    constantsRegistry.getAllMobDefinitions().size(),
+                    constantsRegistry.getAllMobSkins().size()
             );
             return true;
 
@@ -165,7 +168,7 @@ public class BinaryDataLoader {
             this.constantsRegistry = unpackConstants(constantsBytes);
 
             long elapsed = System.currentTimeMillis() - startTime;
-            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}",
+            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}, MobDefs: {}, MobSkins: {}",
                     elapsed,
                     itemRegistry.size(),
                     constantsRegistry.getAllParents().size(),
@@ -173,7 +176,9 @@ public class BinaryDataLoader {
                     constantsRegistry.getBazaarItems().size(),
                     constantsRegistry.getAllMuseumCategories().size(),
                     constantsRegistry.getAllReforges().size(),
-                    constantsRegistry.getAllReforgeStones().size()
+                    constantsRegistry.getAllReforgeStones().size(),
+                    constantsRegistry.getAllMobDefinitions().size(),
+                    constantsRegistry.getAllMobSkins().size()
             );
             return true;
 
@@ -413,12 +418,16 @@ public class BinaryDataLoader {
                         drops.add(new NeuRecipe.DropsRecipe.Drop(id, chance));
                     }
                 }
-                yield new NeuRecipe.DropsRecipe(drops);
+                String name = raw.containsKey("name") ? raw.get("name").asStringValue().asString() : "";
+                String render = raw.containsKey("render") ? raw.get("render").asStringValue().asString() : "";
+                yield new NeuRecipe.DropsRecipe(name, render, drops);
             }
             case "trade" -> new NeuRecipe.TradeRecipe(
-                    raw.containsKey("inputs") ? unpackStringList(raw.get("inputs")) : Collections.emptyList(),
-                    raw.containsKey("output") ? raw.get("output").asStringValue().asString() : "",
-                    raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1
+                    raw.containsKey("cost") ? raw.get("cost").asStringValue().asString() : "",
+                    raw.containsKey("result") ? raw.get("result").asStringValue().asString() : "",
+                    raw.containsKey("count") ? raw.get("count").asIntegerValue().asInt() : 1,
+                    raw.containsKey("min") ? raw.get("min").asIntegerValue().asInt() : 0,
+                    raw.containsKey("max") ? raw.get("max").asIntegerValue().asInt() : 0
             );
             default -> null;
         };
@@ -477,6 +486,8 @@ public class BinaryDataLoader {
         Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
         Set<String> knownStats = new HashSet<>();
         Map<String, String> reforgeNameToStone = new LinkedHashMap<>();
+        Map<String, MobRenderDefinition> mobDefinitions = new LinkedHashMap<>();
+        Map<String, byte[]> mobSkins = new LinkedHashMap<>();
 
         for (int i = 0; i < mapSize; i++) {
             String key = unpacker.unpackString();
@@ -609,9 +620,50 @@ public class BinaryDataLoader {
                         reforgeNameToStone.put(unpacker.unpackString(), unpacker.unpackString());
                     }
                 }
+                case "mobDefinitions" -> {
+                    int msize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < msize; j++) {
+                        String ref = unpacker.unpackString();
+                        MobRenderDefinition def = unpackMobRenderDefinition(unpacker);
+                        if (def != null) {
+                            mobDefinitions.put(ref, def);
+                        }
+                    }
+                }
+                case "mobSkins" -> {
+                    int msize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < msize; j++) {
+                        String path = unpacker.unpackString();
+                        int binLen = unpacker.unpackBinaryHeader();
+                        byte[] bytes = unpacker.readPayload(binLen);
+                        mobSkins.put(path, bytes);
+                    }
+                }
                 default -> unpacker.skipValue();
             }
         }
-        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone);
+        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
+    }
+
+    private MobRenderDefinition unpackMobRenderDefinition(MessageUnpacker unpacker) throws IOException {
+        int mapSize = unpacker.unpackMapHeader();
+        String entityKind = "";
+        String horseKind = null;
+        String skinPath = null;
+        String helmetItemId = null;
+        MobRenderDefinition rider = null;
+        for (int i = 0; i < mapSize; i++) {
+            String key = unpacker.unpackString();
+            switch (key) {
+                case "entityKind" -> entityKind = unpacker.unpackString();
+                case "horseKind" -> horseKind = unpacker.unpackString();
+                case "skinPath" -> skinPath = unpacker.unpackString();
+                case "helmetItemId" -> helmetItemId = unpacker.unpackString();
+                case "rider" -> rider = unpackMobRenderDefinition(unpacker);
+                default -> unpacker.skipValue();
+            }
+        }
+        if (entityKind.isEmpty()) return null;
+        return new MobRenderDefinition(entityKind, horseKind, skinPath, helmetItemId, rider);
     }
 }

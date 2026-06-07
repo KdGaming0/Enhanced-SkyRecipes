@@ -8,6 +8,10 @@ import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
+import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsCache;
+import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsFetcher;
+import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsRegistry;
+import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsSnapshot;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
@@ -20,6 +24,7 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -33,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -270,6 +276,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         // Register for data arrival (fires immediately if data is already ready).
         SkyRecipes.addDataReadyListener(result -> {
             invalidateCaches();
+            startHypixelFetch();
             startWorkIfReady();
 
             // Alias registration and autocomplete touch RRV client state that is not
@@ -339,6 +346,48 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 LOGGER.debug("Startup retry loop interrupted");
             } finally {
                 startupRetryInProgress = false;
+            }
+        });
+    }
+
+    /**
+     * Fetch Hypixel API items data in the background for accurate essence upgrade stats.
+     * Falls back to disk cache if the network request fails.
+     */
+    private void startHypixelFetch() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                Path cacheFile = FabricLoader.getInstance().getGameDir()
+                        .resolve("skyblockdata").resolve("hypixel_items.json");
+
+                if (HypixelItemsCache.isFresh(cacheFile)) {
+                    HypixelItemsSnapshot cached = HypixelItemsCache.tryLoad(cacheFile);
+                    if (cached != null) {
+                        HypixelItemsRegistry.load(cached);
+                        LOGGER.info("Loaded Hypixel items from cache: {} tiered, {} base stats",
+                                cached.tieredStats().size(), cached.baseStats().size());
+                        return;
+                    }
+                }
+
+                HypixelItemsSnapshot fetched = HypixelItemsFetcher.fetch(
+                        java.net.http.HttpClient.newHttpClient());
+                if (fetched != null) {
+                    HypixelItemsRegistry.load(fetched);
+                    HypixelItemsCache.save(cacheFile, fetched);
+                    LOGGER.info("Fetched Hypixel items API: {} tiered, {} base stats",
+                            fetched.tieredStats().size(), fetched.baseStats().size());
+                } else {
+                    HypixelItemsSnapshot cached = HypixelItemsCache.tryLoad(cacheFile);
+                    if (cached != null) {
+                        HypixelItemsRegistry.load(cached);
+                        LOGGER.warn("Hypixel API fetch failed; using stale cache");
+                    } else {
+                        LOGGER.warn("Hypixel API unavailable and no cache — essence stats will use NEU lore fallback");
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Hypixel fetch failed: {}", e.getMessage());
             }
         });
     }

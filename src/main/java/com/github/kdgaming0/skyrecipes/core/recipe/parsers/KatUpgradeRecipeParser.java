@@ -53,7 +53,9 @@ public final class KatUpgradeRecipeParser {
 
             return new SkyblockKatUpgradeClientRecipe(
                     recipeId,
+                    inputItem,
                     inputStack,
+                    outputItem,
                     outputStack,
                     recipe.coins(),
                     recipe.time(),

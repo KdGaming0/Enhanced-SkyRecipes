@@ -20,9 +20,16 @@ public final class GardenMutationRegistry {
     private static final String RESOURCE_PATH = "assets/skyrecipes/skyblock_data/mutations.json";
 
     private static final Map<String, GardenMutation> MUTATIONS = new LinkedHashMap<>();
+    private static final Map<String, CropSize> CROP_SIZES = new HashMap<>();
     private static boolean loaded = false;
 
     private GardenMutationRegistry() {
+    }
+
+    /**
+     * Size of a multi-block crop in the garden grid.
+     */
+    public record CropSize(int width, int height) {
     }
 
     /**
@@ -50,6 +57,17 @@ public final class GardenMutationRegistry {
                     MUTATIONS.put(key, m);
                 }
             }
+
+            JsonObject cropSizes = root.getAsJsonObject("cropSizes");
+            if (cropSizes != null) {
+                for (String key : cropSizes.keySet()) {
+                    JsonObject obj = cropSizes.getAsJsonObject(key);
+                    int w = obj.has("width") ? obj.get("width").getAsInt() : 1;
+                    int h = obj.has("height") ? obj.get("height").getAsInt() : 1;
+                    CROP_SIZES.put(key, new CropSize(w, h));
+                }
+            }
+
             LOGGER.info("Loaded {} garden mutations", MUTATIONS.size());
         } catch (Exception e) {
             LOGGER.error("Failed to load garden mutations", e);
@@ -68,6 +86,13 @@ public final class GardenMutationRegistry {
      */
     public static Optional<GardenMutation> get(String id) {
         return Optional.ofNullable(MUTATIONS.get(id));
+    }
+
+    /**
+     * Crop size for a mutation, or {@code null} if it is a single-cell crop.
+     */
+    public static CropSize getCropSize(String id) {
+        return CROP_SIZES.get(id);
     }
 
     private static GardenMutation parseMutation(String id, JsonObject obj) {

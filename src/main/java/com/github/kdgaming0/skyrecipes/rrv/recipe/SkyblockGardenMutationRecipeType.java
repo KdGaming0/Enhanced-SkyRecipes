@@ -10,17 +10,25 @@ import net.minecraft.world.item.Items;
 /**
  * RRV recipe type for SkyBlock Garden mutations.
  *
- * <p>Uses a fixed 6×6 grid (36 slots) so all mutation layouts fit.
- * Smaller layouts are centered inside the grid.</p>
+ * <p>146×156 custom background. Slot 0 at (4,4) shows the required surface block.
+ * Slots 1–36 form a 6×6 grid starting at (24,20) with 18×18 cells.</p>
  */
 public class SkyblockGardenMutationRecipeType implements ReliableClientRecipeType {
 
     public static final SkyblockGardenMutationRecipeType INSTANCE = new SkyblockGardenMutationRecipeType();
     private static final Identifier ID = Identifier.fromNamespaceAndPath("skyrecipes", "garden_mutation");
+    private static final Identifier BACKGROUND = Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/garden_mutation.png");
 
     private static final int SLOT_SIZE = 18;
     private static final int GRID_SIZE = 6;
-    private static final int PADDING = 6;
+
+    // Surface block slot
+    private static final int SURFACE_SLOT_X = 4;
+    private static final int SURFACE_SLOT_Y = 4;
+
+    // 6×6 grid origin
+    private static final int GRID_ORIGIN_X = 20;
+    private static final int GRID_ORIGIN_Y = 25;
 
     @Override
     public Component getDisplayName() {
@@ -29,32 +37,36 @@ public class SkyblockGardenMutationRecipeType implements ReliableClientRecipeTyp
 
     @Override
     public int getDisplayWidth() {
-        return PADDING * 2 + GRID_SIZE * SLOT_SIZE;
+        return 146;
     }
 
     @Override
     public int getDisplayHeight() {
-        return 140;
+        return 156;
     }
 
     @Override
     public Identifier getGuiTexture() {
-        return Identifier.withDefaultNamespace("textures/gui/container/crafting_table.png");
+        return BACKGROUND;
     }
 
     @Override
     public int getSlotCount() {
-        return GRID_SIZE * GRID_SIZE;
+        return 37; // 1 surface + 6×6 grid
     }
 
     @Override
     public void placeSlots(RecipeViewMenu.SlotDefinition slotDefinition) {
-        int id = 0;
+        // Slot 0: surface block icon
+        slotDefinition.addItemSlot(0, SURFACE_SLOT_X, SURFACE_SLOT_Y);
+
+        // Slots 1–36: 6×6 grid
+        int slotId = 1;
         for (int row = 0; row < GRID_SIZE; row++) {
             for (int col = 0; col < GRID_SIZE; col++) {
-                int x = PADDING + col * SLOT_SIZE;
-                int y = PADDING + row * SLOT_SIZE;
-                slotDefinition.addItemSlot(id++, x, y);
+                int x = GRID_ORIGIN_X + col * SLOT_SIZE;
+                int y = GRID_ORIGIN_Y + row * SLOT_SIZE;
+                slotDefinition.addItemSlot(slotId++, x, y);
             }
         }
     }

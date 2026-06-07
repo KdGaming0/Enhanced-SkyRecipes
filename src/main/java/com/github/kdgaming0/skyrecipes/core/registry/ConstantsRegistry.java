@@ -3,6 +3,7 @@ package com.github.kdgaming0.skyrecipes.core.registry;
 import com.github.kdgaming0.skyrecipes.core.model.EssenceUpgradeData;
 import com.github.kdgaming0.skyrecipes.core.model.ReforgeData;
 import com.github.kdgaming0.skyrecipes.core.model.ReforgeStoneData;
+import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 
 import java.util.Collections;
 import java.util.List;
@@ -20,14 +21,10 @@ public final class ConstantsRegistry {
     private final Map<String, String> museumCategories;
     private final Map<String, ReforgeData> reforges;
     private final Map<String, ReforgeStoneData> reforgeStones;
-    /**
-     * Compile-time-generated whitelist of stat names observed in NEU gear item lore.
-     */
     private final Set<String> knownStats;
-    /**
-     * Reverse map: reforge name → stone internal name.
-     */
     private final Map<String, String> reforgeNameToStone;
+    private final Map<String, MobRenderDefinition> mobDefinitions;
+    private final Map<String, byte[]> mobSkins;
 
     public ConstantsRegistry(
             Map<String, List<String>> parents,
@@ -37,7 +34,8 @@ public final class ConstantsRegistry {
     ) {
         this(parents, essenceCosts, bazaarItems, museumCategories,
                 Collections.emptyMap(), Collections.emptyMap(),
-                Set.of(), Collections.emptyMap());
+                Set.of(), Collections.emptyMap(),
+                Collections.emptyMap(), Collections.emptyMap());
     }
 
     public ConstantsRegistry(
@@ -50,7 +48,8 @@ public final class ConstantsRegistry {
     ) {
         this(parents, essenceCosts, bazaarItems, museumCategories,
                 reforges, reforgeStones,
-                Set.of(), Collections.emptyMap());
+                Set.of(), Collections.emptyMap(),
+                Collections.emptyMap(), Collections.emptyMap());
     }
 
     public ConstantsRegistry(
@@ -63,6 +62,23 @@ public final class ConstantsRegistry {
             Set<String> knownStats,
             Map<String, String> reforgeNameToStone
     ) {
+        this(parents, essenceCosts, bazaarItems, museumCategories,
+                reforges, reforgeStones, knownStats, reforgeNameToStone,
+                Collections.emptyMap(), Collections.emptyMap());
+    }
+
+    public ConstantsRegistry(
+            Map<String, List<String>> parents,
+            Map<String, EssenceUpgradeData> essenceCosts,
+            Set<String> bazaarItems,
+            Map<String, String> museumCategories,
+            Map<String, ReforgeData> reforges,
+            Map<String, ReforgeStoneData> reforgeStones,
+            Set<String> knownStats,
+            Map<String, String> reforgeNameToStone,
+            Map<String, MobRenderDefinition> mobDefinitions,
+            Map<String, byte[]> mobSkins
+    ) {
         this.parents = parents != null ? Collections.unmodifiableMap(parents) : Collections.emptyMap();
         this.essenceCosts = essenceCosts != null ? Collections.unmodifiableMap(essenceCosts) : Collections.emptyMap();
         this.bazaarItems = bazaarItems != null ? Collections.unmodifiableSet(bazaarItems) : Collections.emptySet();
@@ -71,6 +87,8 @@ public final class ConstantsRegistry {
         this.reforgeStones = reforgeStones != null ? Collections.unmodifiableMap(reforgeStones) : Collections.emptyMap();
         this.knownStats = knownStats != null ? Collections.unmodifiableSet(knownStats) : Set.of();
         this.reforgeNameToStone = reforgeNameToStone != null ? Collections.unmodifiableMap(reforgeNameToStone) : Collections.emptyMap();
+        this.mobDefinitions = mobDefinitions != null ? Collections.unmodifiableMap(mobDefinitions) : Collections.emptyMap();
+        this.mobSkins = mobSkins != null ? Collections.unmodifiableMap(mobSkins) : Collections.emptyMap();
     }
 
     public List<String> getChildren(String parentItem) {
@@ -115,18 +133,20 @@ public final class ConstantsRegistry {
         return reforgeStones.get(internalName);
     }
 
-    /**
-     * Returns the internal name of the reforge stone that applies the given reforge name.
-     */
     public String getStoneForReforge(String reforgeName) {
         return reforgeNameToStone.get(reforgeName);
     }
 
-    /**
-     * Returns the compile-time-generated set of known stat names observed in NEU gear lore.
-     */
     public Set<String> getKnownStats() {
         return knownStats;
+    }
+
+    public MobRenderDefinition getMobRender(String ref) {
+        return mobDefinitions.get(ref);
+    }
+
+    public byte[] getMobSkin(String path) {
+        return mobSkins.get(path);
     }
 
     public Map<String, List<String>> getAllParents() {
@@ -155,5 +175,13 @@ public final class ConstantsRegistry {
 
     public Map<String, String> getReforgeNameToStone() {
         return reforgeNameToStone;
+    }
+
+    public Map<String, MobRenderDefinition> getAllMobDefinitions() {
+        return mobDefinitions;
+    }
+
+    public Map<String, byte[]> getAllMobSkins() {
+        return mobSkins;
     }
 }

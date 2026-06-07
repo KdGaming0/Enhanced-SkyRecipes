@@ -59,11 +59,17 @@ public final class ForgeRecipeParser {
                 }
             }
 
-            return new SkyblockForgeClientRecipe(
+            List<String> wikiUrls = ("WIKI_URL".equals(item.infoType()) && item.info() != null)
+                ? item.info()
+                : List.of();
+
+        return new SkyblockForgeClientRecipe(
                     recipeId,
                     inputs,
                     ItemStackBuilder.build(outputItem, recipe.count()),
-                    recipe.duration()
+                    recipe.duration(),
+                    wikiUrls,
+                    item.craftText()
             );
 
         } catch (Exception e) {

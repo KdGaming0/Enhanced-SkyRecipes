@@ -1,31 +1,30 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.parsers;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
-import cc.cassian.rrv.common.builtin.info.InfoClientRecipe;
-import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
-import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockInfoClientRecipe;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Builds RRV info recipes for NPC items (internal names ending in {@code _NPC}).
+ * Builds info recipe cards for NPC items (internal names ending in {@code _NPC}).
  *
- * <p>Displays the NPC's head, island location, and coordinates as an info card.
- * Uses RRV's built-in {@link InfoClientRecipe} so no custom recipe type is needed.</p>
+ * <p>Displays the NPC's head, island location, and coordinates as an info card.</p>
  */
 public final class NpcInfoRecipeBuilder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NpcInfoRecipeBuilder.class);
 
     /**
-     * NEU island codes → human-readable names (from constants/islands.json).
+     * NEU island codes → human-readable names.
      */
     private static final Map<String, String> ISLAND_NAMES = Map.ofEntries(
             Map.entry("dynamic", "Private Island"),
@@ -67,40 +66,49 @@ public final class NpcInfoRecipeBuilder {
         }
 
         try {
-            ItemStack stack = ItemStackBuilder.build(item);
             Identifier id = IdentifierUtil.skyRecipeId("npc_info/", internalName);
 
-            StringBuilder text = new StringBuilder();
-            text.append("§e").append(item.displayName()).append("\n\n");
+            List<Component> infoLines = buildNpcInfoLines(item);
 
-            String island = formatIsland(item.island());
-            if (!island.isEmpty()) {
-                text.append("§7Island: §f").append(island).append("\n");
-            }
+            // Collect wiki URLs if present
+            List<String> wikiUrls = (item.info() != null && !item.info().isEmpty())
+                    ? item.info()
+                    : List.of();
 
-            if (item.x() != 0 || item.y() != 0 || item.z() != 0) {
-                text.append("§7Location: §f")
-                        .append(item.x()).append(", ")
-                        .append(item.y()).append(", ")
-                        .append(item.z()).append("\n");
-            }
-
-            text.append("\n");
-
-            if (item.infoType() != null && !item.infoType().isEmpty()
-                    && item.info() != null && !item.info().isEmpty()) {
-                text.append("§eWiki Links:\n");
-                for (String url : item.info()) {
-                    text.append("§b").append(url).append("\n");
-                }
-            }
-
-            return new InfoClientRecipe(id, SlotContent.of(stack), Component.literal(text.toString()));
+            SkyblockInfoClientRecipe recipe = new SkyblockInfoClientRecipe(
+                    id,
+                    item,
+                    item.displayName(),
+                    infoLines,
+                    wikiUrls,
+                    true,
+                    item.displayName()
+            );
+            NpcInfoRegistry.register(internalName, recipe);
+            return recipe;
 
         } catch (Exception e) {
-            LOGGER.warn("Failed to build NPC info for {}: {}", internalName, e.getMessage());
+            LOGGER.warn("Failed to build NPC info for {}: {}", internalName, e.getMessage(), e);
             return null;
         }
+    }
+
+    private static List<Component> buildNpcInfoLines(NeuItem item) {
+        List<Component> lines = new ArrayList<>();
+
+        String island = formatIsland(item.island());
+        if (!island.isEmpty()) {
+            lines.add(Component.literal("Island:"));
+            lines.add(Component.literal("  " + island));
+        }
+
+        if (item.x() != 0 || item.y() != 0 || item.z() != 0) {
+            String coords = item.x() + ", " + item.y() + ", " + item.z();
+            lines.add(Component.literal("Location:"));
+            lines.add(Component.literal("  " + coords));
+        }
+
+        return lines;
     }
 
     private static String formatIsland(String code) {

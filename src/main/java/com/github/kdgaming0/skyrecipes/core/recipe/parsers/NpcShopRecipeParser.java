@@ -32,9 +32,15 @@ public final class NpcShopRecipeParser {
         try {
             Identifier recipeId = IdentifierUtil.skyRecipeId("npc_shop/", item.internalName());
 
-            // Resolve result item
-            NeuItem resultItem = itemRegistry.getByInternalName(recipe.result()).orElse(item);
-            ItemStack resultStack = ItemStackBuilder.build(resultItem);
+            // Resolve result item — recipe.result() may include a count suffix (e.g. "ROTTEN_FLESH:1")
+            SlotRefParser.IngredientRef resultRef = SlotRefParser.parse(recipe.result());
+            if (resultRef == null) {
+                resultRef = new SlotRefParser.IngredientRef(recipe.result(), 1);
+            }
+            NeuItem resultItem = SlotRefParser.resolve(resultRef, itemRegistry);
+            ItemStack resultStack = resultItem != null
+                    ? ItemStackBuilder.build(resultItem, resultRef.count())
+                    : new ItemStack(Items.BARRIER, resultRef.count());
 
             // Parse costs — NEU uses two formats:
             // 1. Array of strings: ["SKYBLOCK_COIN:8"]
@@ -46,8 +52,9 @@ public final class NpcShopRecipeParser {
 
                 // Handle SKYBLOCK_COIN special case
                 if ("SKYBLOCK_COIN".equals(itemName)) {
+                    ItemStack coinStack = new ItemStack(Items.GOLD_INGOT, 1);
                     costs.add(new SkyblockNpcShopClientRecipe.ShopCost(
-                            new ItemStack(Items.GOLD_INGOT, amount),
+                            coinStack,
                             itemName,
                             amount,
                             true
@@ -58,18 +65,45 @@ public final class NpcShopRecipeParser {
                         ref = new SlotRefParser.IngredientRef(itemName, amount);
                     }
                     NeuItem costItem = SlotRefParser.resolve(ref, itemRegistry);
+                    int displayCount = ref.count() >= 1000 ? 1 : ref.count();
                     ItemStack costStack = costItem != null
-                            ? ItemStackBuilder.build(costItem, ref.count())
-                            : new ItemStack(Items.BARRIER, amount);
+                            ? ItemStackBuilder.build(costItem, displayCount)
+                            : new ItemStack(Items.BARRIER, displayCount);
                     costs.add(new SkyblockNpcShopClientRecipe.ShopCost(costStack, itemName, amount, false));
+                }
+            }
+
+            // NPC name fallback: NEU data has no 'npc' field, derive from parent item
+            String npcDisplayName = item.displayName();
+            if (npcDisplayName == null || npcDisplayName.isEmpty()) {
+                npcDisplayName = item.internalName();
+            }
+
+            // Build NPC head stack for rendering
+            ItemStack npcHead = ItemStackBuilder.build(item);
+
+            // Resolve wiki URLs for the result item
+            List<String> wikiUrls = List.of();
+            String resultIdStr = recipe.result();
+            if (resultIdStr != null && !resultIdStr.isEmpty()) {
+                int colon = resultIdStr.indexOf(':');
+                if (colon >= 0) {
+                    resultIdStr = resultIdStr.substring(0, colon);
+                }
+                NeuItem resultWikiItem = itemRegistry.getByInternalName(resultIdStr).orElse(null);
+                if (resultWikiItem != null && resultWikiItem.info() != null && !resultWikiItem.info().isEmpty()) {
+                    wikiUrls = resultWikiItem.info();
                 }
             }
 
             return new SkyblockNpcShopClientRecipe(
                     recipeId,
-                    recipe.npc(),
+                    npcDisplayName,
+                    item.internalName(),
                     costs,
-                    resultStack
+                    resultStack,
+                    wikiUrls,
+                    npcHead
             );
 
         } catch (Exception e) {

@@ -75,9 +75,13 @@ public sealed interface NeuRecipe {
     /**
      * Mob/boss drop source recipe.
      *
-     * @param drops List of possible drops with chance strings
+     * @param name   Display name of the mob (e.g. "§cAgarimoo")
+     * @param render Entity render reference (e.g. "Mooshroom" or "@neurepo:mobs/goblin.json")
+     * @param drops  List of possible drops with chance strings
      */
     record DropsRecipe(
+            String name,
+            String render,
             List<Drop> drops
     ) implements NeuRecipe {
         public record Drop(String id, String chance) {
@@ -86,11 +90,19 @@ public sealed interface NeuRecipe {
 
     /**
      * Barter/trade recipe.
+     *
+     * @param cost   Single input item string ("ITEM:COUNT")
+     * @param result Output item internal name
+     * @param count  Output quantity
+     * @param min    Minimum cost when variable (0 if fixed)
+     * @param max    Maximum cost when variable (0 if fixed)
      */
     record TradeRecipe(
-            List<String> inputs,
-            String output,
-            int count
+            String cost,
+            String result,
+            int count,
+            int min,
+            int max
     ) implements NeuRecipe {
     }
 }

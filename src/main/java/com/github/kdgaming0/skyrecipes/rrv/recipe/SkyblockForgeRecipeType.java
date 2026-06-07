@@ -23,35 +23,38 @@ public class SkyblockForgeRecipeType implements ReliableClientRecipeType {
 
     @Override
     public int getDisplayWidth() {
-        return 122;
+        return 129;
     }
 
     @Override
     public int getDisplayHeight() {
-        return 60;
+        return 58;
     }
+
+    private static final Identifier BACKGROUND = Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/forge.png");
 
     @Override
     public Identifier getGuiTexture() {
-        // Reuse crafting background for MVP
-        return Identifier.withDefaultNamespace("textures/gui/container/crafting_table.png");
+        return BACKGROUND;
     }
 
     @Override
     public int getSlotCount() {
-        return 10; // 9 inputs + 1 output
+        return 9; // 8 inputs + 1 output
     }
 
     @Override
     public void placeSlots(RecipeViewMenu.SlotDefinition slotDefinition) {
-        // 3x3 input grid
-        for (int y = 0; y < 3; y++) {
-            for (int x = 0; x < 3; x++) {
-                slotDefinition.addItemSlot(x + y * 3, 4 + x * 18, 4 + y * 18);
-            }
+        // Row 1: 4 input slots
+        for (int i = 0; i < 4; i++) {
+            slotDefinition.addItemSlot(i, 4 + i * 18, 4);
         }
-        // Output slot
-        slotDefinition.addItemSlot(9, 98, 22);
+        // Row 2: 4 input slots
+        for (int i = 0; i < 4; i++) {
+            slotDefinition.addItemSlot(4 + i, 4 + i * 18, 22);
+        }
+        // Output
+        slotDefinition.addItemSlot(8, 105, 13);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
 import com.github.kdgaming0.skyrecipes.core.model.*;
+import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -35,7 +36,7 @@ public class BinaryDataCompiler {
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[]{'S', 'K', 'Y', '2'};
-    private static final int SCHEMA_VERSION = 4;
+    private static final int SCHEMA_VERSION = 7;
     private PetStatResolver petResolver;
 
     // ---- Legacy build-time entrypoint (kept for compatibility) ----
@@ -129,9 +130,11 @@ public class BinaryDataCompiler {
         Map<String, String> museumCategories = new LinkedHashMap<>();
         Map<String, ReforgeData> reforges = new LinkedHashMap<>();
         Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
+        Map<String, MobRenderDefinition> mobDefinitions = new LinkedHashMap<>();
+        Map<String, byte[]> mobSkins = new LinkedHashMap<>();
         this.petResolver = null;
 
-        parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones);
+        parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, mobDefinitions, mobSkins);
 
         // Generate stat whitelist from gear item lore
         Set<String> knownStats = buildKnownStats(items);
@@ -141,8 +144,8 @@ public class BinaryDataCompiler {
         if (callback != null) callback.onProgress("Serializing", 50);
 
         LOGGER.info("Parsed {} items", items.size());
-        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones, {} known stats, {} reforge name mappings",
-                parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size());
+        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones, {} known stats, {} reforge name mappings, {} mob defs, {} mob skins",
+                parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size(), mobDefinitions.size(), mobSkins.size());
 
         // Write binary
         Files.createDirectories(outputPath.getParent());
@@ -169,7 +172,7 @@ public class BinaryDataCompiler {
             // Write constants section
             ByteArrayOutputStream constantsBaos = new ByteArrayOutputStream();
             try (MessagePacker packer = MessagePack.newDefaultPacker(constantsBaos)) {
-                packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone);
+                packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
             }
             byte[] constantsBytes = constantsBaos.toByteArray();
             bos.write(constantsBytes);
@@ -289,7 +292,9 @@ public class BinaryDataCompiler {
                           Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
                           Map<String, String> museumCategories,
                           Map<String, ReforgeData> reforges,
-                          Map<String, ReforgeStoneData> reforgeStones) throws IOException {
+                          Map<String, ReforgeStoneData> reforgeStones,
+                          Map<String, MobRenderDefinition> mobDefinitions,
+                          Map<String, byte[]> mobSkins) throws IOException {
 
         String prefix = null;
 
@@ -326,12 +331,34 @@ public class BinaryDataCompiler {
                         parseReforgeStones(bytes, reforgeStones);
                     } else if (name.equals(prefix + "constants/petnums.json")) {
                         this.petResolver = PetStatResolver.load(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject());
+                    } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".json")) {
+                        parseMobJson(bytes, name, prefix, mobDefinitions);
+                    } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".png")) {
+                        parseMobPng(bytes, name, prefix, mobSkins);
                     }
                 } catch (Exception e) {
                     LOGGER.warn("Failed to parse {}: {}", name, e.getMessage());
                 }
             }
         }
+    }
+
+    private void parseMobJson(byte[] bytes, String entryName, String prefix,
+                              Map<String, MobRenderDefinition> mobDefinitions) {
+        String relativePath = entryName.substring(prefix.length());
+        String ref = "@neurepo:" + relativePath;
+        JsonObject obj = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        MobRenderDefinition def = MobRenderDefinition.parse(obj);
+        if (def != null) {
+            mobDefinitions.put(ref, def);
+        }
+    }
+
+    private void parseMobPng(byte[] bytes, String entryName, String prefix,
+                             Map<String, byte[]> mobSkins) {
+        String relativePath = entryName.substring(prefix.length());
+        String key = "neurepo:" + relativePath;
+        mobSkins.put(key, bytes);
     }
 
     private NeuItem parseItem(byte[] bytes) {
@@ -482,12 +509,18 @@ public class BinaryDataCompiler {
                         }
                     }
                 }
-                yield new NeuRecipe.DropsRecipe(drops);
+                yield new NeuRecipe.DropsRecipe(
+                        JsonUtil.getString(obj, "name"),
+                        JsonUtil.getString(obj, "render"),
+                        drops
+                );
             }
             case "trade" -> new NeuRecipe.TradeRecipe(
-                    JsonUtil.getStringList(obj, "inputs"),
-                    JsonUtil.getString(obj, "output"),
-                    JsonUtil.getInt(obj, "count", 1)
+                    JsonUtil.getString(obj, "cost"),
+                    JsonUtil.getString(obj, "result"),
+                    JsonUtil.getInt(obj, "count", 1),
+                    JsonUtil.getInt(obj, "min", 0),
+                    JsonUtil.getInt(obj, "max", 0)
             );
             case "crafting" -> {
                 Map<String, String> grid = new LinkedHashMap<>();
@@ -932,9 +965,13 @@ public class BinaryDataCompiler {
                 }
             }
             case NeuRecipe.DropsRecipe d -> {
-                packer.packMapHeader(2);
+                packer.packMapHeader(4);
                 packer.packString("_type");
                 packer.packString("drops");
+                packer.packString("name");
+                packer.packString(d.name());
+                packer.packString("render");
+                packer.packString(d.render());
                 packer.packString("drops");
                 packer.packArrayHeader(d.drops().size());
                 for (NeuRecipe.DropsRecipe.Drop drop : d.drops()) {
@@ -946,18 +983,19 @@ public class BinaryDataCompiler {
                 }
             }
             case NeuRecipe.TradeRecipe t -> {
-                packer.packMapHeader(4);
+                packer.packMapHeader(6);
                 packer.packString("_type");
                 packer.packString("trade");
+                packer.packString("cost");
+                packer.packString(t.cost());
+                packer.packString("result");
+                packer.packString(t.result());
                 packer.packString("count");
                 packer.packInt(t.count());
-                packer.packString("output");
-                packer.packString(t.output());
-                packer.packString("inputs");
-                packer.packArrayHeader(t.inputs().size());
-                for (String input : t.inputs()) {
-                    packer.packString(input);
-                }
+                packer.packString("min");
+                packer.packInt(t.min());
+                packer.packString("max");
+                packer.packInt(t.max());
             }
         }
     }
@@ -972,8 +1010,10 @@ public class BinaryDataCompiler {
                                Map<String, ReforgeData> reforges,
                                Map<String, ReforgeStoneData> reforgeStones,
                                Set<String> knownStats,
-                               Map<String, String> reforgeNameToStone) throws IOException {
-        packer.packMapHeader(8);
+                               Map<String, String> reforgeNameToStone,
+                               Map<String, MobRenderDefinition> mobDefinitions,
+                               Map<String, byte[]> mobSkins) throws IOException {
+        packer.packMapHeader(10);
 
         packer.packString("parents");
         packer.packMapHeader(parents.size());
@@ -1134,6 +1174,72 @@ public class BinaryDataCompiler {
         for (Map.Entry<String, String> e : reforgeNameToStone.entrySet()) {
             packer.packString(e.getKey());
             packer.packString(e.getValue());
+        }
+
+        packer.packString("mobDefinitions");
+        packer.packMapHeader(mobDefinitions.size());
+        for (Map.Entry<String, MobRenderDefinition> e : mobDefinitions.entrySet()) {
+            packer.packString(e.getKey());
+            MobRenderDefinition d = e.getValue();
+            int mapSize = 1;
+            if (d.horseKind() != null) mapSize++;
+            if (d.skinPath() != null) mapSize++;
+            if (d.helmetItemId() != null) mapSize++;
+            if (d.rider() != null) mapSize++;
+            packer.packMapHeader(mapSize);
+            packer.packString("entityKind");
+            packer.packString(d.entityKind());
+            if (d.horseKind() != null) {
+                packer.packString("horseKind");
+                packer.packString(d.horseKind());
+            }
+            if (d.skinPath() != null) {
+                packer.packString("skinPath");
+                packer.packString(d.skinPath());
+            }
+            if (d.helmetItemId() != null) {
+                packer.packString("helmetItemId");
+                packer.packString(d.helmetItemId());
+            }
+            if (d.rider() != null) {
+                packer.packString("rider");
+                packMobRenderDefinition(packer, d.rider());
+            }
+        }
+
+        packer.packString("mobSkins");
+        packer.packMapHeader(mobSkins.size());
+        for (Map.Entry<String, byte[]> e : mobSkins.entrySet()) {
+            packer.packString(e.getKey());
+            packer.packBinaryHeader(e.getValue().length);
+            packer.addPayload(e.getValue());
+        }
+    }
+
+    private void packMobRenderDefinition(MessagePacker packer, MobRenderDefinition d) throws IOException {
+        int mapSize = 1;
+        if (d.horseKind() != null) mapSize++;
+        if (d.skinPath() != null) mapSize++;
+        if (d.helmetItemId() != null) mapSize++;
+        if (d.rider() != null) mapSize++;
+        packer.packMapHeader(mapSize);
+        packer.packString("entityKind");
+        packer.packString(d.entityKind());
+        if (d.horseKind() != null) {
+            packer.packString("horseKind");
+            packer.packString(d.horseKind());
+        }
+        if (d.skinPath() != null) {
+            packer.packString("skinPath");
+            packer.packString(d.skinPath());
+        }
+        if (d.helmetItemId() != null) {
+            packer.packString("helmetItemId");
+            packer.packString(d.helmetItemId());
+        }
+        if (d.rider() != null) {
+            packer.packString("rider");
+            packMobRenderDefinition(packer, d.rider());
         }
     }
 

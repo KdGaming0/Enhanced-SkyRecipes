@@ -1,14 +1,12 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.parsers;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
-import cc.cassian.rrv.common.builtin.info.InfoClientRecipe;
-import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
-import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockInfoClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,7 +14,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Builds RRV info recipes for items with WIKI_URL infoType.
+ * Builds SkyBlock info recipe cards for items with WIKI_URL infoType.
+ *
+ * <p>Shows useful item info (requirements, slayer level) and places a wiki button.</p>
  */
 public final class WikiInfoRecipeBuilder {
 
@@ -26,8 +26,9 @@ public final class WikiInfoRecipeBuilder {
     }
 
     /**
-     * Build wiki info recipes for an item.
-     * Returns a list (usually 1) of InfoClientRecipe instances.
+     * Build info recipe(s) for an item.
+     *
+     * @return a list (usually one) of info recipes, or empty if the item has no wiki data
      */
     public static List<ReliableClientRecipe> build(NeuItem item) {
         List<ReliableClientRecipe> recipes = new ArrayList<>();
@@ -36,21 +37,38 @@ public final class WikiInfoRecipeBuilder {
         }
 
         try {
-            ItemStack stack = ItemStackBuilder.build(item);
             Identifier id = IdentifierUtil.skyRecipeId("wiki/", item.internalName());
 
-            StringBuilder text = new StringBuilder();
-            text.append("§eWiki Links:\n\n");
-            for (String url : item.info()) {
-                text.append("§b").append(url).append("\n");
-            }
+            List<Component> infoLines = buildInfoLines(item);
 
-            recipes.add(new InfoClientRecipe(id, SlotContent.of(stack), Component.literal(text.toString())));
+            recipes.add(new SkyblockInfoClientRecipe(
+                    id,
+                    item,
+                    item.displayName(),
+                    infoLines,
+                    item.info()
+            ));
 
         } catch (Exception e) {
-            LOGGER.warn("Failed to build wiki info for {}: {}", item.internalName(), e.getMessage());
+            LOGGER.warn("Failed to build wiki info for {}: {}", item.internalName(), e.getMessage(), e);
         }
 
         return recipes;
+    }
+
+    private static List<Component> buildInfoLines(NeuItem item) {
+        List<Component> lines = new ArrayList<>();
+
+        String formattedCraft = RecipeUiHelper.formatCraftText(item.craftText());
+        if (!formattedCraft.isEmpty()) {
+            lines.add(Component.literal("Req: " + formattedCraft));
+        }
+
+        String formattedSlayer = RecipeUiHelper.formatSlayerReq(item.slayerReq());
+        if (!formattedSlayer.isEmpty()) {
+            lines.add(Component.literal("Slayer: " + formattedSlayer));
+        }
+
+        return lines;
     }
 }

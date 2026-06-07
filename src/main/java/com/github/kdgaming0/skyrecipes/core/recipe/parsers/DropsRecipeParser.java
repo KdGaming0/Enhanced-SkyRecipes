@@ -32,6 +32,8 @@ public final class DropsRecipeParser {
             Identifier recipeId = IdentifierUtil.skyRecipeId("drops/", item.internalName());
 
             List<SkyblockDropsClientRecipe.DropEntry> drops = new ArrayList<>();
+            String[] chances = new String[recipe.drops().size()];
+            int idx = 0;
             for (NeuRecipe.DropsRecipe.Drop drop : recipe.drops()) {
                 SlotRefParser.IngredientRef ref = SlotRefParser.parse(drop.id());
                 if (ref == null) continue;
@@ -42,9 +44,13 @@ public final class DropsRecipeParser {
                         : ItemStack.EMPTY;
 
                 drops.add(new SkyblockDropsClientRecipe.DropEntry(stack, drop.id(), drop.chance()));
+                chances[idx++] = drop.chance();
             }
 
-            return new SkyblockDropsClientRecipe(recipeId, drops);
+            String name = recipe.name() != null ? recipe.name() : "";
+            String render = recipe.render() != null ? recipe.render() : "";
+
+            return new SkyblockDropsClientRecipe(recipeId, name, render, drops, chances, item.info());
 
         } catch (Exception e) {
             LOGGER.warn("Failed to parse drops recipe for {}: {}", item.internalName(), e.getMessage());

@@ -12,6 +12,8 @@ public class SkyblockNpcShopRecipeType implements ReliableClientRecipeType {
     public static final SkyblockNpcShopRecipeType INSTANCE = new SkyblockNpcShopRecipeType();
     private static final Identifier ID = Identifier.fromNamespaceAndPath("skyrecipes", "npc_shop");
 
+    private static final Identifier BACKGROUND = Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/npc_shop.png");
+
     @Override
     public Component getDisplayName() {
         return Component.literal("NPC Shop");
@@ -19,30 +21,34 @@ public class SkyblockNpcShopRecipeType implements ReliableClientRecipeType {
 
     @Override
     public int getDisplayWidth() {
-        return 122;
+        return 156;
     }
 
     @Override
     public int getDisplayHeight() {
-        return 60;
+        return 64;
     }
 
     @Override
     public Identifier getGuiTexture() {
-        return Identifier.withDefaultNamespace("textures/gui/container/crafting_table.png");
+        return BACKGROUND;
     }
 
     @Override
     public int getSlotCount() {
-        return 4; // Up to 3 costs + 1 result
+        return 9; // 8 costs + 1 result
     }
 
     @Override
     public void placeSlots(RecipeViewMenu.SlotDefinition slotDefinition) {
-        slotDefinition.addItemSlot(0, 4, 22);   // Cost 1
-        slotDefinition.addItemSlot(1, 26, 22);  // Cost 2
-        slotDefinition.addItemSlot(2, 48, 22);  // Cost 3
-        slotDefinition.addItemSlot(3, 98, 22);  // Result
+        // 2 rows × 4 columns of cost slots
+        for (int row = 0; row < 2; row++) {
+            for (int col = 0; col < 4; col++) {
+                slotDefinition.addItemSlot(row * 4 + col, 29 + col * 18, 14 + row * 18);
+            }
+        }
+        // Result slot — 18×18 centered in 28×28 box at (128, 21)
+        slotDefinition.addItemSlot(8, 133, 24);
     }
 
     @Override

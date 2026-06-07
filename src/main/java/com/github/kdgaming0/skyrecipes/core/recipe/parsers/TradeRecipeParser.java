@@ -11,6 +11,8 @@ import net.minecraft.world.item.ItemStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 /**
  * Parses NEU trade recipes (barter/trade exchanges).
  */
@@ -28,26 +30,32 @@ public final class TradeRecipeParser {
         try {
             Identifier recipeId = IdentifierUtil.skyRecipeId("trade/", item.internalName());
 
-            // Parse input (single ingredient in "cost" field, stored as inputs list)
+            // Parse cost
             ItemStack inputStack = ItemStack.EMPTY;
-            if (!recipe.inputs().isEmpty()) {
-                SlotRefParser.IngredientRef ref = SlotRefParser.parse(recipe.inputs().get(0));
-                if (ref != null) {
-                    NeuItem inputItem = SlotRefParser.resolve(ref, itemRegistry);
-                    if (inputItem != null) {
-                        inputStack = ItemStackBuilder.build(inputItem, ref.count());
-                    }
+            SlotRefParser.IngredientRef ref = SlotRefParser.parse(recipe.cost());
+            if (ref != null) {
+                NeuItem inputItem = SlotRefParser.resolve(ref, itemRegistry);
+                if (inputItem != null) {
+                    // For variable trades, show the minimum cost on the stack;
+                    // the exact range is rendered as overlay text.
+                    int displayCount = (recipe.min() > 0 && recipe.max() > recipe.min())
+                            ? recipe.min()
+                            : ref.count();
+                    inputStack = ItemStackBuilder.build(inputItem, displayCount);
                 }
             }
 
             // Resolve output
-            NeuItem outputItem = itemRegistry.getByInternalName(recipe.output()).orElse(item);
+            NeuItem outputItem = itemRegistry.getByInternalName(recipe.result()).orElse(item);
             ItemStack outputStack = ItemStackBuilder.build(outputItem, recipe.count());
 
             return new SkyblockTradeClientRecipe(
                     recipeId,
                     inputStack,
-                    outputStack
+                    outputStack,
+                    recipe.min(),
+                    recipe.max(),
+                    item.info()
             );
 
         } catch (Exception e) {

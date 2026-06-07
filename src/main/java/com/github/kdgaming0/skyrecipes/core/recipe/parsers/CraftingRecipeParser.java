@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -74,8 +75,12 @@ public final class CraftingRecipeParser {
             ItemStack resultStack = ItemStackBuilder.build(outputItem, recipe.count());
 
             String craftText = item.craftText();
+            List<String> wikiUrls = ("WIKI_URL".equals(item.infoType()) && item.info() != null)
+                    ? item.info()
+                    : List.of();
+
             return new SkyblockCraftingClientRecipe(recipeId, ingredients,
-                    SlotContent.of(resultStack), craftText);
+                    SlotContent.of(resultStack), craftText, wikiUrls);
 
         } catch (Exception e) {
             LOGGER.warn("Failed to parse crafting recipe for {}: {}", item.internalName(), e.getMessage());

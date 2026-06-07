@@ -9,7 +9,9 @@ import com.github.kdgaming0.skyrecipes.core.recipe.parsers.*;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockGardenMutationClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockReforgeClientRecipe;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +40,8 @@ public final class RecipeGenerator {
      * @return The generation result containing recipes and indexes
      */
     public RecipeResult generate() {
+        NpcInfoRegistry.clear();
+
         List<ReliableClientRecipe> recipes = new ArrayList<>();
         RecipeIndex.Builder indexBuilder = new RecipeIndex.Builder();
 
@@ -53,8 +57,10 @@ public final class RecipeGenerator {
                 }
             }
 
-            // Wiki info recipes
-            if (item.infoType() != null && !item.infoType().isEmpty() && item.info() != null && !item.info().isEmpty()) {
+            // Wiki info recipes (skip NPCs — they get a unified NPC info card instead)
+            String internalName = item.internalName();
+            boolean isNpc = internalName != null && internalName.endsWith("_NPC");
+            if (!isNpc && item.infoType() != null && !item.infoType().isEmpty() && item.info() != null && !item.info().isEmpty()) {
                 List<ReliableClientRecipe> wikiRecipes = WikiInfoRecipeBuilder.build(item);
                 for (ReliableClientRecipe recipe : wikiRecipes) {
                     recipes.add(recipe);
@@ -120,8 +126,18 @@ public final class RecipeGenerator {
                 List<ReliableClientRecipe> reforgeRecipes = ReforgeRecipeGenerator.generateAll(constantsRegistry, itemRegistry);
                 for (ReliableClientRecipe recipe : reforgeRecipes) {
                     recipes.add(recipe);
-                    if (recipe.getId() != null) {
-                        indexBuilder.addResult("reforge", recipe.getId());
+                    if (recipe instanceof SkyblockReforgeClientRecipe reforge) {
+                        // Index by every item this reforge applies to
+                        for (String resultName : reforge.getResultInternalNames()) {
+                            if (!resultName.isEmpty()) {
+                                indexBuilder.addResult(resultName, recipe.getId());
+                            }
+                        }
+                        // Index stone as ingredient
+                        String stoneName = reforge.getStoneInternalName();
+                        if (!stoneName.isEmpty()) {
+                            indexBuilder.addIngredient(stoneName, recipe.getId());
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -132,8 +148,12 @@ public final class RecipeGenerator {
             try {
                 for (GardenMutation mutation : GardenMutationRegistry.all()) {
                     Identifier recipeId = IdentifierUtil.skyRecipeId("garden_mutation/", mutation.id());
+                    List<String> wikiUrls = itemRegistry.getByInternalName(mutation.id())
+                            .filter(item -> "WIKI_URL".equals(item.infoType()))
+                            .map(NeuItem::info)
+                            .orElse(List.of());
                     SkyblockGardenMutationClientRecipe recipe =
-                            new SkyblockGardenMutationClientRecipe(recipeId, mutation, itemRegistry);
+                            new SkyblockGardenMutationClientRecipe(recipeId, mutation, itemRegistry, wikiUrls);
                     recipes.add(recipe);
                     indexBuilder.addResult(mutation.id(), recipeId);
                     // Index ingredients
@@ -190,7 +210,7 @@ public final class RecipeGenerator {
             case NeuRecipe.KatGradeRecipe k -> k.items();
             case NeuRecipe.NpcShopRecipe n -> n.costs().stream().map(NeuRecipe.NpcShopRecipe.Cost::item).toList();
             case NeuRecipe.DropsRecipe d -> d.drops().stream().map(NeuRecipe.DropsRecipe.Drop::id).toList();
-            case NeuRecipe.TradeRecipe t -> t.inputs();
+            case NeuRecipe.TradeRecipe t -> t.cost().isEmpty() ? List.of() : List.of(t.cost());
         };
     }
 

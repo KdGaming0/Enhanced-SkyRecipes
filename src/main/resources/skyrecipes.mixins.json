@@ -11,6 +11,8 @@
     "ItemViewOverlayMixin",
     "RecipeCategoryConfigMixin",
     "RecipeCategoryConfigScreenMixin",
+    "RecipeViewMenuMixin",
+    "rrv.RecipeViewScreenMixin",
     "SearchBarMixin"
   ],
   "injectors": {

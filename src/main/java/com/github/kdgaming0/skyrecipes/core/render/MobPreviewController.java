@@ -1,161 +1,136 @@
 package com.github.kdgaming0.skyrecipes.core.render;
 
+import com.github.kdgaming0.skyrecipes.core.mob.MobPreview;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Manages temporary {@link LivingEntity} instances for drop-recipe previews.
- *
- * <p>Entities are created on demand and must be explicitly disposed to avoid
- * leaking client-side world references.</p>
+ * Owns the entity lifecycle, animation, and rendering for a drop-recipe mob preview.
  */
-public final class MobPreviewController {
+public class MobPreviewController {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MobPreviewController.class);
+    private static final int ROTATION_PERIOD = 360;
 
-    private static final Map<String, EntityType<? extends LivingEntity>> MOB_MAP = new HashMap<>();
+    private final MobPreview preview;
+    private final List<LivingEntity> entityStack = new ArrayList<>();
 
-    static {
-        // Common SkyBlock mob mappings (hardcoded fallback until NEU mob data is in binary)
-        MOB_MAP.put("ZOMBIE", EntityType.ZOMBIE);
-        MOB_MAP.put("SKELETON", EntityType.SKELETON);
-        MOB_MAP.put("SPIDER", EntityType.SPIDER);
-        MOB_MAP.put("CREEPER", EntityType.CREEPER);
-        MOB_MAP.put("ENDERMAN", EntityType.ENDERMAN);
-        MOB_MAP.put("BLAZE", EntityType.BLAZE);
-        MOB_MAP.put("WITCH", EntityType.WITCH);
-        MOB_MAP.put("SLIME", EntityType.SLIME);
-        MOB_MAP.put("MAGMA_CUBE", EntityType.MAGMA_CUBE);
-        MOB_MAP.put("GHAST", EntityType.GHAST);
-        MOB_MAP.put("PIGLIN", EntityType.PIGLIN);
-        MOB_MAP.put("PIGLIN_BRUTE", EntityType.PIGLIN_BRUTE);
-        MOB_MAP.put("ZOMBIFIED_PIGLIN", EntityType.ZOMBIFIED_PIGLIN);
-        MOB_MAP.put("WITHER_SKELETON", EntityType.WITHER_SKELETON);
-        MOB_MAP.put("CAVE_SPIDER", EntityType.CAVE_SPIDER);
-        MOB_MAP.put("SILVERFISH", EntityType.SILVERFISH);
-        MOB_MAP.put("ENDER_DRAGON", EntityType.ENDER_DRAGON);
-        MOB_MAP.put("WITHER", EntityType.WITHER);
-        MOB_MAP.put("GUARDIAN", EntityType.GUARDIAN);
-        MOB_MAP.put("ELDER_GUARDIAN", EntityType.ELDER_GUARDIAN);
-        MOB_MAP.put("IRON_GOLEM", EntityType.IRON_GOLEM);
-        MOB_MAP.put("SNOW_GOLEM", EntityType.SNOW_GOLEM);
-        MOB_MAP.put("WOLF", EntityType.WOLF);
-        MOB_MAP.put("ZOGLIN", EntityType.ZOGLIN);
-        MOB_MAP.put("HOGLIN", EntityType.HOGLIN);
+    private int animationTick;
+    private boolean hovered;
+
+    public MobPreviewController(@Nullable MobPreview preview) {
+        this.preview = preview;
     }
 
-    private MobPreviewController() {
+    public void init() {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) return;
+        if (preview == null || !preview.needsLivingEntity()) return;
+        spawnRecursive(level, preview, null);
     }
 
-    /**
-     * Create a preview entity for the given mob identifier.
-     *
-     * @param mobId internal name or mob identifier (e.g. "ZOMBIE", "SKELETON")
-     * @return a living entity instance, or {@code null} if creation failed
-     */
-    @SuppressWarnings("unchecked")
-    public static LivingEntity createEntity(String mobId) {
-        Level level = Minecraft.getInstance().level;
-        if (level == null) {
-            return null;
-        }
-
-        EntityType<? extends LivingEntity> type = resolveType(mobId);
-        if (type == null) {
-            LOGGER.debug("No entity type mapping for mobId: {}", mobId);
-            return null;
-        }
-
-        try {
-            LivingEntity entity = type.create(level, EntitySpawnReason.COMMAND);
-            if (entity == null) {
-                return null;
+    private void spawnRecursive(ClientLevel level, MobPreview current, @Nullable LivingEntity mount) {
+        LivingEntity entity = spawnForLayer(level, current.entityType());
+        if (entity != null) {
+            if (mount != null) {
+                entity.startRiding(mount);
+                mount.positionRider(entity);
             }
-            // Position entity at origin for preview
-            entity.setPos(0, 0, 0);
-            entity.yRotO = 0;
-            entity.setYRot(0);
-            return entity;
-        } catch (Exception e) {
-            LOGGER.debug("Failed to create preview entity for {}: {}", mobId, e.getMessage());
-            return null;
+            entityStack.add(entity);
+        }
+        if (current.rider() != null) {
+            spawnRecursive(level, current.rider(), entity != null ? entity : mount);
         }
     }
 
-    /**
-     * Create a Villager entity for the blacksmith preview.
-     *
-     * @return a Villager instance, or {@code null}
-     */
+    @Nullable
+    private static LivingEntity spawnForLayer(ClientLevel level, @Nullable EntityType<?> type) {
+        if (type == null) return null;
+        Entity entity = type.create(level, EntitySpawnReason.LOAD);
+        if (!(entity instanceof LivingEntity living)) return null;
+        living.setYBodyRot(30.0F);
+        living.setYHeadRot(30.0F);
+        return living;
+    }
+
+    public void fade() {
+        for (LivingEntity entity : entityStack) {
+            entity.remove(Entity.RemovalReason.DISCARDED);
+        }
+        entityStack.clear();
+    }
+
+    /** Legacy static helper for reforge recipes. */
     public static LivingEntity createVillager() {
-        Level level = Minecraft.getInstance().level;
-        if (level == null) {
-            return null;
-        }
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc.level == null) return null;
         try {
-            LivingEntity entity = EntityType.VILLAGER.create(level, EntitySpawnReason.COMMAND);
-            if (entity == null) {
-                return null;
+            var entity = net.minecraft.world.entity.EntityType.VILLAGER.create(mc.level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+            if (entity instanceof LivingEntity living) {
+                living.setPos(0, 0, 0);
+                living.yRotO = 0;
+                living.setYRot(0);
+                return living;
             }
-            entity.setPos(0, 0, 0);
-            entity.yRotO = 0;
-            entity.setYRot(0);
-            return entity;
         } catch (Exception e) {
-            LOGGER.debug("Failed to create villager preview: {}", e.getMessage());
-            return null;
+            // ignore
         }
+        return null;
     }
 
-    /**
-     * Dispose of a previously created preview entity.
-     *
-     * @param entity the entity to clean up
-     */
+    /** Legacy static helper for reforge recipes. */
     public static void disposeEntity(LivingEntity entity) {
         if (entity != null) {
             try {
-                entity.remove(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
-            } catch (Exception e) {
-                LOGGER.debug("Failed to dispose preview entity: {}", e.getMessage());
+                entity.remove(Entity.RemovalReason.DISCARDED);
+            } catch (Exception ignored) {
             }
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static EntityType<? extends LivingEntity> resolveType(String mobId) {
-        if (mobId == null) {
-            return null;
+    public void tick() {
+        if (!hovered) {
+            animationTick++;
+            if (animationTick >= ROTATION_PERIOD) animationTick = 0;
         }
+    }
 
-        // Direct map lookup
-        EntityType<? extends LivingEntity> type = MOB_MAP.get(mobId.toUpperCase());
-        if (type != null) {
-            return type;
+    public void render(GuiGraphicsExtractor gfx, int recipeLeft, int recipeTop,
+                       int mouseX, int mouseY, float partialTicks) {
+        hovered = MobPreviewRenderer.isPointInPreviewBox(mouseX, mouseY);
+        syncPassengerPositions();
+
+        if (preview != null) {
+            MobPreviewRenderer.render(preview, gfx, recipeLeft, recipeTop, entityStack, animationTick, partialTicks);
+        } else {
+            MobPreviewRenderer.renderPlaceholder(gfx, recipeLeft, recipeTop);
         }
+    }
 
-        // Try parsing as a modern identifier
-        try {
-            net.minecraft.resources.Identifier id = net.minecraft.resources.Identifier.tryParse(mobId.toLowerCase());
-            if (id != null) {
-                EntityType<?> foundType =
-                        net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(id).orElse(null);
-                if (foundType != null && foundType.getBaseClass() != null && foundType.getBaseClass().isAssignableFrom(LivingEntity.class)) {
-                    return (EntityType<? extends LivingEntity>) foundType;
-                }
+    private void syncPassengerPositions() {
+        for (int i = 0; i < entityStack.size() - 1; i++) {
+            LivingEntity mount = entityStack.get(i);
+            LivingEntity rider = entityStack.get(i + 1);
+            if (rider.getVehicle() == mount) {
+                mount.positionRider(rider);
             }
-        } catch (Exception ignored) {
         }
+    }
 
-        return null;
+    public boolean isHovered() {
+        return hovered;
+    }
+
+    @Nullable
+    public MobPreview getPreview() {
+        return preview;
     }
 }

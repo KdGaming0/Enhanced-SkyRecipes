@@ -5,10 +5,15 @@ import com.github.kdgaming0.skyrecipes.core.model.EssenceUpgradeData;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.core.render.StarredItemBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockEssenceUpgradeClientRecipe;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ItemLore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +43,34 @@ public final class EssenceUpgradeGenerator {
     private EssenceUpgradeGenerator() {
     }
 
+    private static ItemStack buildCoinStack(long amount) {
+        ItemStack stack = new ItemStack(Items.GOLD_NUGGET, 1);
+        String compact = formatCompact(amount);
+        stack.set(DataComponents.CUSTOM_NAME, Component.literal(compact + " Coins"));
+        String exact = String.format("%,d", amount);
+        stack.set(DataComponents.LORE, new ItemLore(List.of(
+                Component.literal("§e" + exact + " Coins")
+        )));
+        return stack;
+    }
+
+    private static String formatCompact(long value) {
+        if (value >= 1_000_000) {
+            java.math.BigDecimal d = java.math.BigDecimal.valueOf(value)
+                    .divide(java.math.BigDecimal.valueOf(1_000_000));
+            String s = d.stripTrailingZeros().toPlainString();
+            int decimals = s.contains(".") ? s.length() - s.indexOf(".") - 1 : 0;
+            if (decimals <= 3) return s + "m";
+        }
+        if (value >= 1_000) {
+            java.math.BigDecimal d = java.math.BigDecimal.valueOf(value)
+                    .divide(java.math.BigDecimal.valueOf(1_000));
+            String s = d.stripTrailingZeros().toPlainString();
+            return s + "k";
+        }
+        return String.valueOf(value);
+    }
+
     /**
      * Generate all essence upgrade recipes.
      */
@@ -50,8 +83,8 @@ public final class EssenceUpgradeGenerator {
 
             var itemOpt = itemRegistry.getByInternalName(itemName);
             if (itemOpt.isEmpty()) continue;
+            var neuItem = itemOpt.get();
 
-            ItemStack baseStack = ItemStackBuilder.build(itemOpt.get());
             String essenceItemName = ESSENCE_ITEM_MAP.getOrDefault(data.essenceType(), "ESSENCE_" + data.essenceType().toUpperCase());
             ItemStack essenceStack = ItemStack.EMPTY;
             var essenceOpt = itemRegistry.getByInternalName(essenceItemName);
@@ -59,21 +92,60 @@ public final class EssenceUpgradeGenerator {
                 essenceStack = ItemStackBuilder.build(essenceOpt.get());
             }
 
-            for (Map.Entry<Integer, Integer> costEntry : data.costsPerStar().entrySet()) {
+            var sortedStars = data.costsPerStar().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .toList();
+
+            for (Map.Entry<Integer, Integer> costEntry : sortedStars) {
                 int starLevel = costEntry.getKey();
                 int essenceAmount = costEntry.getValue();
 
-                List<ItemStack> extraItems = new ArrayList<>();
+                ItemStack inputStack = StarredItemBuilder.buildInput(neuItem, starLevel);
+                ItemStack outputStack = StarredItemBuilder.buildOutput(neuItem, starLevel);
+
+                long coinAmount = 0;
+                List<ItemStack> displayExtras = new ArrayList<>();
+                List<Long> extraAmounts = new ArrayList<>();
                 List<String> extraReqs = data.extraItemsPerStar().get(starLevel);
+
                 if (extraReqs != null) {
+                    // First pass: find coin amount
                     for (String req : extraReqs) {
                         SlotRefParser.IngredientRef ref = SlotRefParser.parse(req);
                         if (ref == null) continue;
-                        var reqItem = SlotRefParser.resolve(ref, itemRegistry);
-                        if (reqItem != null) {
-                            extraItems.add(ItemStackBuilder.build(reqItem, ref.count()));
+                        if ("SKYBLOCK_COIN".equals(ref.internalName())) {
+                            coinAmount = ref.count();
                         }
                     }
+
+                    // Coin first (count=1, no vanilla text)
+                    if (coinAmount > 0) {
+                        displayExtras.add(buildCoinStack(coinAmount));
+                        extraAmounts.add(coinAmount);
+                    }
+
+                    // Other extras (count=1 if >=1000 to suppress vanilla text)
+                    for (String req : extraReqs) {
+                        SlotRefParser.IngredientRef ref = SlotRefParser.parse(req);
+                        if (ref == null) continue;
+                        if ("SKYBLOCK_COIN".equals(ref.internalName())) continue;
+
+                        var reqItem = SlotRefParser.resolve(ref, itemRegistry);
+                        if (reqItem != null) {
+                            int displayCount = ref.count() >= 1000 ? 1 : ref.count();
+                            displayExtras.add(ItemStackBuilder.build(reqItem, displayCount));
+                            extraAmounts.add((long) ref.count());
+                        }
+                    }
+                }
+
+                // Essence stack: count=1 if >=1000 to suppress vanilla text,
+                // otherwise use actual count so vanilla text shows correctly
+                ItemStack displayEssence = essenceStack.copy();
+                if (essenceAmount >= 1000) {
+                    displayEssence.setCount(1);
+                } else {
+                    displayEssence.setCount(essenceAmount);
                 }
 
                 Identifier recipeId = IdentifierUtil.skyRecipeId("essence/",
@@ -81,11 +153,15 @@ public final class EssenceUpgradeGenerator {
 
                 recipes.add(new SkyblockEssenceUpgradeClientRecipe(
                         recipeId,
-                        baseStack,
-                        essenceStack.copyWithCount(essenceAmount),
+                        inputStack,
+                        outputStack,
+                        displayEssence,
                         starLevel,
-                        data.essenceType(),
-                        extraItems
+                        displayExtras,
+                        extraAmounts,
+                        neuItem.displayName(),
+                        coinAmount,
+                        essenceAmount
                 ));
             }
         }
