@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.core.search;
 
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -123,20 +124,6 @@ public final class StatParser {
         return normalized;
     }
 
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
-    }
-
     /**
      * Extract all stats from a single lore line.
      *
@@ -162,7 +149,7 @@ public final class StatParser {
 
     @Nullable
     private ParsedStat parseColonFormat(String loreLine) {
-        String clean = stripColorCodes(loreLine);
+        String clean = TextUtil.stripColorCodes(loreLine);
         int colonIdx = clean.indexOf(':');
         if (colonIdx <= 0) return null;
 
@@ -181,7 +168,7 @@ public final class StatParser {
     }
 
     private List<ParsedStat> parseNoColonFormat(String loreLine) {
-        String clean = stripColorCodes(loreLine);
+        String clean = TextUtil.stripColorCodes(loreLine);
         // Skip lines that already have a colon (handled by parseColonFormat)
         if (clean.indexOf(':') >= 0) return List.of();
         // Quick reject: no + or - sign means no stat value

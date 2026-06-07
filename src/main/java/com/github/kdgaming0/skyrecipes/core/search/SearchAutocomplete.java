@@ -2,6 +2,7 @@ package com.github.kdgaming0.skyrecipes.core.search;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 
 import java.util.*;
 
@@ -34,7 +35,7 @@ public final class SearchAutocomplete {
 
         // Tier 1: display names
         for (NeuItem item : itemRegistry.getAllItems()) {
-            String name = stripColorCodes(item.displayName());
+            String name = TextUtil.stripColorCodes(item.displayName());
             if (!name.isBlank() && seen.add(name.toLowerCase())) {
                 entries.add(new Entry(name, Tier.DISPLAY_NAME, 0));
             }
@@ -54,7 +55,7 @@ public final class SearchAutocomplete {
             String targetId = alias.getValue();
             // Resolve alias to display name for better UX
             String displayName = itemRegistry.getByInternalName(targetId)
-                    .map(item -> stripColorCodes(item.displayName()))
+                    .map(item -> TextUtil.stripColorCodes(item.displayName()))
                     .filter(name -> !name.isBlank())
                     .orElse(aliasKey);
             if (seen.add(displayName.toLowerCase())) {
@@ -71,20 +72,6 @@ public final class SearchAutocomplete {
 
         // Sort by text for deterministic binary search
         entries.sort(Comparator.comparing(e -> e.text().toLowerCase()));
-    }
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++; // skip formatting code
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
     }
 
     /**

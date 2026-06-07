@@ -93,7 +93,7 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
             Component name = Component.literal(npcDisplayName);
             int textWidth = font.width(name);
             int x = (pos.width() - textWidth) / 2;
-            graphics.text(font, name, x, NPC_NAME_Y, 0xFFFFFFFF, true);
+            graphics.text(font, name, x, NPC_NAME_Y, RecipeUiHelper.TEXT_WHITE, true);
         }
 
         // NPC skin preview — full player model using the same path as Drops recipes
@@ -149,10 +149,7 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
             int x = slotX + 17 - textWidth;
             int y = slotY + 9;
 
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(0.0f, 0.0f);
-            graphics.text(font, text, x, y, 0xFFFFFFFF, true);
-            graphics.pose().popMatrix();
+            graphics.text(font, text, x, y, RecipeUiHelper.TEXT_WHITE, true);
         }
     }
 

@@ -75,7 +75,7 @@ public final class MobSkinRegistry {
             return id;
         } catch (Exception e) {
             FAILED.put(skinPath, Boolean.TRUE);
-            LOGGER.debug("Failed to decode mob skin '{}': {}", skinPath, e.getMessage());
+            LOGGER.debug("Failed to decode mob skin '{}'", skinPath, e);
             return null;
         }
     }

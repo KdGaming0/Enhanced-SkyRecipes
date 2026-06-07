@@ -10,7 +10,6 @@
     "ItemFiltersMixin",
     "ItemViewOverlayMixin",
     "RecipeCategoryConfigMixin",
-    "RecipeCategoryConfigScreenMixin",
     "RecipeViewMenuMixin",
     "rrv.RecipeViewScreenMixin",
     "SearchBarMixin"

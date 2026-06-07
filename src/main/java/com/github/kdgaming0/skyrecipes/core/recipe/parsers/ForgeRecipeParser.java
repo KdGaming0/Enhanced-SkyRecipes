@@ -32,16 +32,11 @@ public final class ForgeRecipeParser {
      * @return A SkyblockForgeClientRecipe, or null if parsing fails
      */
     public static SkyblockForgeClientRecipe parse(NeuItem item, NeuRecipe.ForgeRecipe recipe, ItemRegistry itemRegistry) {
-        try {
+        return ParserUtil.parseSafely(item.internalName(), "forge", () -> {
             Identifier recipeId = IdentifierUtil.skyRecipeId("forge/", item.internalName());
 
-            // Resolve output item
-            NeuItem outputItem = item;
-            if (recipe.overrideOutputId() != null && !recipe.overrideOutputId().isEmpty()) {
-                outputItem = itemRegistry.getByInternalName(recipe.overrideOutputId()).orElse(item);
-            }
+            NeuItem outputItem = ParserUtil.resolveOutputItem(item, recipe.overrideOutputId(), itemRegistry);
 
-            // Parse inputs
             List<SkyblockForgeClientRecipe.ForgeIngredient> inputs = new ArrayList<>();
             for (String inputStr : recipe.inputs()) {
                 SlotRefParser.IngredientRef ref = SlotRefParser.parse(inputStr);
@@ -59,22 +54,14 @@ public final class ForgeRecipeParser {
                 }
             }
 
-            List<String> wikiUrls = ("WIKI_URL".equals(item.infoType()) && item.info() != null)
-                    ? item.info()
-                    : List.of();
-
             return new SkyblockForgeClientRecipe(
                     recipeId,
                     inputs,
                     ItemStackBuilder.build(outputItem, recipe.count()),
                     recipe.duration(),
-                    wikiUrls,
+                    ParserUtil.wikiUrlsForItem(item),
                     item.craftText()
             );
-
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse forge recipe for {}: {}", item.internalName(), e.getMessage());
-            return null;
-        }
+        });
     }
 }

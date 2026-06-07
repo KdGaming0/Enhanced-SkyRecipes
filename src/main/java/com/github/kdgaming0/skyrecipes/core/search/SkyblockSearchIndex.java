@@ -7,6 +7,7 @@ import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -197,22 +198,8 @@ public final class SkyblockSearchIndex {
         return false;
     }
 
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
-    }
-
     private static String extractRarity(String lastLoreLine) {
-        String clean = stripColorCodes(lastLoreLine);
+        String clean = TextUtil.stripColorCodes(lastLoreLine);
         String[] parts = clean.split("\\s+");
         for (String part : parts) {
             if (part.matches("[A-Z]+")) {
@@ -866,7 +853,7 @@ public final class SkyblockSearchIndex {
         Set<String> itemTokens = itemId != null ? new HashSet<>(32) : null;
 
         // Display name
-        String displayName = stripColorCodes(stack.getHoverName().getString());
+        String displayName = TextUtil.stripColorCodes(stack.getHoverName().getString());
         displayNames[itemIndex] = displayName;
         tokenize(displayName, (token) -> {
             addNameToken(token, itemIndex);
@@ -887,7 +874,7 @@ public final class SkyblockSearchIndex {
         try {
             indexNeuItemInternal(itemIndex, stack, neuItem, itemTokens, constantsRegistry);
         } catch (Exception e) {
-            LOGGER.warn("Failed to index item {}: {}", neuItem.internalName(), e.getMessage());
+            LOGGER.warn("Failed to index item {}", neuItem.internalName(), e);
         }
     }
 
@@ -911,7 +898,7 @@ public final class SkyblockSearchIndex {
         // Lore
         if (neuItem.lore() != null) {
             for (String line : neuItem.lore()) {
-                String clean = stripColorCodes(line);
+                String clean = TextUtil.stripColorCodes(line);
                 tokenize(clean, (token) -> {
                     addAnyToken(token, itemIndex);
                     if (itemTokens != null) itemTokens.add(token);
@@ -992,7 +979,7 @@ public final class SkyblockSearchIndex {
         // Lore fallback for stones missing from constants (e.g. GEOMETRIC_ODDITY)
         if (!reforgeIndexed && neuItem.lore() != null) {
             for (String line : neuItem.lore()) {
-                String clean = stripColorCodes(line);
+                String clean = TextUtil.stripColorCodes(line);
                 String lower = clean.toLowerCase();
                 int appliesIdx = lower.indexOf("applies the ");
                 if (appliesIdx >= 0) {
@@ -1072,7 +1059,7 @@ public final class SkyblockSearchIndex {
     private void indexSkillRequirements(int itemIndex, NeuItem neuItem, Set<String> itemTokens) {
         if (neuItem.lore() == null || neuItem.lore().isEmpty()) return;
         for (String line : neuItem.lore()) {
-            String clean = stripColorCodes(line).toLowerCase();
+            String clean = TextUtil.stripColorCodes(line).toLowerCase();
             if (!clean.contains("requires") || !clean.contains(" skill ")) continue;
             if (clean.contains("catacombs")) continue;
 
@@ -1114,7 +1101,7 @@ public final class SkyblockSearchIndex {
     private void indexCatacombsRequirements(int itemIndex, NeuItem neuItem, Set<String> itemTokens) {
         if (neuItem.lore() == null || neuItem.lore().isEmpty()) return;
         for (String line : neuItem.lore()) {
-            String clean = stripColorCodes(line).toLowerCase();
+            String clean = TextUtil.stripColorCodes(line).toLowerCase();
             if (!clean.contains("catacombs")) continue;
 
             // "Requires The Catacombs Floor [ROMAN] Completion."
@@ -1176,7 +1163,7 @@ public final class SkyblockSearchIndex {
         boolean rift = false;
 
         for (String line : neuItem.lore()) {
-            String clean = stripColorCodes(line);
+            String clean = TextUtil.stripColorCodes(line);
             if (clean.contains("* Soulbound *") || clean.contains("* Co-op Soulbound *")) {
                 soulbound = true;
             }
@@ -1190,7 +1177,7 @@ public final class SkyblockSearchIndex {
 
         // Dungeon also from type
         String lastLore = neuItem.lore().isEmpty() ? "" : neuItem.lore().getLast();
-        String cleanLast = stripColorCodes(lastLore).toUpperCase();
+        String cleanLast = TextUtil.stripColorCodes(lastLore).toUpperCase();
         if (cleanLast.contains("DUNGEON")) {
             dungeon = true;
         }
@@ -1260,7 +1247,7 @@ public final class SkyblockSearchIndex {
         // 2. Lore fallback: "Requires §5Zombie Slayer 5§c." or "§4☠ §cRequires §5Spider Slayer 4§c."
         if (neuItem.lore() != null) {
             for (String line : neuItem.lore()) {
-                String clean = stripColorCodes(line);
+                String clean = TextUtil.stripColorCodes(line);
                 // Match "Requires <Name> Slayer <Level>" or "<Name> Slayer <Level>"
                 int slayerIdx = clean.toLowerCase().indexOf(" slayer ");
                 if (slayerIdx > 0) {
@@ -1288,7 +1275,7 @@ public final class SkyblockSearchIndex {
 
         // 3. Crafttext fallback: "Requires: Zombie Slayer 5"
         if (neuItem.craftText() != null && !neuItem.craftText().isEmpty()) {
-            String clean = stripColorCodes(neuItem.craftText());
+            String clean = TextUtil.stripColorCodes(neuItem.craftText());
             int slayerIdx = clean.toLowerCase().indexOf(" slayer ");
             if (slayerIdx > 0) {
                 String before = clean.substring(0, slayerIdx).trim();

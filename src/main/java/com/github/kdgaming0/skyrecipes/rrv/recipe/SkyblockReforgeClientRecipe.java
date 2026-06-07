@@ -16,7 +16,6 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.component.DataComponents;
@@ -337,7 +336,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         String nameStr = getNameString();
         int nameMaxWidth = pos.width() - TEXT_LEFT - 5;
         for (String line : wrapText(font, nameStr, nameMaxWidth)) {
-            graphics.text(font, Component.literal(line), TEXT_LEFT, y, 0xFFFFFFFF, true);
+            graphics.text(font, Component.literal(line), TEXT_LEFT, y, RecipeUiHelper.TEXT_WHITE, true);
             y += LINE_HEIGHT;
         }
 
@@ -363,7 +362,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         // Ability (wrapped)
         if (!ability.isEmpty()) {
             for (String line : wrapText(font, ability, bodyMaxWidth)) {
-                graphics.text(font, Component.literal(line), 5, y, 0xFFFFFFFF, true);
+                graphics.text(font, Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE, true);
                 y += LINE_HEIGHT;
             }
         }
@@ -371,7 +370,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         // Stats (wrapped)
         for (String statStr : getStatStrings()) {
             for (String line : wrapText(font, statStr, bodyMaxWidth)) {
-                graphics.text(font, Component.literal(line), 5, y, 0xFFFFFFFF, true);
+                graphics.text(font, Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE, true);
                 y += LINE_HEIGHT;
             }
         }
@@ -381,7 +380,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
 
     private String getNameString() {
         if (cachedName == null) {
-            cachedName = "§e" + reforgeName + " §7- " + rarityColorCode() + rarity;
+            cachedName = "§e" + reforgeName + " §7- " + RecipeUiHelper.rarityColorCode(rarity) + rarity;
         }
         return cachedName;
     }
@@ -441,52 +440,15 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         return stacks.isEmpty() ? SlotContent.of() : SlotContent.of(stacks);
     }
 
-    private String rarityColorCode() {
-        return switch (rarity) {
-            case "COMMON" -> "§f";
-            case "UNCOMMON" -> "§a";
-            case "RARE" -> "§9";
-            case "EPIC" -> "§5";
-            case "LEGENDARY" -> "§6";
-            case "MYTHIC" -> "§d";
-            case "DIVINE" -> "§b";
-            case "SPECIAL" -> "§c";
-            case "VERY_SPECIAL" -> "§c";
-            case "ULTIMATE" -> "§4";
-            case "ADMIN" -> "§4";
-            default -> "§7";
-        };
-    }
-
     // ── Getters ────────────────────────────────────────────────────────────────
 
-    public String getReforgeName() {
-        return reforgeName;
-    }
-
-    public String getRarity() {
-        return rarity;
-    }
-
-    public boolean isBlacksmith() {
-        return isBlacksmith;
+    public List<String> getResultInternalNames() {
+        return resultInternalNames;
     }
 
     public String getStoneInternalName() {
         if (isBlacksmith) return "";
         String id = SkyblockIdExtractor.extract(stoneStack);
         return id != null ? id : "";
-    }
-
-    public List<String> getResultInternalNames() {
-        return resultInternalNames;
-    }
-
-    // ── Buttons ────────────────────────────────────────────────────────────────
-
-    @Override
-    @Nullable
-    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
-        return addWikiButton(screen, pos);
     }
 }

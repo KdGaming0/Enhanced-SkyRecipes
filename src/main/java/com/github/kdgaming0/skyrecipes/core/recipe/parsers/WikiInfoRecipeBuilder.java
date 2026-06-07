@@ -7,8 +7,6 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockInfoClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +17,6 @@ import java.util.List;
  * <p>Shows useful item info (requirements, slayer level) and places a wiki button.</p>
  */
 public final class WikiInfoRecipeBuilder {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(WikiInfoRecipeBuilder.class);
 
     private WikiInfoRecipeBuilder() {
     }
@@ -50,7 +46,9 @@ public final class WikiInfoRecipeBuilder {
             ));
 
         } catch (Exception e) {
-            LOGGER.warn("Failed to build wiki info for {}: {}", item.internalName(), e.getMessage(), e);
+            // parseSafely isn't used here because we return a partially-filled list
+            org.slf4j.LoggerFactory.getLogger(WikiInfoRecipeBuilder.class)
+                    .warn("Failed to build wiki info for {}", item.internalName(), e);
         }
 
         return recipes;

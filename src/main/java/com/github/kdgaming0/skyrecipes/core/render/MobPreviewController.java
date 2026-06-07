@@ -9,6 +9,8 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +20,7 @@ import java.util.List;
  */
 public class MobPreviewController {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MobPreviewController.class);
     private static final int ROTATION_PERIOD = 360;
 
     private final MobPreview preview;
@@ -55,7 +58,7 @@ public class MobPreviewController {
                 return living;
             }
         } catch (Exception e) {
-            // ignore
+            LOGGER.debug("Failed to create villager entity for preview", e);
         }
         return null;
     }
@@ -67,7 +70,8 @@ public class MobPreviewController {
         if (entity != null) {
             try {
                 entity.remove(Entity.RemovalReason.DISCARDED);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                LOGGER.debug("Failed to discard preview entity", e);
             }
         }
     }

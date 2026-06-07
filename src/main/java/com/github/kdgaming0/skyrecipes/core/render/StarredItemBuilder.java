@@ -3,6 +3,7 @@ package com.github.kdgaming0.skyrecipes.core.render;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsRegistry;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -210,7 +211,7 @@ public final class StarredItemBuilder {
 
         for (String raw : lore) {
             if (raw == null || raw.isEmpty()) continue;
-            String clean = stripColorCodes(raw);
+            String clean = TextUtil.stripColorCodes(raw);
             int colonIdx = clean.indexOf(':');
             if (colonIdx <= 0) continue;
 
@@ -302,20 +303,6 @@ public final class StarredItemBuilder {
         if (star <= 0) return base;
         double multiplier = 1.0 + PERCENT_PER_STAR * star;
         return (int) Math.round(base * multiplier);
-    }
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
     }
 
     private static int extractLeadingInt(String s) {

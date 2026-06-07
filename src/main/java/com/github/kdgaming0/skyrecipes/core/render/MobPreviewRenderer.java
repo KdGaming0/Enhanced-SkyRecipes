@@ -79,7 +79,7 @@ public final class MobPreviewRenderer {
             graphics.entity(state, scale, translation, rotation, null,
                     x - size / 2, y - size / 2, x + size / 2, y + size / 2);
         } catch (Exception e) {
-            LOGGER.debug("Failed to render mob preview: {}", e.getMessage());
+            LOGGER.debug("Failed to render mob preview", e);
         }
     }
 

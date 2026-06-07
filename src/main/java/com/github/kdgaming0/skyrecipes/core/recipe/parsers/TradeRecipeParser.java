@@ -8,15 +8,11 @@ import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockTradeClientRecipe;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Parses NEU trade recipes (barter/trade exchanges).
  */
 public final class TradeRecipeParser {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(TradeRecipeParser.class);
 
     private TradeRecipeParser() {
     }
@@ -25,7 +21,7 @@ public final class TradeRecipeParser {
      * Parse a trade recipe.
      */
     public static SkyblockTradeClientRecipe parse(NeuItem item, NeuRecipe.TradeRecipe recipe, ItemRegistry itemRegistry) {
-        try {
+        return ParserUtil.parseSafely(item.internalName(), "trade", () -> {
             Identifier recipeId = IdentifierUtil.skyRecipeId("trade/", item.internalName());
 
             // Parse cost
@@ -55,10 +51,6 @@ public final class TradeRecipeParser {
                     recipe.max(),
                     item.info()
             );
-
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse trade recipe for {}: {}", item.internalName(), e.getMessage());
-            return null;
-        }
+        });
     }
 }

@@ -47,7 +47,7 @@ public final class HypixelItemsCache {
         try (Reader reader = Files.newBufferedReader(cacheFile, StandardCharsets.UTF_8)) {
             return GSON.fromJson(reader, HypixelItemsSnapshot.class);
         } catch (Exception e) {
-            LOGGER.debug("Failed to load Hypixel items cache: {}", e.getMessage());
+            LOGGER.debug("Failed to load Hypixel items cache", e);
             return null;
         }
     }
@@ -65,7 +65,7 @@ public final class HypixelItemsCache {
             Files.move(temp, cacheFile, StandardCopyOption.REPLACE_EXISTING,
                     StandardCopyOption.ATOMIC_MOVE);
         } catch (Exception e) {
-            LOGGER.warn("Failed to save Hypixel items cache: {}", e.getMessage());
+            LOGGER.warn("Failed to save Hypixel items cache", e);
         }
     }
 }

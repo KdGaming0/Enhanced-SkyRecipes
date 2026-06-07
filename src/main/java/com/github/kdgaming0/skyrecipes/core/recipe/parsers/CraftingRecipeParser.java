@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,7 +40,7 @@ public final class CraftingRecipeParser {
      * @return A CraftingClientRecipe, or null if parsing fails
      */
     public static SkyblockCraftingClientRecipe parse(NeuItem item, NeuRecipe.CraftingRecipe recipe, ItemRegistry itemRegistry) {
-        try {
+        return ParserUtil.parseSafely(item.internalName(), "crafting", () -> {
             Identifier recipeId = IdentifierUtil.skyRecipeId("crafting/", item.internalName());
 
             // Build ingredient map
@@ -66,25 +65,11 @@ public final class CraftingRecipeParser {
                 }
             }
 
-            // Resolve output item
-            NeuItem outputItem = item;
-            if (recipe.overrideOutputId() != null && !recipe.overrideOutputId().isEmpty()) {
-                outputItem = itemRegistry.getByInternalName(recipe.overrideOutputId()).orElse(item);
-            }
-
+            NeuItem outputItem = ParserUtil.resolveOutputItem(item, recipe.overrideOutputId(), itemRegistry);
             ItemStack resultStack = ItemStackBuilder.build(outputItem, recipe.count());
 
-            String craftText = item.craftText();
-            List<String> wikiUrls = ("WIKI_URL".equals(item.infoType()) && item.info() != null)
-                    ? item.info()
-                    : List.of();
-
             return new SkyblockCraftingClientRecipe(recipeId, ingredients,
-                    SlotContent.of(resultStack), craftText, wikiUrls);
-
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse crafting recipe for {}: {}", item.internalName(), e.getMessage());
-            return null;
-        }
+                    SlotContent.of(resultStack), item.craftText(), ParserUtil.wikiUrlsForItem(item));
+        });
     }
 }

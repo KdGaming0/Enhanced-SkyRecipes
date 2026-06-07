@@ -7,11 +7,9 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -77,10 +75,7 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         int textWidth = font.width(cmp);
         int x = slotX + 17 - textWidth;
         int y = slotY + 9;
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(0.0f, 0.0f);
-        graphics.text(font, cmp, x, y, 0xFFFFFFFF, true);
-        graphics.pose().popMatrix();
+        graphics.text(font, cmp, x, y, RecipeUiHelper.TEXT_WHITE, true);
     }
 
     @Override
@@ -132,10 +127,6 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         return List.of(SlotContent.of(outputItem));
     }
 
-    public int getStarLevel() {
-        return starLevel;
-    }
-
     @Override
     public void renderRecipe(RecipeViewScreen screen, RecipePosition pos,
                              GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
@@ -162,14 +153,14 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
             headerWidth = font.width(header);
         }
         int headerX = (pos.width() - headerWidth) / 2;
-        graphics.text(font, header, headerX, HEADER_Y, 0xFFFFFFFF, true);
+        graphics.text(font, header, headerX, HEADER_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         // Overflow indicator
         int totalExtras = extraItems.size() + 1; // +1 for essence
         if (totalExtras > 6) {
             int overflow = totalExtras - 6;
             Component overflowText = Component.literal("§e+" + overflow);
-            graphics.text(font, overflowText, OVERFLOW_X, OVERFLOW_Y, 0xFFFFFFFF, true);
+            graphics.text(font, overflowText, OVERFLOW_X, OVERFLOW_Y, RecipeUiHelper.TEXT_WHITE, true);
         }
 
         maintainButtons(screen, pos);
@@ -215,9 +206,4 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         }
     }
 
-    @Override
-    @Nullable
-    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
-        return addWikiButton(screen, pos);
-    }
 }

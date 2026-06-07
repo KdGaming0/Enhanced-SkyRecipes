@@ -9,8 +9,6 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockKatUpgradeClientRecipe
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,8 +18,6 @@ import java.util.List;
  */
 public final class KatUpgradeRecipeParser {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(KatUpgradeRecipeParser.class);
-
     private KatUpgradeRecipeParser() {
     }
 
@@ -29,7 +25,7 @@ public final class KatUpgradeRecipeParser {
      * Parse a katgrade recipe.
      */
     public static SkyblockKatUpgradeClientRecipe parse(NeuItem item, NeuRecipe.KatGradeRecipe recipe, ItemRegistry itemRegistry) {
-        try {
+        return ParserUtil.parseSafely(item.internalName(), "katgrade", () -> {
             Identifier recipeId = IdentifierUtil.skyRecipeId("katgrade/", item.internalName());
 
             // Resolve input pet
@@ -61,10 +57,6 @@ public final class KatUpgradeRecipeParser {
                     recipe.time(),
                     itemCosts
             );
-
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse katgrade recipe for {}: {}", item.internalName(), e.getMessage());
-            return null;
-        }
+        });
     }
 }

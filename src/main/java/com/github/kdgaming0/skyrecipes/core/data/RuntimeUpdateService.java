@@ -270,7 +270,7 @@ public class RuntimeUpdateService {
                 Files.move(newMpk, finalMpk, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 Files.move(newMeta, finalMeta, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
-                LOGGER.warn("Atomic move failed ({}), falling back to regular replace", e.getMessage());
+                LOGGER.warn("Atomic move failed, falling back to regular replace", e);
                 Files.move(newMpk, finalMpk, StandardCopyOption.REPLACE_EXISTING);
                 Files.move(newMeta, finalMeta, StandardCopyOption.REPLACE_EXISTING);
             }
@@ -316,15 +316,17 @@ public class RuntimeUpdateService {
             conn.setReadTimeout(10000);
             conn.setInstanceFollowRedirects(true);
 
-            int responseCode = conn.getResponseCode();
-            if (responseCode != 200) {
-                LOGGER.warn("HEAD request returned {}", responseCode);
-                return null;
-            }
+            try {
+                int responseCode = conn.getResponseCode();
+                if (responseCode != 200) {
+                    LOGGER.warn("HEAD request returned {}", responseCode);
+                    return null;
+                }
 
-            String etag = conn.getHeaderField("ETag");
-            conn.disconnect();
-            return etag;
+                return conn.getHeaderField("ETag");
+            } finally {
+                conn.disconnect();
+            }
 
         } catch (IOException e) {
             LOGGER.warn("Failed to fetch remote ETag", e);

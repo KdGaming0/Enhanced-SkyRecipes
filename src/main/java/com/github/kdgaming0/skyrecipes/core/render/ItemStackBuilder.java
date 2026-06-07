@@ -79,7 +79,7 @@ public final class ItemStackBuilder {
             CompoundTag tag = TagParser.parseCompoundFully(normalizedNbt);
             applyComponents(stack, tag, item);
         } catch (Exception e) {
-            LOGGER.warn("Failed to parse NBT for {}: {}", item.internalName(), e.getMessage());
+            LOGGER.warn("Failed to parse NBT for {}", item.internalName(), e);
         }
 
         return stack;
@@ -352,7 +352,7 @@ public final class ItemStackBuilder {
             }
             return ResolvableProfile.createUnresolved(uuid);
         } catch (Exception e) {
-            LOGGER.warn("Failed to resolve skull profile: {}", e.getMessage());
+            LOGGER.warn("Failed to resolve skull profile", e);
             return null;
         }
     }

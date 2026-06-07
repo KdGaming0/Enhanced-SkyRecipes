@@ -29,7 +29,7 @@ public final class NpcShopRecipeParser {
      * Parse an NPC shop recipe.
      */
     public static SkyblockNpcShopClientRecipe parse(NeuItem item, NeuRecipe.NpcShopRecipe recipe, ItemRegistry itemRegistry) {
-        try {
+        return ParserUtil.parseSafely(item.internalName(), "npc_shop", () -> {
             Identifier recipeId = IdentifierUtil.skyRecipeId("npc_shop/", item.internalName());
 
             // Resolve result item — recipe.result() may include a count suffix (e.g. "ROTTEN_FLESH:1")
@@ -105,10 +105,6 @@ public final class NpcShopRecipeParser {
                     wikiUrls,
                     npcHead
             );
-
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse npc_shop recipe for {}: {}", item.internalName(), e.getMessage());
-            return null;
-        }
+        });
     }
 }

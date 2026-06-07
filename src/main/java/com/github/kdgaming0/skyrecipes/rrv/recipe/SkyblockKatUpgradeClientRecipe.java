@@ -177,10 +177,10 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         var font = Minecraft.getInstance().font;
 
         // Duration text — centred horizontally (only text line)
-        Component duration = getDurationText();
+        Component duration = RecipeUiHelper.formatDuration(timeSeconds, true, "Time: ");
         int textWidth = font.width(duration);
         int textX = (pos.width() - textWidth) / 2;
-        graphics.text(font, duration, textX, DURATION_Y, 0xFFFFFFFF, true);
+        graphics.text(font, duration, textX, DURATION_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         maintainButtons(screen, pos);
     }
@@ -196,10 +196,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         int countX = COIN_SLOT_X + 17 - compactW;
         int countY = COIN_SLOT_Y + 9;
 
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(0.0f, 0.0f);
-        graphics.text(font, compact, countX, countY, 0xFFFFFFFF, true);
-        graphics.pose().popMatrix();
+        graphics.text(font, compact, countX, countY, RecipeUiHelper.TEXT_WHITE, true);
     }
 
     @Override
@@ -215,33 +212,9 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         return levelSlider;
     }
 
-    public long getBaseCoins() {
-        return baseCoins;
-    }
-
-    public int getTimeSeconds() {
-        return timeSeconds;
-    }
-
     // -----------------------------------------------------------------
     // Pet level handling
     // -----------------------------------------------------------------
-
-    public Component getDurationText() {
-        int seconds = timeSeconds % 60;
-        int minutes = (timeSeconds / 60) % 66;
-        int hours = timeSeconds / 3600;
-        int days = hours / 24;
-        hours = hours % 24;
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Time: ");
-        if (days > 0) sb.append(days).append("d ");
-        if (hours > 0) sb.append(hours).append("h ");
-        if (minutes > 0) sb.append(minutes).append("m ");
-        sb.append(seconds).append("s");
-        return Component.literal(sb.toString());
-    }
 
     private void setPetLevel(int level) {
         if (level == petLevel) return;

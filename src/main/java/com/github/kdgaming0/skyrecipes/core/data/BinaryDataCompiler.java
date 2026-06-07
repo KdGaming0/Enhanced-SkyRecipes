@@ -3,6 +3,7 @@ package com.github.kdgaming0.skyrecipes.core.data;
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.model.*;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -64,20 +65,6 @@ public class BinaryDataCompiler {
         String normalized = sb.toString();
         if ("walk_speed".equals(normalized)) return "speed";
         return normalized;
-    }
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
     }
 
     public void compile(String outputDirPath, String cacheDirPath) throws Exception {
@@ -252,14 +239,18 @@ public class BinaryDataCompiler {
             conn.setReadTimeout(10000);
             conn.setInstanceFollowRedirects(true);
 
-            int responseCode = conn.getResponseCode();
-            if (responseCode != 200) {
-                LOGGER.warn("HEAD request returned {}, using cache if available", responseCode);
-                return false;
-            }
+            String newEtag;
+            try {
+                int responseCode = conn.getResponseCode();
+                if (responseCode != 200) {
+                    LOGGER.warn("HEAD request returned {}, using cache if available", responseCode);
+                    return false;
+                }
 
-            String newEtag = conn.getHeaderField("ETag");
-            conn.disconnect();
+                newEtag = conn.getHeaderField("ETag");
+            } finally {
+                conn.disconnect();
+            }
 
             if (newEtag != null && newEtag.equals(existingEtag) && Files.exists(zipFile)) {
                 return false; // Cache hit
@@ -337,7 +328,7 @@ public class BinaryDataCompiler {
                         parseMobPng(bytes, name, prefix, mobSkins);
                     }
                 } catch (Exception e) {
-                    LOGGER.warn("Failed to parse {}: {}", name, e.getMessage());
+                    LOGGER.warn("Failed to parse {}", name, e);
                 }
             }
         }
@@ -438,7 +429,7 @@ public class BinaryDataCompiler {
             );
 
         } catch (Exception e) {
-            LOGGER.warn("Failed to parse item: {}", e.getMessage());
+            LOGGER.warn("Failed to parse item", e);
             return null;
         }
     }
@@ -689,7 +680,7 @@ public class BinaryDataCompiler {
             if (item.lore() == null || item.lore().isEmpty()) continue;
 
             // Only scan gear items to avoid false positives from non-gear
-            String last = stripColorCodes(item.lore().getLast()).toUpperCase().trim();
+            String last = TextUtil.stripColorCodes(item.lore().getLast()).toUpperCase().trim();
             boolean isGear = false;
             for (String gearType : gearTypes) {
                 if (last.contains(gearType)) {
@@ -700,7 +691,7 @@ public class BinaryDataCompiler {
             if (!isGear) continue;
 
             for (String line : item.lore()) {
-                String clean = stripColorCodes(line);
+                String clean = TextUtil.stripColorCodes(line);
                 int colonIdx = clean.indexOf(':');
                 if (colonIdx <= 0) continue;
                 String statName = clean.substring(0, colonIdx).trim().toLowerCase();

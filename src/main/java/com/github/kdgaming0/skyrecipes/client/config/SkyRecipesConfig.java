@@ -19,13 +19,7 @@ public class SkyRecipesConfig extends MidnightConfig {
     // UI settings
     // -----------------------------------------------------------------
     @Entry(category = "ui")
-    public static boolean categoryButtonsVisible = true;
-
-    @Entry(category = "ui")
     public static SearchBarMode searchBarMode = SearchBarMode.SHOW_WHEN_SEARCHING;
-
-    @Entry(category = "ui", min = 0, max = 5)
-    public static int fuzzyThreshold = 2;
 
     @Entry(category = "ui", min = 1, max = 20)
     public static int autocompleteMax = 10;
@@ -39,21 +33,12 @@ public class SkyRecipesConfig extends MidnightConfig {
     @Entry(category = "ui")
     public static boolean searchCategoryButtonsVisible = true;
 
-    @Entry(category = "ui", min = 1, max = 100)
-    public static int searchMaxResults = 50;
-
     // -----------------------------------------------------------------
-    // Data & debug settings
+    // Data settings
     // -----------------------------------------------------------------
     @Entry(category = "data", min = 1, max = 168)
     public static int dataRefreshIntervalHours = 24;
 
     @Entry(category = "data", min = 1, max = 168)
     public static int hypixelCacheTtlHours = 24;
-
-    @Entry(category = "debug")
-    public static boolean recipeDiagnosticMode = false;
-
-    @Entry(category = "debug")
-    public static boolean debugLogging = false;
 }

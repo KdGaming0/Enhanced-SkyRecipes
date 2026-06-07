@@ -19,6 +19,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.mixin.EditBoxAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -387,7 +388,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                     }
                 }
             } catch (Exception e) {
-                LOGGER.warn("Hypixel fetch failed: {}", e.getMessage());
+                LOGGER.warn("Hypixel fetch failed", e);
             }
         });
     }
@@ -481,8 +482,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
             LOGGER.info("SkyRecipes startup complete: {} recipes injected into RRV",
                     recipes.size());
-        } catch (Throwable t) {
-            LOGGER.error("Failed to inject recipes into RRV", t);
+        } catch (Exception e) {
+            LOGGER.error("Failed to inject recipes into RRV", e);
             // Even if injection fails, mark ready so the provider can serve recipes
             // on the next natural RRV rebuild.
             recipesReady = true;
@@ -494,7 +495,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     /**
      * Direct cache injection via MethodHandle. Must run on the main thread.
      */
-    private void injectDirectly(List<ReliableClientRecipe> recipes) throws Throwable {
+    private void injectDirectly(List<ReliableClientRecipe> recipes) {
         ClientRecipeCache cache = ClientRecipeCache.INSTANCE;
 
         // On reload, clear stale client recipes before re-injecting.
@@ -503,9 +504,13 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             LOGGER.debug("Cleared stale client recipes before re-injection");
         }
 
-        for (int i = 0; i < recipes.size(); i++) {
-            ReliableClientRecipe recipe = recipes.get(i);
-            INJECT_RECIPE.invokeExact(cache, recipe.entryId(), recipe, i, true);
+        try {
+            for (int i = 0; i < recipes.size(); i++) {
+                ReliableClientRecipe recipe = recipes.get(i);
+                INJECT_RECIPE.invokeExact(cache, recipe.entryId(), recipe, i, true);
+            }
+        } catch (Throwable t) {
+            throw new RuntimeException("Direct recipe injection failed", t);
         }
 
         Configs.CATEGORIES.addNewCategories();
@@ -535,8 +540,11 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         List<ItemStack> stacks = new ArrayList<>();
         if (registry == null) return stacks;
 
-        List<NeuItem> items = new ArrayList<>(registry.getAllItems());
-        items.sort(Comparator.comparing(ItemSortKey::of));
+        List<NeuItem> items = registry.getAllItems().stream()
+                .map(item -> new java.util.AbstractMap.SimpleEntry<>(ItemSortKey.of(item), item))
+                .sorted(java.util.Comparator.comparing(java.util.Map.Entry::getKey))
+                .map(java.util.Map.Entry::getValue)
+                .toList();
 
         for (NeuItem item : items) {
             try {
@@ -545,7 +553,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                     stacks.add(stack);
                 }
             } catch (Exception e) {
-                LOGGER.debug("Failed to build stack for {}: {}", item.internalName(), e.getMessage());
+                LOGGER.debug("Failed to build stack for {}", item.internalName(), e);
             }
         }
         return stacks;
@@ -657,23 +665,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             return new ItemSortKey(
                     com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractBaseName(name),
                     com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractTier(name),
-                    stripColorCodes(display),
+                    TextUtil.stripColorCodes(display),
                     name
             );
-        }
-
-        private static String stripColorCodes(String text) {
-            if (text == null || text.isEmpty()) return "";
-            StringBuilder sb = new StringBuilder(text.length());
-            for (int i = 0; i < text.length(); i++) {
-                char c = text.charAt(i);
-                if (c == '§' && i + 1 < text.length()) {
-                    i++;
-                } else {
-                    sb.append(c);
-                }
-            }
-            return sb.toString().trim();
         }
 
         @Override

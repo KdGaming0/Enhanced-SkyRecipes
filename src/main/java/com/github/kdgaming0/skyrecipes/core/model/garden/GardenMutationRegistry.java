@@ -38,30 +38,32 @@ public final class GardenMutationRegistry {
                 LOGGER.warn("Garden mutation resource not found: {}", RESOURCE_PATH);
                 return;
             }
-            JsonObject root = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
-            JsonObject mutations = root.getAsJsonObject("mutations");
-            if (mutations == null) {
-                LOGGER.warn("Garden mutation JSON missing 'mutations' object");
-                return;
-            }
-            for (String key : mutations.keySet()) {
-                JsonObject obj = mutations.getAsJsonObject(key);
-                GardenMutation m = parseMutation(key, obj);
-                if (m != null) {
-                    MUTATIONS.put(key, m);
+            try (var reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+                JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+                JsonObject mutations = root.getAsJsonObject("mutations");
+                if (mutations == null) {
+                    LOGGER.warn("Garden mutation JSON missing 'mutations' object");
+                    return;
                 }
-            }
-
-            JsonObject cropSizes = root.getAsJsonObject("cropSizes");
-            if (cropSizes != null) {
-                for (String key : cropSizes.keySet()) {
-                    JsonObject obj = cropSizes.getAsJsonObject(key);
-                    int w = obj.has("width") ? obj.get("width").getAsInt() : 1;
-                    int h = obj.has("height") ? obj.get("height").getAsInt() : 1;
-                    CROP_SIZES.put(key, new CropSize(w, h));
+                for (String key : mutations.keySet()) {
+                    JsonObject obj = mutations.getAsJsonObject(key);
+                    GardenMutation m = parseMutation(key, obj);
+                    if (m != null) {
+                        MUTATIONS.put(key, m);
+                    }
                 }
-            }
 
+                JsonObject cropSizes = root.getAsJsonObject("cropSizes");
+                if (cropSizes != null) {
+                    for (String key : cropSizes.keySet()) {
+                        JsonObject obj = cropSizes.getAsJsonObject(key);
+                        int w = obj.has("width") ? obj.get("width").getAsInt() : 1;
+                        int h = obj.has("height") ? obj.get("height").getAsInt() : 1;
+                        CROP_SIZES.put(key, new CropSize(w, h));
+                    }
+                }
+
+            }
             LOGGER.info("Loaded {} garden mutations", MUTATIONS.size());
         } catch (Exception e) {
             LOGGER.error("Failed to load garden mutations", e);
@@ -110,7 +112,7 @@ public final class GardenMutationRegistry {
             return new GardenMutation(id, name, rarity, gridSize, surface, needsWater,
                     stages, costCoins, rewardCopper, layout, conditions, effects, requiredFor, specialMechanic);
         } catch (Exception e) {
-            LOGGER.warn("Failed to parse garden mutation {}: {}", id, e.getMessage());
+            LOGGER.warn("Failed to parse garden mutation {}", id, e);
             return null;
         }
     }

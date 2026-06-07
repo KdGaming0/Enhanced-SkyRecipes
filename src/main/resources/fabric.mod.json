@@ -5,7 +5,7 @@
   "name": "${name}",
   "description": "SkyBlock recipe viewing for Reliable Recipe Viewer (RRV). View crafting, forge, drops, NPC shop, essence upgrade, and more recipe types for 8,000+ SkyBlock items.",
   "authors": [
-    "SkyRecipes Contributors"
+    "Kd_Gaming1"
   ],
   "contact": {
     "sources": "https://github.com/kdgaming0/SkyRecipes"
@@ -32,9 +32,7 @@
     "fabricloader": ">=${loader_version}",
     "minecraft": "${minecraft}",
     "fabric-api": "*",
-    "midnightlib": ">=1.9.3"
-  },
-  "recommends": {
+    "midnightlib": ">=1.9.3",
     "rrv": ">=8.0.0"
   }
 }

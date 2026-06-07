@@ -244,10 +244,10 @@ public final class FamilyResolver {
     public Set<String> getFamilyMembers(String internalName) {
         FamilyInfo info = memberToFamily.get(internalName);
         if (info == null) {
-            return Set.of(internalName);
+            return Collections.singleton(internalName);
         }
         if (!info.type().expandsForResults()) {
-            return Set.of(internalName);
+            return Collections.singleton(internalName);
         }
         return info.members();
     }

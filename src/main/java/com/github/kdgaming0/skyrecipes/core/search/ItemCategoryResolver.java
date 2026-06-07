@@ -2,6 +2,7 @@ package com.github.kdgaming0.skyrecipes.core.search;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.regex.Pattern;
@@ -73,7 +74,7 @@ public final class ItemCategoryResolver {
                 || internalName.contains("_relic")) return "accessory";
 
         if (item.lore() != null && !item.lore().isEmpty()) {
-            String last = stripColorCodes(item.lore().getLast()).toLowerCase();
+            String last = TextUtil.stripColorCodes(item.lore().getLast()).toLowerCase();
             if (last.endsWith(" sword")) return "sword";
             if (last.endsWith(" bow")) return "bow";
             if (last.endsWith(" axe")) return "axe";
@@ -178,7 +179,7 @@ public final class ItemCategoryResolver {
 
         // Check last lore line for PET type indicator
         if (item.lore() != null && !item.lore().isEmpty()) {
-            String last = stripColorCodes(item.lore().getLast()).toUpperCase();
+            String last = TextUtil.stripColorCodes(item.lore().getLast()).toUpperCase();
             if (last.contains("PET") && !last.contains("PET ITEM")) {
                 return true;
             }
@@ -194,17 +195,4 @@ public final class ItemCategoryResolver {
         return false;
     }
 
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
-    }
 }

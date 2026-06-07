@@ -8,6 +8,7 @@ import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.render.StarredItemBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockEssenceUpgradeClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -45,30 +46,13 @@ public final class EssenceUpgradeGenerator {
 
     private static ItemStack buildCoinStack(long amount) {
         ItemStack stack = new ItemStack(Items.GOLD_NUGGET, 1);
-        String compact = formatCompact(amount);
+        String compact = RecipeUiHelper.formatCompactNumber(amount);
         stack.set(DataComponents.CUSTOM_NAME, Component.literal(compact + " Coins"));
         String exact = String.format("%,d", amount);
         stack.set(DataComponents.LORE, new ItemLore(List.of(
                 Component.literal("§e" + exact + " Coins")
         )));
         return stack;
-    }
-
-    private static String formatCompact(long value) {
-        if (value >= 1_000_000) {
-            java.math.BigDecimal d = java.math.BigDecimal.valueOf(value)
-                    .divide(java.math.BigDecimal.valueOf(1_000_000));
-            String s = d.stripTrailingZeros().toPlainString();
-            int decimals = s.contains(".") ? s.length() - s.indexOf(".") - 1 : 0;
-            if (decimals <= 3) return s + "m";
-        }
-        if (value >= 1_000) {
-            java.math.BigDecimal d = java.math.BigDecimal.valueOf(value)
-                    .divide(java.math.BigDecimal.valueOf(1_000));
-            String s = d.stripTrailingZeros().toPlainString();
-            return s + "k";
-        }
-        return String.valueOf(value);
     }
 
     /**

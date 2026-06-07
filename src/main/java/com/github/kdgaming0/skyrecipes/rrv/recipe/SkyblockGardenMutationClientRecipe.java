@@ -13,7 +13,6 @@ import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -231,17 +230,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     // ── base-item border (1px solid — always drawn) ───────────────────────────
 
     private static String rarityColorCode(String rarity) {
-        return switch (rarity != null ? rarity.toUpperCase() : "") {
-            case "UNCOMMON" -> "§a";
-            case "RARE" -> "§9";
-            case "EPIC" -> "§5";
-            case "LEGENDARY" -> "§6";
-            case "MYTHIC" -> "§d";
-            case "DIVINE" -> "§b";
-            case "SPECIAL" -> "§c";
-            case "ADMIN" -> "§4";
-            default -> "§f";
-        };
+        return RecipeUiHelper.rarityColorCode(rarity);
     }
 
     // ── multi-block borders (2px dashed — cropSize-based) ─────────────────────
@@ -276,7 +265,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
 
         // Mutation name beside surface slot
         Component name = getNameComponent();
-        graphics.text(font, name, NAME_X, NAME_Y, 0xFFFFFFFF, true);
+        graphics.text(font, name, NAME_X, NAME_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         // Water droplet indicator + tooltip
         if (mutation.needsWater()) {
@@ -284,7 +273,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
             int dropY = WATER_DROPLET_Y;
             int dropS = WATER_DROPLET_SIZE;
             graphics.fill(dropX, dropY, dropX + dropS, dropY + dropS, 0xFF00FFFF);
-            graphics.fill(dropX + 1, dropY + 1, dropX + 2, dropY + 2, 0xFFFFFFFF);
+            graphics.fill(dropX + 1, dropY + 1, dropX + 2, dropY + 2, RecipeUiHelper.TEXT_WHITE);
 
             if (mouseX >= dropX - 2 && mouseX < dropX + dropS + 2
                     && mouseY >= dropY - 2 && mouseY < dropY + dropS + 2) {
@@ -298,7 +287,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         Component hint = Component.literal("§8Hover for more info");
         int hintWidth = font.width(hint);
         int hintX = (pos.width() - hintWidth) / 2;
-        graphics.text(font, hint, hintX, INFO_TEXT_Y, 0xFFFFFFFF, true);
+        graphics.text(font, hint, hintX, INFO_TEXT_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         // Tooltip on hover over the info area
         if (mouseX >= 0 && mouseX < pos.width()
@@ -481,12 +470,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         }
 
         return Collections.unmodifiableList(lines);
-    }
-
-    @Override
-    @Nullable
-    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
-        return addWikiButton(screen, pos);
     }
 
     // ── buttons ───────────────────────────────────────────────────────────────

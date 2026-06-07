@@ -9,20 +9,17 @@ import com.github.kdgaming0.skyrecipes.core.mob.MobPreview;
 import com.github.kdgaming0.skyrecipes.core.mob.MobPreviewResolver;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.MobPreviewController;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -182,7 +179,7 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
         int x = (pos.width() - textWidth) / 2;
         int y = 4;
 
-        gfx.text(font, line, x, y, 0xFFFFFFFF, true);
+        gfx.text(font, line, x, y, RecipeUiHelper.TEXT_WHITE, true);
     }
 
     private void renderHoverTooltipIfNeeded(GuiGraphicsExtractor gfx, RecipeViewScreen screen,
@@ -197,32 +194,7 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
                 pos.top() + mouseY);
     }
 
-    @Override
-    @Nullable
-    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
-        if (wikiUrls.isEmpty()) return null;
-        String url = wikiUrls.stream()
-                .filter(u -> u != null && !u.isEmpty())
-                .findFirst()
-                .orElse(null);
-        if (url == null) return null;
-
-        int btnX = pos.left() + pos.width() - 16;
-        int btnY = pos.top() + pos.height() - 16;
-        Button wikiButton = Button.builder(Component.literal("W"), b -> {
-                    try {
-                        Util.getPlatform().openUri(URI.create(url));
-                    } catch (Exception e) {
-                        // ignore
-                    }
-                }).pos(btnX, btnY).size(12, 12)
-                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Open Wiki")))
-                .build();
-        screen.addRecipeWidget(wikiButton);
-        return wikiButton;
-    }
-
-    public List<DropEntry> getDrops() {
+    private List<DropEntry> getDrops() {
         List<DropEntry> list = new ArrayList<>();
         for (int i = 0; i < drops.size() && i < chances.length; i++) {
             ItemStack stack = drops.get(i).getByIndex(0);

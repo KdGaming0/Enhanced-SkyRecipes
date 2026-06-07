@@ -56,7 +56,7 @@ public final class SkyblockIdExtractor {
                 return id;
             }
         } catch (Exception e) {
-            LOGGER.debug("Failed to extract SkyBlock ID from stack: {}", e.getMessage());
+            LOGGER.debug("Failed to extract SkyBlock ID from stack", e);
         }
 
         return null;

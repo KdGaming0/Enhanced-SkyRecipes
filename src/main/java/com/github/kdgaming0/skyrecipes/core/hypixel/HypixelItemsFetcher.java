@@ -61,7 +61,7 @@ public final class HypixelItemsFetcher {
                 return parseResponse(reader);
             }
         } catch (Exception e) {
-            LOGGER.warn("Failed to fetch Hypixel items API: {}", e.getMessage());
+            LOGGER.warn("Failed to fetch Hypixel items API", e);
             return null;
         }
     }

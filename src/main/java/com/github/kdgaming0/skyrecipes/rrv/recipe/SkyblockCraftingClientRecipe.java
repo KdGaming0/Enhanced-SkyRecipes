@@ -41,18 +41,13 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
 
     private final Map<Integer, SlotContent> ingredients;
     private final SlotContent result;
-    private final String craftText;
-    private final boolean hasCraftText;
-    @Nullable
-    private Component cachedTooltipLine;
 
     public SkyblockCraftingClientRecipe(Identifier id, Map<Integer, SlotContent> ingredients,
                                         SlotContent result, String craftText, List<String> wikiUrls) {
         super(id, wikiUrls);
         this.ingredients = Map.copyOf(ingredients);
         this.result = result;
-        this.craftText = craftText != null ? craftText : "";
-        this.hasCraftText = !this.craftText.isEmpty();
+        setCraftText(craftText);
     }
 
     private static void sendViewRecipeCommand(String itemId) {
@@ -73,24 +68,9 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
             ctx.bindSlot(e.getKey(), e.getValue());
         }
         ctx.bindSlot(9, result);
-        if (hasCraftText) {
+        if (hasCraftText()) {
             ctx.addAdditionalStackModifier(9, this::appendRequirementTooltip);
         }
-    }
-
-    private void appendRequirementTooltip(ItemStack stack, List<Component> tooltip) {
-        tooltip.addLast(Component.empty());
-        tooltip.addLast(requirementTooltipLine());
-    }
-
-    private Component requirementTooltipLine() {
-        Component cached = cachedTooltipLine;
-        if (cached != null) {
-            return cached;
-        }
-        cached = RecipeUiHelper.requirementTooltip(craftText);
-        cachedTooltipLine = cached;
-        return cached;
     }
 
     @Override
@@ -106,9 +86,9 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
     @Override
     public void renderRecipe(RecipeViewScreen screen, RecipePosition pos,
                              GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        if (hasCraftText) {
+        if (hasCraftText()) {
             var font = Minecraft.getInstance().font;
-            graphics.text(font, "§c!", ARROW_X + 25, ARROW_Y - 3, 0xFFFFFFFF, false);
+            graphics.text(font, "§c!", ARROW_X + 25, ARROW_Y - 3, RecipeUiHelper.TEXT_WHITE, false);
             if (mouseX >= ARROW_X && mouseX < ARROW_X + ARROW_HIT_W
                     && mouseY >= ARROW_Y && mouseY < ARROW_Y + ARROW_HIT_H) {
                 graphics.setComponentTooltipForNextFrame(font,

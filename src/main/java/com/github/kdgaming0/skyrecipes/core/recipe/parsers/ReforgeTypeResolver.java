@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.parsers;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 
 import java.util.*;
 
@@ -119,7 +120,7 @@ public final class ReforgeTypeResolver {
         if (line == null || line.isEmpty()) {
             return null;
         }
-        String clean = stripColorCodes(line).toUpperCase().trim();
+        String clean = TextUtil.stripColorCodes(line).toUpperCase().trim();
         if (clean.isEmpty()) {
             return null;
         }
@@ -157,17 +158,4 @@ public final class ReforgeTypeResolver {
         return sb.toString();
     }
 
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
-    }
 }

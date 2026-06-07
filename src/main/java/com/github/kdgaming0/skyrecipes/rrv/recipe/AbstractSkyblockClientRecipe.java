@@ -2,6 +2,7 @@ package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -9,7 +10,10 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.util.List;
@@ -17,9 +21,12 @@ import java.util.List;
 /**
  * Base class for all SkyRecipes custom client recipes.
  *
- * <p>Manages the lifecycle of per-recipe widgets (wiki button, craft button, etc.)</p>
+ * <p>Manages the lifecycle of per-recipe widgets (wiki button, craft button, etc.)
+ * and provides shared helpers such as requirement-tooltip caching.</p>
  */
 public abstract class AbstractSkyblockClientRecipe implements ReliableClientRecipe {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractSkyblockClientRecipe.class);
 
     protected final Identifier id;
     protected final List<String> wikiUrls;
@@ -29,6 +36,13 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
     private boolean buttonsDirty = true;
     @Nullable
     private AbstractWidget sentinelWidget;
+
+    // -- Optional requirement-tooltip caching --------------------------------
+    @Nullable
+    private String craftText;
+    private boolean hasCraftText;
+    @Nullable
+    private Component cachedTooltipLine;
 
     protected AbstractSkyblockClientRecipe(Identifier id) {
         this(id, List.of());
@@ -52,6 +66,35 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
     public List<String> getWikiUrls() {
         return wikiUrls;
     }
+
+    // -- Requirement tooltip helpers -----------------------------------------
+
+    protected final void setCraftText(@Nullable String craftText) {
+        this.craftText = craftText != null ? craftText : "";
+        this.hasCraftText = !this.craftText.isEmpty();
+        this.cachedTooltipLine = null;
+    }
+
+    protected final boolean hasCraftText() {
+        return hasCraftText;
+    }
+
+    protected final void appendRequirementTooltip(ItemStack stack, List<Component> tooltip) {
+        tooltip.addLast(Component.empty());
+        tooltip.addLast(requirementTooltipLine());
+    }
+
+    protected final Component requirementTooltipLine() {
+        Component cached = cachedTooltipLine;
+        if (cached != null) {
+            return cached;
+        }
+        cached = RecipeUiHelper.requirementTooltip(craftText);
+        cachedTooltipLine = cached;
+        return cached;
+    }
+
+    // -- Lifecycle -----------------------------------------------------------
 
     @Override
     public void initRecipe() {
@@ -81,12 +124,13 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
     }
 
     /**
-     * Place all recipe-specific buttons. Return any one of the placed widgets
-     * to serve as a sentinel; {@code null} when no buttons are placed.
+     * Place all recipe-specific buttons. The default implementation adds the
+     * wiki button when wiki URLs are available. Subclasses may override to add
+     * additional buttons (e.g. craft button, navigate button).
      */
     @Nullable
     protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
-        return null;
+        return addWikiButton(screen, pos);
     }
 
     /**
@@ -99,14 +143,30 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
         // default no-op
     }
 
+    // -- Wiki button ---------------------------------------------------------
+
     /**
-     * Adds a small wiki button at the bottom-right of the recipe card
-     * where RRV's share button normally sits.
+     * Adds a small wiki button at the bottom-right of the recipe card.
      *
      * @return the created button, or {@code null} if no wiki URLs are available
      */
     @Nullable
     protected final Button addWikiButton(RecipeViewScreen screen, RecipePosition pos) {
+        return addWikiButton(screen, pos,
+                getType().getDisplayWidth() - RecipeUiHelper.WIKI_BUTTON_OFFSET,
+                getType().getDisplayHeight() - RecipeUiHelper.WIKI_BUTTON_OFFSET);
+    }
+
+    /**
+     * Overload that places the wiki button at a custom position relative to the
+     * recipe card origin.
+     *
+     * @param relX X offset from {@code pos.left()}
+     * @param relY Y offset from {@code pos.top()}
+     * @return the created button, or {@code null} if no wiki URLs are available
+     */
+    @Nullable
+    protected final Button addWikiButton(RecipeViewScreen screen, RecipePosition pos, int relX, int relY) {
         if (wikiUrls.isEmpty() || wikiButton != null) {
             return wikiButton;
         }
@@ -117,15 +177,15 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
         if (url == null) {
             return null;
         }
-        int btnX = pos.left() + getType().getDisplayWidth() - 16;
-        int btnY = pos.top() + getType().getDisplayHeight() - 16;
+        int btnX = pos.left() + relX;
+        int btnY = pos.top() + relY;
         wikiButton = Button.builder(Component.literal("W"), b -> {
                     try {
                         Util.getPlatform().openUri(URI.create(url));
                     } catch (Exception e) {
-                        // ignore
+                        LOGGER.debug("Failed to open wiki URL: {}", url, e);
                     }
-                }).pos(btnX, btnY).size(12, 12)
+                }).pos(btnX, btnY).size(RecipeUiHelper.WIKI_BUTTON_SIZE, RecipeUiHelper.WIKI_BUTTON_SIZE)
                 .tooltip(Tooltip.create(Component.literal("Open Wiki")))
                 .build();
         screen.addRecipeWidget(wikiButton);

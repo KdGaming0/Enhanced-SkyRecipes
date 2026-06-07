@@ -40,6 +40,14 @@ public class ItemViewOverlayMixin {
     @Unique
     private static final int DIM_OVERLAY_COLOR = 0x80000000;
 
+    // -- Per-frame cache for filtered item sets --------------------------------
+    @Unique
+    private static String cachedQuery = null;
+    @Unique
+    private static Set<String> cachedFilteredIds = Set.of();
+    @Unique
+    private static Set<String> cachedFilteredVanillaNames = Set.of();
+
     @Unique
     private static boolean enchantedBookMatches(ItemStack stack, String query) {
         if (!stack.has(DataComponents.CUSTOM_DATA)) return false;
@@ -107,19 +115,29 @@ public class ItemViewOverlayMixin {
             return;
         }
 
-        // Build fast lookup sets from already-filtered available items
-        Set<String> filteredIds = new HashSet<>();
-        Set<String> filteredVanillaNames = new HashSet<>();
-        for (ItemStack stack : ((AbstractRrvItemListOverlayAccessor) self).skyrecipes$getAvailableItems()) {
-            String id = SkyblockIdExtractor.extract(stack);
-            if (id != null) {
-                filteredIds.add(id);
-            } else {
-                String name = stack.getHoverName().getString().toLowerCase();
-                if (!name.isBlank()) {
-                    filteredVanillaNames.add(name);
+        // Rebuild cached sets only when the query changes
+        Set<String> filteredIds;
+        Set<String> filteredVanillaNames;
+        if (query.equals(cachedQuery)) {
+            filteredIds = cachedFilteredIds;
+            filteredVanillaNames = cachedFilteredVanillaNames;
+        } else {
+            filteredIds = new HashSet<>();
+            filteredVanillaNames = new HashSet<>();
+            for (ItemStack stack : ((AbstractRrvItemListOverlayAccessor) self).skyrecipes$getAvailableItems()) {
+                String id = SkyblockIdExtractor.extract(stack);
+                if (id != null) {
+                    filteredIds.add(id);
+                } else {
+                    String name = stack.getHoverName().getString().toLowerCase();
+                    if (!name.isBlank()) {
+                        filteredVanillaNames.add(name);
+                    }
                 }
             }
+            cachedQuery = query;
+            cachedFilteredIds = filteredIds;
+            cachedFilteredVanillaNames = filteredVanillaNames;
         }
 
         int left = OverlayManager.INSTANCE.currentInfo().leftPos() - 1;

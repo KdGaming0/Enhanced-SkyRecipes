@@ -7,6 +7,7 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -151,14 +152,14 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         // Title — centered, relative to card origin (preserves rarity color, white with shadow)
         int titleWidth = font.width(title);
         int titleX = (pos.width() - titleWidth) / 2;
-        graphics.text(font, title, titleX, TITLE_Y, 0xFFFFFFFF, true);
+        graphics.text(font, title, titleX, TITLE_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         // Info lines — left-aligned with indent, relative to card origin (white with shadow)
         int y = INFO_START_Y;
         int lineCount = Math.min(infoLines.size(), MAX_INFO_LINES);
         for (int i = 0; i < lineCount; i++) {
             Component line = infoLines.get(i);
-            graphics.text(font, line, 6, y, 0xFFFFFFFF, true);
+            graphics.text(font, line, 6, y, RecipeUiHelper.TEXT_WHITE, true);
             y += LINE_HEIGHT;
         }
 

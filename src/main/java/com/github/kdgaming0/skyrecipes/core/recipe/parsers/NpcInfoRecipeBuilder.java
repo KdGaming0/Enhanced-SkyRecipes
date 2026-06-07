@@ -7,8 +7,6 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockInfoClientRecipe;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,8 +18,6 @@ import java.util.Map;
  * <p>Displays the NPC's head, island location, and coordinates as an info card.</p>
  */
 public final class NpcInfoRecipeBuilder {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(NpcInfoRecipeBuilder.class);
 
     /**
      * NEU island codes → human-readable names.
@@ -65,7 +61,7 @@ public final class NpcInfoRecipeBuilder {
             return null;
         }
 
-        try {
+        return ParserUtil.parseSafely(internalName, "npc_info", () -> {
             Identifier id = IdentifierUtil.skyRecipeId("npc_info/", internalName);
 
             List<Component> infoLines = buildNpcInfoLines(item);
@@ -86,11 +82,7 @@ public final class NpcInfoRecipeBuilder {
             );
             NpcInfoRegistry.register(internalName, recipe);
             return recipe;
-
-        } catch (Exception e) {
-            LOGGER.warn("Failed to build NPC info for {}: {}", internalName, e.getMessage(), e);
-            return null;
-        }
+        });
     }
 
     private static List<Component> buildNpcInfoLines(NeuItem item) {

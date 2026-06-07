@@ -55,7 +55,7 @@ public class SkyRecipesPlugin implements ReliableRecipeViewerPlugin {
                     skipped++;
                 }
             } catch (Exception e) {
-                LOGGER.debug("Failed to build server stack for {}: {}", item.internalName(), e.getMessage());
+                LOGGER.debug("Failed to build server stack for {}", item.internalName(), e);
                 skipped++;
             }
         }

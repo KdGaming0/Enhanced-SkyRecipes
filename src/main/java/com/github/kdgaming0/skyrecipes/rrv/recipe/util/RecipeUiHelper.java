@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.util;
 
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import net.minecraft.network.chat.Component;
 
 import java.math.BigDecimal;
@@ -8,6 +9,10 @@ import java.math.BigDecimal;
  * Shared UI helpers for SkyRecipes recipe rendering.
  */
 public final class RecipeUiHelper {
+
+    public static final int TEXT_WHITE = 0xFFFFFFFF;
+    public static final int WIKI_BUTTON_SIZE = 12;
+    public static final int WIKI_BUTTON_OFFSET = 16;
 
     private RecipeUiHelper() {
     }
@@ -43,6 +48,58 @@ public final class RecipeUiHelper {
             return s + "k";
         }
         return String.valueOf(value);
+    }
+
+    /**
+     * Formats a duration in seconds into a human-readable string.
+     *
+     * @param totalSeconds total duration in seconds
+     * @param includeDays  if {@code true}, days are shown (e.g. "2d 3h 4m 5s");
+     *                     if {@code false}, hours wrap (e.g. "27h 4m 5s")
+     * @param prefix       text to prepend (e.g. "Duration: " or "Time: ")
+     * @return formatted component
+     */
+    public static Component formatDuration(int totalSeconds, boolean includeDays, String prefix) {
+        int seconds = totalSeconds % 60;
+        int minutes = (totalSeconds / 60) % 60;
+        int hours = totalSeconds / 3600;
+        int days = 0;
+        if (includeDays) {
+            days = hours / 24;
+            hours = hours % 24;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(prefix);
+        if (days > 0) sb.append(days).append("d ");
+        if (hours > 0) sb.append(hours).append("h ");
+        if (minutes > 0 || hours > 0 || days > 0) sb.append(minutes).append("m ");
+        sb.append(seconds).append("s");
+        return Component.literal(sb.toString());
+    }
+
+    /**
+     * Returns the Minecraft section-formatting colour code for a SkyBlock rarity name.
+     *
+     * @param rarity the rarity string (e.g. "LEGENDARY"), may be {@code null}
+     * @return the colour code (e.g. "§6"), or "§7" if unknown
+     */
+    public static String rarityColorCode(String rarity) {
+        if (rarity == null) {
+            return "§7";
+        }
+        return switch (rarity.toUpperCase()) {
+            case "COMMON" -> "§f";
+            case "UNCOMMON" -> "§a";
+            case "RARE" -> "§9";
+            case "EPIC" -> "§5";
+            case "LEGENDARY" -> "§6";
+            case "MYTHIC" -> "§d";
+            case "DIVINE" -> "§b";
+            case "SPECIAL", "VERY_SPECIAL" -> "§c";
+            case "ULTIMATE", "ADMIN" -> "§4";
+            default -> "§7";
+        };
     }
 
     /**
@@ -102,13 +159,6 @@ public final class RecipeUiHelper {
         }
         String type = raw.substring(0, underscore);
         String level = raw.substring(underscore + 1);
-        return capitalize(type) + " Slayer " + level;
-    }
-
-    private static String capitalize(String s) {
-        if (s.length() <= 1) {
-            return s.toUpperCase();
-        }
-        return Character.toUpperCase(s.charAt(0)) + s.substring(1).toLowerCase();
+        return TextUtil.capitalize(type) + " Slayer " + level;
     }
 }

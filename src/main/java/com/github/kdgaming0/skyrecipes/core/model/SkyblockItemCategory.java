@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.core.model;
 
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -63,7 +64,7 @@ public enum SkyblockItemCategory {
             return UNKNOWN;
         }
 
-        String clean = stripColorCodes(lastLoreLine).toUpperCase().trim();
+        String clean = TextUtil.stripColorCodes(lastLoreLine).toUpperCase().trim();
         if (clean.isEmpty()) {
             return UNKNOWN;
         }
@@ -239,20 +240,6 @@ public enum SkyblockItemCategory {
         return slash >= 0 && slash + 1 < path.length()
                 ? path.substring(slash + 1).toUpperCase()
                 : null;
-    }
-
-    private static String stripColorCodes(String text) {
-        if (text == null) return "";
-        StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '§' && i + 1 < text.length()) {
-                i++;
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString().trim();
     }
 
     /**

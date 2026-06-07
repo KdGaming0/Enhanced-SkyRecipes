@@ -8,8 +8,6 @@ import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockDropsClientRecipe;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +17,6 @@ import java.util.List;
  */
 public final class DropsRecipeParser {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(DropsRecipeParser.class);
-
     private DropsRecipeParser() {
     }
 
@@ -28,7 +24,7 @@ public final class DropsRecipeParser {
      * Parse a drops recipe.
      */
     public static SkyblockDropsClientRecipe parse(NeuItem item, NeuRecipe.DropsRecipe recipe, ItemRegistry itemRegistry) {
-        try {
+        return ParserUtil.parseSafely(item.internalName(), "drops", () -> {
             Identifier recipeId = IdentifierUtil.skyRecipeId("drops/", item.internalName());
 
             List<SkyblockDropsClientRecipe.DropEntry> drops = new ArrayList<>();
@@ -51,10 +47,6 @@ public final class DropsRecipeParser {
             String render = recipe.render() != null ? recipe.render() : "";
 
             return new SkyblockDropsClientRecipe(recipeId, name, render, drops, chances, item.info());
-
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse drops recipe for {}: {}", item.internalName(), e.getMessage());
-            return null;
-        }
+        });
     }
 }

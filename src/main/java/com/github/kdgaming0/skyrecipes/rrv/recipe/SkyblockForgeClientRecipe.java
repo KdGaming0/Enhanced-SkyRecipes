@@ -8,12 +8,10 @@ import cc.cassian.rrv.common.recipe.rendering.AnimationTicker;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,11 +29,7 @@ public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
     private final List<ForgeIngredient> inputs;
     private final ItemStack output;
     private final int durationSeconds;
-    private final String craftText;
-    private final boolean hasCraftText;
     private final AnimationTicker flameTicker;
-    @Nullable
-    private Component cachedTooltipLine;
 
     public SkyblockForgeClientRecipe(Identifier id, List<ForgeIngredient> inputs,
                                      ItemStack output, int durationSeconds,
@@ -44,8 +38,7 @@ public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
         this.inputs = inputs;
         this.output = output;
         this.durationSeconds = durationSeconds;
-        this.craftText = craftText != null ? craftText : "";
-        this.hasCraftText = !this.craftText.isEmpty();
+        setCraftText(craftText);
         this.flameTicker = AnimationTicker.create(FLAME_TICKER_ID, 80);
     }
 
@@ -60,24 +53,9 @@ public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
             ctx.bindSlot(i, SlotContent.of(inputs.get(i).stack()));
         }
         ctx.bindSlot(8, SlotContent.of(output));
-        if (hasCraftText) {
+        if (hasCraftText()) {
             ctx.addAdditionalStackModifier(8, this::appendRequirementTooltip);
         }
-    }
-
-    private void appendRequirementTooltip(ItemStack stack, List<Component> tooltip) {
-        tooltip.addLast(Component.empty());
-        tooltip.addLast(requirementTooltipLine());
-    }
-
-    private Component requirementTooltipLine() {
-        Component cached = cachedTooltipLine;
-        if (cached != null) {
-            return cached;
-        }
-        cached = RecipeUiHelper.requirementTooltip(craftText);
-        cachedTooltipLine = cached;
-        return cached;
     }
 
     @Override
@@ -92,17 +70,6 @@ public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
     @Override
     public List<SlotContent> getResults() {
         return List.of(SlotContent.of(output));
-    }
-
-    public Component getDurationText() {
-        int seconds = durationSeconds % 60;
-        int minutes = (durationSeconds / 60) % 60;
-        int hours = durationSeconds / 3600;
-        StringBuilder sb = new StringBuilder("Duration: ");
-        if (hours > 0) sb.append(hours).append("h ");
-        if (minutes > 0 || hours > 0) sb.append(minutes).append("m ");
-        sb.append(seconds).append("s");
-        return Component.literal(sb.toString());
     }
 
     @Override
@@ -120,12 +87,12 @@ public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
                 FLAME_SIZE, flameProgress, 128, 128);
 
         var font = Minecraft.getInstance().font;
-        Component text = getDurationText();
+        Component text = RecipeUiHelper.formatDuration(durationSeconds, false, "Duration: ");
         int textWidth = font.width(text);
-        graphics.text(font, text, (pos.width() - textWidth) / 2, 42, 0xFFFFFFFF, true);
+        graphics.text(font, text, (pos.width() - textWidth) / 2, 42, RecipeUiHelper.TEXT_WHITE, true);
 
-        if (hasCraftText) {
-            graphics.text(font, "§c!", FLAME_X + 15, FLAME_Y - 3, 0xFFFFFFFF, false);
+        if (hasCraftText()) {
+            graphics.text(font, "§c!", FLAME_X + 15, FLAME_Y - 3, RecipeUiHelper.TEXT_WHITE, false);
             if (mouseX >= FLAME_X && mouseX < FLAME_X + FLAME_HIT_W
                     && mouseY >= FLAME_Y && mouseY < FLAME_Y + FLAME_HIT_H) {
                 graphics.setComponentTooltipForNextFrame(font,
@@ -136,12 +103,6 @@ public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
         }
 
         maintainButtons(screen, pos);
-    }
-
-    @Override
-    @Nullable
-    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
-        return addWikiButton(screen, pos);
     }
 
     public record ForgeIngredient(ItemStack stack, String internalName, int count) {
