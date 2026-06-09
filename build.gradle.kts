@@ -81,6 +81,7 @@ dependencies {
     modRuntimeOnly("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
 
     implementation("org.msgpack:msgpack-core:0.9.12")
+    include("org.msgpack:msgpack-core:0.9.12")
 
     modRuntimeOnly("me.djtheredstoner:DevAuth-fabric:1.2.2")
     modRuntimeOnly("maven.modrinth:modmenu:${property("deps.modmenu_version")}")
