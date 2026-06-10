@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
  * Raises RRV's hard-coded recipe-viewer height limit so SkyRecipes' taller
  * drop recipe cards (168×151) can display without being collapsed to zero recipes.
  */
-@Mixin(RecipeViewMenu.class)
+@Mixin(value = RecipeViewMenu.class, remap = false)
 public class RecipeViewMenuMixin {
 
     @ModifyConstant(method = "calculateRecipesPerPage", constant = @Constant(intValue = 214))

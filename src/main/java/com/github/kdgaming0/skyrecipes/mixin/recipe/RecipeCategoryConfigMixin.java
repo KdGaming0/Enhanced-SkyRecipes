@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * even if a user previously enabled vanilla categories, they remain disabled while
  * SkyRecipes is active.</p>
  */
-@Mixin(RecipeCategoryConfig.class)
+@Mixin(value = RecipeCategoryConfig.class, remap = false)
 public class RecipeCategoryConfigMixin {
 
     @Inject(method = "enabled", at = @At("HEAD"), cancellable = true)

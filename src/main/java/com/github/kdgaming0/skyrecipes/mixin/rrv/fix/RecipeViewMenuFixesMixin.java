@@ -24,11 +24,20 @@ import java.util.HashMap;
  *       so third-party mods probing fixed indices don't crash during RRV's slot rebuilds.</li>
  * </ul>
  */
-@Mixin(RecipeViewMenu.class)
+@Mixin(value = RecipeViewMenu.class, remap = false)
 public class RecipeViewMenuFixesMixin {
 
     @Unique
     private static final int SKYRECIPES$MINIMUM_SLOT_COUNT = 54;
+
+    @Unique
+    private static final SafeDummySlot[] SKYRECIPES$DUMMY_SLOTS = new SafeDummySlot[SKYRECIPES$MINIMUM_SLOT_COUNT];
+
+    static {
+        for (int i = 0; i < SKYRECIPES$MINIMUM_SLOT_COUNT; i++) {
+            SKYRECIPES$DUMMY_SLOTS[i] = new SafeDummySlot();
+        }
+    }
 
     // ── Return-to-cache guard ─────────────────────────────────────────────────
 
@@ -61,9 +70,7 @@ public class RecipeViewMenuFixesMixin {
         int currentSize = menu.slots.size();
 
         for (int i = currentSize; i < SKYRECIPES$MINIMUM_SLOT_COUNT; i++) {
-            SafeDummySlot dummy = new SafeDummySlot();
-            dummy.index = i;
-            menu.slots.add(dummy);
+            menu.slots.add(SKYRECIPES$DUMMY_SLOTS[i]);
         }
     }
 }

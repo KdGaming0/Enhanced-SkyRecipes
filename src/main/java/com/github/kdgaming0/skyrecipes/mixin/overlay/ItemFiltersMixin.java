@@ -28,7 +28,7 @@ import java.util.List;
  * loaded. This replaces RRV's naive substring search with token-based AND search across
  * display names, internal names, lore, stats, rarity, type, and reforge names.</p>
  */
-@Mixin(ItemFilters.class)
+@Mixin(value = ItemFilters.class, remap = false)
 public class ItemFiltersMixin {
 
     /**

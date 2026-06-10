@@ -39,7 +39,7 @@ import java.util.List;
  * <p><b>Upstream feature request:</b> Not yet filed. Remove these injects if RRV adds a
  * {@code RecipeIndexCustomizer}, {@code IngredientRedirector}, or rebuild-guard API.</p>
  */
-@Mixin(ClientRecipeCache.class)
+@Mixin(value = ClientRecipeCache.class, remap = false)
 public class ClientRecipeCacheMixin {
 
     @Inject(method = "buildRecipeCache", at = @At("HEAD"), cancellable = true)

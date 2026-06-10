@@ -37,6 +37,24 @@ import java.util.Set;
 @Mixin(value = ItemViewOverlay.class, remap = false)
 public class ItemViewOverlayMixin {
 
+    /**
+     * Defers the first {@code updateQuery} call until SkyRecipes data is ready.
+     *
+     * <p>If the overlay is opened before {@link SkyRecipesClientPlugin}'s batched injection
+     * has finished, {@code getSearchIndex()} returns {@code null}. Running a search at that
+     * moment would operate on an empty {@code fullStackList()} (all vanilla items filtered out
+     * and no stack-sensitives registered yet), producing an empty item list. Cancelling the
+     * query here prevents that flash-of-empty-list. When injection completes,
+     * {@code OverlayManager.updateOverlaysAndWidgets(true)} triggers {@code onScreenChanged}
+     * again and the query re-runs with the index populated.</p>
+     */
+    @Inject(method = "updateQuery", at = @At("HEAD"), cancellable = true, remap = false)
+    private void skyrecipes$deferQueryUntilReady(String newQuery, CallbackInfo ci) {
+        if (SkyRecipesClientPlugin.getSearchIndex() == null) {
+            ci.cancel();
+        }
+    }
+
     @Unique
     private static final int SLOT_SIZE = 18;
     @Unique
