@@ -3,22 +3,22 @@
 [![Download on Modrinth](https://raw.githubusercontent.com/intergrav/devins-badges/c7fd18efdadd1c3f12ae56b49afd834640d2d797/assets/cozy/available/modrinth_vector.svg)](https://modrinth.com/mod/skyrecipes)
 [![Join Discord](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-plural_vector.svg)](https://discord.gg/FCPP2WPZ3U)
 [![Requires Fabric API](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/requires/fabric-api_vector.svg)](https://modrinth.com/mod/fabric-api)
+</div>
+<div align="center">
 [![Requires RRV](https://img.shields.io/badge/requires-Reliable%20Recipe%20Viewer-9B59B6?logo=minecraft)](https://modrinth.com/mod/rrv)
 [![Modrinth Downloads](https://img.shields.io/modrinth/dt/skyrecipes?color=00AF5C&label=downloads&logo=modrinth)](https://modrinth.com/mod/skyrecipes)
 [![Join Fluxer](https://img.shields.io/badge/Join-Fluxer-5865F2?style=for-the-badge)](https://fluxer.gg/3jJy9cp6)
 
-**The ultimate SkyBlock recipe viewer for Reliable Recipe Viewer (RRV).**
-Browse 8,000+ Hypixel SkyBlock items, recipes, drops, NPC shops, essence upgrades, reforges, garden mutations, and more — all sourced from the NEU repository and kept up to date automatically.
+# SkyRecipes
 
+**The complete SkyBlock recipe viewer — 8,000+ items, 11 recipe types, and powerful search.**
+
+Browse crafting recipes, forge recipes, mob drops, NPC shops, essence upgrades, reforges, garden mutations, and more. Built on Reliable Recipe Viewer as its display layer, with data sourced from the NEU repository, kept up to date automatically.
 </div>
-
----
 
 ## What is SkyRecipes?
 
 SkyRecipes is a standalone Fabric client mod that brings the full SkyBlock item and recipe database into [Reliable Recipe Viewer (RRV)](https://modrinth.com/mod/rrv). It downloads and compiles data from the [NotEnoughUpdates Repository](https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO) on first launch, then keeps it cached and refreshed in the background. The result: instant recipe lookup, powerful search, and a clean UI for every SkyBlock item.
-
----
 
 ## Recipe Types
 
@@ -45,8 +45,6 @@ SkyRecipes registers **11 custom SkyBlock recipe categories** in RRV. Press `R` 
 **SkyBlock Reforge** — Reforge recipes see what stats each reforge gives. Displays the input item, reforge stone, applicable rarities, and a blacksmith NPC preview.
 
 **SkyBlock Garden Mutation** — Built-in garden mutation reference with a 6×6 grid layout, surface/water requirements, spreading conditions, effects, and copper cost. Easily easy the required layout for any mutation.
-
----
 
 ## Search & Discovery
 
@@ -91,18 +89,31 @@ SkyRecipes supports structured queries beyond plain keywords:
 Combine them freely: `rarity:legendary damage>200 dungeon sword` finds legendary dungeon swords with more than 200 damage.
 
 ### Search Calculator
-Evaluate math directly in the RRV search bar. Great for quick bulk calculations:
+Evaluate math directly in the RRV search bar. The result appears as gray ghost text next to your query — no need to press anything.
 
-- `1.5m + 250k` → **1,750,000**
-- `64 * 9 * 160` → **92,160**
-- `50m / 1.2k` → **41,666.67**
+**Basic arithmetic**
+- `10+10` → **20**
+- `50m / 1.2k` → **41,666.66667**
+- `(1000+500)*2` → **3,000**
 
-Supports `k`/`m`/`b` suffixes, parentheses, exponentiation (`^`), modulo (`%`), and decimal values.
+**SkyBlock unit suffixes** (postfix, no spaces needed)
+- `k` → ×1,000 (e.g. `1.5m + 250k` → **1,750,000**)
+- `m` → ×1,000,000
+- `b` → ×1,000,000,000
+- `t` → ×1,000,000,000,000
+- `s` → ×64 (stack) (e.g. `27s` → **1,728**)
+- `e` → ×160 (enchanted item) (e.g. `10e` → **1,600**)
+- `%` → ÷100 (e.g. `50 * 10%` → **5**)
+
+**Operators**
+- `+` `-` `*` `/` `^` (power) `%` (modulo)
+- `x` or `X` can be used instead of `*` for multiplication
+- `**` is treated as `^`
+
+**Config:** `calculatorPrecision` controls the number of decimal places (0–10, default 5).
 
 ### Family Expansion
 Tiered items (dungeon stars, pet tiers, minion tiers, accessory upgrades, enchantment levels) are grouped into families. When family expansion is enabled, pressing `R` on one member can show recipes across the whole family, so you don't have to hunt down each tier separately.
-
----
 
 ## Configuration
 
@@ -110,12 +121,18 @@ Open the config through **Mod Menu** → **SkyRecipes** → **Config**. SkyRecip
 
 | Category | Option | Description |
 |----------|--------|-------------|
-| **UI** | `searchCategoryButtonsVisible` | Show the compact category icon row above the search bar |
+| **UI** | `calculatorEnabled` | Allows math expressions in the RRV search bar |
+| **UI** | `calculatorPrecision` | Decimal places for search-bar calculator results (0–10) |
 | **UI** | `familyExpansionEnabled` | Group related tiered items (pets, minions, stars, accessory upgrades) into families |
+| **RRV** | `hideCategoryButtons` | Completely hide the compact category icon row above the RRV search bar |
+| **RRV** | `hideCategoryButtonsWhenNotSearching` | Hide category buttons when RRV is set to "Only visible when searching" and the search bar is empty |
+| **RRV** | `hideEmptyBookmarkPanel` | Auto-hide the bookmark side-panel when no bookmarks exist |
+| **RRV** | `wideRrvSearchBar` | Expand the RRV search bar (centred mode: up to configured width; item-list mode: limited by available space) |
+| **RRV** | `rrvSearchBarWidth` | Minimum width for the search bar when wide mode is enabled |
+| **RRV** | `rrvItemListWidthPercent` | Shrink the RRV item-list overlay width (25–100%) |
+| **RRV** | `rrvSidePanelWidthPercent` | Shrink the RRV side-panel overlay width (25–100%) |
 
 Recipe category visibility is managed natively by RRV through its **Recipe Category Config** screen.
-
----
 
 ## Installation
 
@@ -128,8 +145,6 @@ Recipe category visibility is managed natively by RRV through its **Recipe Categ
 
 [<img height="40" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/available/modrinth_vector.svg">](https://modrinth.com/mod/skyrecipes)
 
----
-
 ## Support & Community
 
 Have a bug report, feature request, or just want to hang out?
@@ -137,7 +152,6 @@ Have a bug report, feature request, or just want to hang out?
 [![Join Discord](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-plural_vector.svg)](https://discord.gg/FCPP2WPZ3U)
 [![Join Fluxer](https://img.shields.io/badge/Join-Fluxer-5865F2?style=for-the-badge)](https://fluxer.gg/3jJy9cp6)
 
----
 
 ## Support the Project
 
@@ -145,10 +159,9 @@ Want to support development? You can do that on **Ko-fi**. All donations are hig
 
 [**Support on Ko-fi**](https://ko-fi.com/kdgaming1)
 
----
 
 <div align="center">
 
-**Made with love for the SkyBlock community.**
+**Made for the SkyBlock community.**
 
 </div>

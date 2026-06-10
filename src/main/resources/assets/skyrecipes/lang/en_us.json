@@ -1,0 +1,42 @@
+{
+  "skyrecipes.midnightconfig.title": "SkyRecipes Settings",
+
+  "skyrecipes.midnightconfig.calculatorEnabled": "Enable Calculator",
+  "skyrecipes.midnightconfig.calculatorEnabled.tooltip": "Allows simple math expressions in the search bar.",
+
+  "skyrecipes.midnightconfig.familyExpansionEnabled": "Family Expansion",
+  "skyrecipes.midnightconfig.familyExpansionEnabled.tooltip": "Group related tiered items (pets, minions, stars, accessory upgrades) into families.",
+
+  "skyrecipes.midnightconfig.hideCategoryButtons": "Hide Category Buttons",
+  "skyrecipes.midnightconfig.hideCategoryButtons.tooltip": "Completely hides the compact category icon row above the RRV search bar.",
+
+  "skyrecipes.midnightconfig.hideCategoryButtonsWhenNotSearching": "Hide Category Buttons When Not Searching",
+  "skyrecipes.midnightconfig.hideCategoryButtonsWhenNotSearching.tooltip": "Hides category buttons when RRV is set to 'Only visible when searching' and the search bar is empty.",
+
+  "skyrecipes.midnightconfig.hideEmptyBookmarkPanel": "Hide Empty Bookmark Panel",
+  "skyrecipes.midnightconfig.hideEmptyBookmarkPanel.tooltip": "Auto-hides the bookmark side-panel when no bookmarks exist.",
+
+  "skyrecipes.midnightconfig.wideRrvSearchBar": "Wide Search Bar",
+  "skyrecipes.midnightconfig.wideRrvSearchBar.tooltip": "Expands the RRV search bar. In centred mode it widens up to the configured width but never shrinks below RRV's default. In item-list mode it is limited by the available item-list space.",
+
+  "skyrecipes.midnightconfig.rrvSearchBarWidth": "Search Bar Width",
+  "skyrecipes.midnightconfig.rrvSearchBarWidth.tooltip": "Minimum width for the search bar when wide mode is enabled.",
+
+  "skyrecipes.midnightconfig.rrvItemListWidthPercent": "Item List Width",
+  "skyrecipes.midnightconfig.rrvItemListWidthPercent.tooltip": "Shrinks the RRV item-list overlay width as a percentage.",
+
+  "skyrecipes.midnightconfig.rrvSidePanelWidthPercent": "Side Panel Width",
+  "skyrecipes.midnightconfig.rrvSidePanelWidthPercent.tooltip": "Shrinks the RRV side-panel overlay width as a percentage.",
+
+  "skyrecipes.midnightconfig.dataRefreshIntervalHours": "Data Refresh Interval",
+  "skyrecipes.midnightconfig.dataRefreshIntervalHours.tooltip": "How often to check for updated NEU repository data (in hours).",
+
+  "skyrecipes.midnightconfig.hypixelCacheTtlHours": "Hypixel Cache TTL",
+  "skyrecipes.midnightconfig.hypixelCacheTtlHours.tooltip": "How long to cache Hypixel API item data (in hours).",
+
+  "skyrecipes.midnightconfig.category.ui": "UI",
+  "skyrecipes.midnightconfig.category.rrv": "RRV",
+  "skyrecipes.midnightconfig.category.data": "Data",
+
+  "skyrecipes.midnightconfig.open_from_rrv": "SkyRecipes Settings..."
+}

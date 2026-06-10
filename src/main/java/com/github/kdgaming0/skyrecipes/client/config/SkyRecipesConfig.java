@@ -19,19 +19,37 @@ public class SkyRecipesConfig extends MidnightConfig {
     // UI settings
     // -----------------------------------------------------------------
     @Entry(category = "ui")
-    public static SearchBarMode searchBarMode = SearchBarMode.SHOW_WHEN_SEARCHING;
-
-    @Entry(category = "ui", min = 1, max = 20)
-    public static int autocompleteMax = 10;
-
-    @Entry(category = "ui")
     public static boolean calculatorEnabled = true;
+
+    @Entry(category = "ui", isSlider = true, min = 0, max = 10, precision = 0)
+    public static int calculatorPrecision = 5;
 
     @Entry(category = "ui")
     public static boolean familyExpansionEnabled = true;
 
-    @Entry(category = "ui")
-    public static boolean searchCategoryButtonsVisible = true;
+    // -----------------------------------------------------------------
+    // RRV integration settings
+    // -----------------------------------------------------------------
+    @Entry(category = "rrv")
+    public static boolean hideCategoryButtons = false;
+
+    @Entry(category = "rrv")
+    public static boolean hideCategoryButtonsWhenNotSearching = true;
+
+    @Entry(category = "rrv")
+    public static boolean hideEmptyBookmarkPanel = true;
+
+    @Entry(category = "rrv")
+    public static boolean wideRrvSearchBar = true;
+
+    @Entry(category = "rrv", isSlider = true, min = 100, max = 300, precision = 1)
+    public static int rrvSearchBarWidth = 200;
+
+    @Entry(category = "rrv", isSlider = true, min = 25, max = 100, precision = 1)
+    public static int rrvItemListWidthPercent = 100;
+
+    @Entry(category = "rrv", isSlider = true, min = 25, max = 100, precision = 1)
+    public static int rrvSidePanelWidthPercent = 100;
 
     // -----------------------------------------------------------------
     // Data settings

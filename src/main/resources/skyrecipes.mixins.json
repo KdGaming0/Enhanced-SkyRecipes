@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "AbstractRrvItemListOverlayAccessor",
+    "AbstractRrvOverlayAccessor",
     "CategoryButtonMixin",
     "ClientRecipeCacheMixin",
     "EditBoxAccessor",
@@ -11,7 +12,19 @@
     "ItemViewOverlayMixin",
     "RecipeCategoryConfigMixin",
     "RecipeViewMenuMixin",
+    "ScreenAccessor",
+    "rrv.ClientConfigScreenMixin",
+    "rrv.ItemViewOverlayWidthMixin",
     "rrv.RecipeViewScreenMixin",
+    "rrv.SearchBarWidthMixin",
+    "rrv.SidePanelOverlayMixin",
+    "rrv.SidePanelOverlayWidthMixin",
+    "rrv.fix.QuickNavRecipeViewMixin",
+    "rrv.fix.RrvScreenNullItemGuardMixin",
+    "rrv.fix.RecipeViewMenuPacketSuppressMixin",
+    "rrv.fix.RecipeViewMenuSlotPaddingMixin",
+    "rrv.fix.RecipeViewMenuReturnToCacheMixin",
+    "rrv.fix.RecipeViewMenuSlotSafetyMixin",
     "SearchBarMixin"
   ],
   "injectors": {

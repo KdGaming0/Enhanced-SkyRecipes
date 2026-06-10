@@ -8,6 +8,8 @@ import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 /**
@@ -40,7 +42,7 @@ public final class SkyblockRecipeCache {
 
     /**
      * Set the family resolver used for result-lookup expansion.
-     * Must be called before {@link #rebuild(List)} on the main thread.
+     * Must be called before {@link #rebuild(List)}.
      */
     public static void setFamilyResolver(FamilyResolver resolver) {
         familyResolver = resolver;
@@ -49,8 +51,12 @@ public final class SkyblockRecipeCache {
     /**
      * Rebuild the parallel index from the given recipe list.
      *
-     * <p>Must be called on the main thread (during RRV injection). The volatile maps ensure
-     * visibility to the render thread that services R/U key lookups.</p>
+     * <p>This method is thread-safe and may be called from a background thread. The
+     * volatile maps ensure visibility to the render thread that services R/U key lookups.</p>
+     *
+     * <p>The build is parallelized across recipes and uses a shared per-rebuild cache for
+     * {@link SkyblockIdExtractor#extract(ItemStack)} to avoid re-parsing NBT for stacks
+     * that appear in multiple recipes.</p>
      *
      * @param recipes the full list of SkyRecipes client recipes (already config-filtered)
      */
@@ -61,41 +67,65 @@ public final class SkyblockRecipeCache {
             return;
         }
 
-        Map<String, LinkedHashSet<ReliableClientRecipe>> byIngredient = new HashMap<>();
-        Map<String, LinkedHashSet<ReliableClientRecipe>> byResult = new HashMap<>();
+        ConcurrentMap<String, Set<ReliableClientRecipe>> byIngredient = new ConcurrentHashMap<>();
+        ConcurrentMap<String, Set<ReliableClientRecipe>> byResult = new ConcurrentHashMap<>();
 
-        for (ReliableClientRecipe recipe : recipes) {
-            // Index ingredients
-            for (SlotContent slot : recipe.getIngredients()) {
-                for (ItemStack stack : slot.getValidContents()) {
-                    String id = SkyblockIdExtractor.extract(stack);
-                    if (id != null) {
-                        byIngredient.computeIfAbsent(id, k -> new LinkedHashSet<>()).add(recipe);
-                    }
-                }
-            }
+        // Shared per-rebuild cache: ItemStack equality is component-aware, so equal stacks
+        // (same item, same components, same count) share an extraction result.
+        ConcurrentMap<ItemStack, String> idCache = new ConcurrentHashMap<>();
 
-            // Index results
-            for (SlotContent slot : recipe.getResults()) {
-                for (ItemStack stack : slot.getValidContents()) {
-                    String id = SkyblockIdExtractor.extract(stack);
-                    if (id != null) {
-                        byResult.computeIfAbsent(id, k -> new LinkedHashSet<>()).add(recipe);
-                    }
+        recipes.parallelStream().forEach(recipe -> indexRecipe(recipe, byIngredient, byResult, idCache));
+
+        byIngredientId = byIngredient.entrySet().parallelStream()
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey,
+                        e -> sortRecipes(List.copyOf(e.getValue()))
+                ));
+        byResultId = byResult.entrySet().parallelStream()
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey,
+                        e -> sortRecipes(List.copyOf(e.getValue()))
+                ));
+    }
+
+    private static void indexRecipe(ReliableClientRecipe recipe,
+                                    ConcurrentMap<String, Set<ReliableClientRecipe>> byIngredient,
+                                    ConcurrentMap<String, Set<ReliableClientRecipe>> byResult,
+                                    ConcurrentMap<ItemStack, String> idCache) {
+        for (SlotContent slot : recipe.getIngredients()) {
+            for (ItemStack stack : slot.getValidContents()) {
+                String id = extractCached(stack, idCache);
+                if (id != null) {
+                    byIngredient.computeIfAbsent(id, k -> ConcurrentHashMap.newKeySet()).add(recipe);
                 }
             }
         }
 
-        byIngredientId = byIngredient.entrySet().stream()
-                .collect(Collectors.toUnmodifiableMap(
-                        Map.Entry::getKey,
-                        e -> sortRecipes(List.copyOf(e.getValue()))
-                ));
-        byResultId = byResult.entrySet().stream()
-                .collect(Collectors.toUnmodifiableMap(
-                        Map.Entry::getKey,
-                        e -> sortRecipes(List.copyOf(e.getValue()))
-                ));
+        for (SlotContent slot : recipe.getResults()) {
+            for (ItemStack stack : slot.getValidContents()) {
+                String id = extractCached(stack, idCache);
+                if (id != null) {
+                    byResult.computeIfAbsent(id, k -> ConcurrentHashMap.newKeySet()).add(recipe);
+                }
+            }
+        }
+    }
+
+    private static String extractCached(ItemStack stack, ConcurrentMap<ItemStack, String> idCache) {
+        if (stack == null || stack.isEmpty()) {
+            return null;
+        }
+        String cached = idCache.get(stack);
+        if (cached != null) {
+            return cached;
+        }
+        // ConcurrentHashMap does not allow null values; only store non-null IDs.
+        String id = SkyblockIdExtractor.extract(stack);
+        if (id != null) {
+            String existing = idCache.putIfAbsent(stack, id);
+            return existing != null ? existing : id;
+        }
+        return null;
     }
 
     /**

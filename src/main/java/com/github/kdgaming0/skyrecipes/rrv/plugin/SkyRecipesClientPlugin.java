@@ -444,11 +444,16 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     }
 
     /**
-     * Inject recipes into RRV's cache.
+     * Inject recipes into RRV's cache and build lookup indexes.
      *
      * <p>If direct injection is available, recipes are added one-by-one via
      * {@code handleClientRecipe}. Otherwise we fall back to calling
      * {@code buildRecipeCache(false)}.</p>
+     *
+     * <p>The heavy family-resolution and SkyBlock-ID index builds are offloaded to a
+     * background thread so the render thread only pays for the RRV injection itself.
+     * The volatile index fields in {@link SkyblockRecipeCache} make this safe — the
+     * render thread sees the new indexes only after the background build completes.</p>
      */
     private void tryFinalizeStartup(Minecraft client) {
         if (startupFinalized) return;
@@ -468,28 +473,46 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 ClientRecipeCache.INSTANCE.buildRecipeCache(false);
             }
 
-            // Build family resolver and rebuild parallel SkyBlock-ID index
-            FamilyResolver familyResolver = new FamilyResolver(
-                    SkyRecipes.getConstantsRegistry(),
-                    SkyRecipes.getItemRegistry()
-            );
-            SkyblockRecipeCache.setFamilyResolver(familyResolver);
-            SkyblockRecipeCache.rebuild(recipes);
-
-            recipesReady = true;
-            startupFinalized = true;
-            firstInjection = false;
-
-            LOGGER.info("SkyRecipes startup complete: {} recipes injected into RRV",
-                    recipes.size());
+            // Offload the heavy indexing work to a background thread. RRV injection must
+            // stay on the main thread, but family scanning and recipe indexing are pure
+            // CPU work that blocks the render thread for 1-2 seconds on large packs.
+            CompletableFuture.supplyAsync(() -> {
+                FamilyResolver familyResolver = new FamilyResolver(
+                        SkyRecipes.getConstantsRegistry(),
+                        SkyRecipes.getItemRegistry()
+                );
+                SkyblockRecipeCache.setFamilyResolver(familyResolver);
+                SkyblockRecipeCache.rebuild(recipes);
+                return familyResolver;
+            }).thenAccept(familyResolver -> {
+                if (client != null) {
+                    client.execute(() -> finishStartup(client, recipes));
+                } else {
+                    finishStartup(null, recipes);
+                }
+            }).exceptionally(throwable -> {
+                LOGGER.error("Failed to build SkyBlock recipe indexes", throwable);
+                if (client != null) {
+                    client.execute(() -> finishStartup(client, recipes));
+                } else {
+                    finishStartup(null, recipes);
+                }
+                return null;
+            });
         } catch (Exception e) {
             LOGGER.error("Failed to inject recipes into RRV", e);
             // Even if injection fails, mark ready so the provider can serve recipes
             // on the next natural RRV rebuild.
-            recipesReady = true;
-            startupFinalized = true;
-            firstInjection = false;
+            finishStartup(client, recipes);
         }
+    }
+
+    private void finishStartup(Minecraft client, List<ReliableClientRecipe> recipes) {
+        recipesReady = true;
+        startupFinalized = true;
+        firstInjection = false;
+        LOGGER.info("SkyRecipes startup complete: {} recipes injected into RRV",
+                recipes.size());
     }
 
     /**

@@ -3,6 +3,8 @@ package com.github.kdgaming0.skyrecipes.mixin;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
 import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
+import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.client.gui.SearchBarCalculator;
 import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -46,7 +48,7 @@ public class SearchBarMixin {
     private static boolean looksLikeMath(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (c == '+' || c == '*' || c == '/' || c == '^' || c == '%' || c == '=') {
+            if (c == '+' || c == '*' || c == '/' || c == '^' || c == '%' || c == '=' || c == 'x' || c == 'X') {
                 return true;
             }
             if (c == '-' && i > 0 && Character.isDigit(s.charAt(i - 1))) {
@@ -68,9 +70,10 @@ public class SearchBarMixin {
             return;
         }
 
-        // Don't suggest if query looks like a math expression
-        if (looksLikeMath(newQuery)) {
-            searchbar.setSuggestion(null);
+        // Calculator: evaluate math expressions and show result as ghost text
+        if (SkyRecipesConfig.calculatorEnabled && looksLikeMath(newQuery)) {
+            String suggestion = SearchBarCalculator.calculateSuggestion(newQuery);
+            searchbar.setSuggestion(suggestion);
             return;
         }
 

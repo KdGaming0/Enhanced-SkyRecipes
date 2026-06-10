@@ -15,4 +15,10 @@ public interface AbstractRrvItemListOverlayAccessor {
 
     @Accessor("startIndex")
     void skyrecipes$setStartIndex(int value);
+
+    @Accessor("itemStartX")
+    void skyrecipes$setItemStartX(int value);
+
+    @Accessor("itemEndX")
+    void skyrecipes$setItemEndX(int value);
 }

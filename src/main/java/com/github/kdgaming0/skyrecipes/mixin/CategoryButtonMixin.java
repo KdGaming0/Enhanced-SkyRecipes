@@ -1,5 +1,7 @@
 package com.github.kdgaming0.skyrecipes.mixin;
 
+import cc.cassian.rrv.common.config.Configs;
+import cc.cassian.rrv.common.config.options.OverlayDisplay;
 import cc.cassian.rrv.common.overlay.BlockingGuiComponent;
 import cc.cassian.rrv.common.overlay.OverlayManager;
 import cc.cassian.rrv.common.overlay.itemlist.AbstractRrvItemListOverlay;
@@ -25,6 +27,9 @@ import java.util.List;
  *
  * <p>Buttons are rendered as 16×16 sprite icons. Clicking toggles the category
  * filter via {@link CategoryState} and refreshes the overlay.</p>
+ *
+ * <p>When the search bar is too narrow to fit all buttons in one row, they wrap
+ * into multiple rows so they remain clickable.</p>
  */
 @Mixin(value = ItemViewOverlay.class, remap = false)
 public class CategoryButtonMixin {
@@ -43,7 +48,7 @@ public class CategoryButtonMixin {
 
     @Inject(method = "placeWidgets", at = @At("TAIL"), remap = false)
     private void skyrecipes$addCategoryButtons(cc.cassian.rrv.common.overlay.AbstractRrvOverlay.ScreenContext ctx, CallbackInfo ci) {
-        if (!SkyRecipesConfig.searchCategoryButtonsVisible) return;
+        if (SkyRecipesConfig.hideCategoryButtons) return;
         if (searchbar == null) return;
 
         if (skyrecipes$categoryButtons == null) {
@@ -57,17 +62,44 @@ public class CategoryButtonMixin {
         int btnGap = 2;
         int count = categories.size();
         int totalWidth = count * btnSize + (count - 1) * btnGap;
-        int startX = searchbar.getX() + (searchbar.getWidth() - totalWidth) / 2;
-        int btnY = searchbar.getY() - btnSize - 2;
+
+        // Determine how many buttons fit per row based on search bar width
+        int availableWidth = searchbar.getWidth();
+        int buttonsPerRow;
+        if (totalWidth <= availableWidth) {
+            buttonsPerRow = count;
+        } else {
+            buttonsPerRow = Math.max(1, (availableWidth + btnGap) / (btnSize + btnGap));
+        }
+
+        int rows = (count + buttonsPerRow - 1) / buttonsPerRow;
+        int rowWidth = buttonsPerRow * btnSize + (buttonsPerRow - 1) * btnGap;
+
+        // Centre the grid horizontally on the search bar; left-align when wrapping
+        int startX;
+        if (totalWidth <= availableWidth) {
+            startX = searchbar.getX() + (availableWidth - totalWidth) / 2;
+        } else {
+            startX = searchbar.getX();
+        }
+
+        // Start above the search bar; each additional row pushes us further up
+        int firstRowY = searchbar.getY() - btnSize - 2 - (rows - 1) * (btnSize + btnGap);
 
         SkyblockItemCategory active = CategoryState.getButtonCategory();
 
-        int x = startX;
+        int idx = 0;
         for (SkyblockItemCategory category : categories) {
             String spriteName = category.getSpriteName();
             if (spriteName == null) continue;
+
+            int col = idx % buttonsPerRow;
+            int row = idx / buttonsPerRow;
+            int x = startX + col * (btnSize + btnGap);
+            int y = firstRowY + row * (btnSize + btnGap);
+
             CategoryIconButton btn = new CategoryIconButton(
-                    x, btnY, btnSize,
+                    x, y, btnSize,
                     spriteName,
                     category == active,
                     b -> skyrecipes$onToggle(category)
@@ -76,13 +108,17 @@ public class CategoryButtonMixin {
             btn.setTooltipText(category.getDisplayName());
             skyrecipes$categoryButtons.add(btn);
             ctx.addRenderable(btn);
-            x += btnSize + btnGap;
+            idx++;
         }
 
-        // Register blocking component so RRV avoids rendering over the button row
+        // Blocking component must cover the full button grid
+        int actualTotalWidth = (totalWidth <= availableWidth) ? totalWidth : rowWidth;
+        int blockHeight = rows * btnSize + (rows - 1) * btnGap + 2;
         BlockingGuiComponent rowBlocking =
-                new BlockingGuiComponent(skyrecipes$ROW_ID, startX, btnY, totalWidth, btnSize + 2);
+                new BlockingGuiComponent(skyrecipes$ROW_ID, startX, firstRowY, actualTotalWidth, blockHeight);
         OverlayManager.INSTANCE.setGuiBlocking(rowBlocking);
+
+        skyrecipes$updateCategoryButtonVisibility();
     }
 
     @Unique
@@ -109,6 +145,37 @@ public class CategoryButtonMixin {
         boolean categoryChanged = CategoryState.getButtonCategory() != skyrecipes$previousCategory;
         if (queryChanged || categoryChanged) {
             ((AbstractRrvItemListOverlayAccessor) this).skyrecipes$setStartIndex(0);
+        }
+    }
+
+    @Inject(method = "updateQuery", at = @At("TAIL"), remap = false)
+    private void skyrecipes$onQueryChanged(String newQuery, CallbackInfo ci) {
+        skyrecipes$updateCategoryButtonVisibility();
+    }
+
+    @Inject(method = "setEnabled", at = @At("TAIL"), remap = false)
+    private void skyrecipes$onEnabledChanged(boolean enabled, CallbackInfo ci) {
+        skyrecipes$updateCategoryButtonVisibility();
+    }
+
+    @Unique
+    private void skyrecipes$updateCategoryButtonVisibility() {
+        if (skyrecipes$categoryButtons == null || skyrecipes$categoryButtons.isEmpty()) return;
+
+        ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+        OverlayDisplay rrvMode = Configs.CLIENT_SETTINGS.isShowItemView();
+
+        boolean visible;
+        if (SkyRecipesConfig.hideCategoryButtons) {
+            visible = false;
+        } else if (rrvMode == OverlayDisplay.WHEN_SEARCHING) {
+            visible = !SkyRecipesConfig.hideCategoryButtonsWhenNotSearching || self.isSearching();
+        } else {
+            visible = rrvMode != OverlayDisplay.DISABLED;
+        }
+
+        for (CategoryIconButton btn : skyrecipes$categoryButtons) {
+            btn.visible = visible;
         }
     }
 }
