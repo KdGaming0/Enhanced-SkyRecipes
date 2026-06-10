@@ -44,11 +44,14 @@ public class ClientRecipeCacheMixin {
 
     @Inject(method = "buildRecipeCache", at = @At("HEAD"), cancellable = true)
     private void skyrecipes$skipRedundantRebuild(boolean rebuildFromSynchronizedRecipes, CallbackInfo ci) {
-        if (rebuildFromSynchronizedRecipes && SkyRecipesClientPlugin.areRecipesReady()) {
-            InternalRecipeManager.INSTANCE.setRecipesSynced(true);
+        if (SkyRecipesClientPlugin.areRecipesReady()) {
+            if (rebuildFromSynchronizedRecipes) {
+                InternalRecipeManager.INSTANCE.setRecipesSynced(true);
+            }
             ci.cancel();
             org.slf4j.LoggerFactory.getLogger(ClientRecipeCacheMixin.class)
-                    .debug("Cancelled redundant RRV buildRecipeCache(true) — SkyRecipes recipes already loaded");
+                    .debug("Cancelled redundant RRV buildRecipeCache({}) — SkyRecipes recipes already loaded",
+                            rebuildFromSynchronizedRecipes);
         }
     }
 

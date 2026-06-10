@@ -575,6 +575,16 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         recipesReady = true;
         startupFinalized = true;
         firstInjection = false;
+
+        // Mark RRV's local cache as built so buildRecipeCache(false) returns early
+        // and never triggers the expensive clear()+rebuild path.
+        try {
+            ((com.github.kdgaming0.skyrecipes.mixin.recipe.ClientRecipeCacheAccessor)
+                    ClientRecipeCache.INSTANCE).skyrecipes$setLocalCacheBuilt(true);
+        } catch (Exception e) {
+            LOGGER.debug("Could not set RRV localCacheBuilt via accessor", e);
+        }
+
         LOGGER.info("SkyRecipes startup complete: {} recipes injected into RRV",
                 recipes.size());
     }

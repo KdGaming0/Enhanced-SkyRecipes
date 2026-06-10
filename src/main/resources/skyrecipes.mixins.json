@@ -11,6 +11,7 @@
     "overlay.ItemFiltersMixin",
     "overlay.ItemViewOverlayMixin",
     "overlay.SearchBarMixin",
+    "recipe.ClientRecipeCacheAccessor",
     "recipe.ClientRecipeCacheMixin",
     "recipe.RecipeCategoryConfigMixin",
     "recipe.RecipeViewMenuMixin",
