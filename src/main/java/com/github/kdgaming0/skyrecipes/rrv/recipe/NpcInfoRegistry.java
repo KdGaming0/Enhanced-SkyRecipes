@@ -1,5 +1,7 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
+import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockInfoClientRecipe;
+
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;

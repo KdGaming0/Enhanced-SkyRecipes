@@ -446,4 +446,26 @@ public final class FamilyResolver {
         }
         return null;
     }
+
+    /**
+     * Comparator for SkyBlock internal names that orders tiered family members
+     * logically (lower tiers first).
+     */
+    private static final class FamilyMemberComparator implements Comparator<String> {
+
+        public static final FamilyMemberComparator INSTANCE = new FamilyMemberComparator();
+
+        private FamilyMemberComparator() {
+        }
+
+        @Override
+        public int compare(String a, String b) {
+            int tierA = FamilyResolver.extractTier(a);
+            int tierB = FamilyResolver.extractTier(b);
+            if (tierA != tierB) {
+                return Integer.compare(tierA, tierB);
+            }
+            return a.compareTo(b);
+        }
+    }
 }

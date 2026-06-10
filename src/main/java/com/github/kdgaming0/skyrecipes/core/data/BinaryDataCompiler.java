@@ -1,5 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
+import com.github.kdgaming0.skyrecipes.core.util.PetStatResolver;
+
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.model.*;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;

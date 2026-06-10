@@ -5,7 +5,7 @@ import cc.cassian.rrv.common.overlay.AbstractRrvOverlay;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
 import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
-import com.github.kdgaming0.skyrecipes.mixin.AbstractRrvOverlayAccessor;
+import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvOverlayAccessor;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;

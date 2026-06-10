@@ -1,11 +1,18 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.parsers;
 
+import com.github.kdgaming0.skyrecipes.core.recipe.util.ParserUtil;
+
+import com.github.kdgaming0.skyrecipes.core.recipe.util.SlotRefParser;
+import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
+
+import com.github.kdgaming0.skyrecipes.core.recipe.util.SlotRefParser;
+
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
-import com.github.kdgaming0.skyrecipes.core.render.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
-import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockKatUpgradeClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockKatUpgradeClientRecipe;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;

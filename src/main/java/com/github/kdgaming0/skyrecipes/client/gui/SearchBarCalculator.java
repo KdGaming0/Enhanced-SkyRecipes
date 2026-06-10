@@ -1,7 +1,7 @@
 package com.github.kdgaming0.skyrecipes.client.gui;
 
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
-import com.github.kdgaming0.skyrecipes.core.util.calculator.NeuCalculator;
+import com.github.kdgaming0.skyrecipes.core.util.NeuCalculator;
 
 import java.math.BigDecimal;
 import java.text.DecimalFormat;

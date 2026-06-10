@@ -2,7 +2,7 @@ package com.github.kdgaming0.skyrecipes.mixin.rrv.fix;
 
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
-import com.github.kdgaming0.skyrecipes.mixin.ScreenAccessor;
+import com.github.kdgaming0.skyrecipes.mixin.accessor.ScreenAccessor;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import org.spongepowered.asm.mixin.Mixin;
