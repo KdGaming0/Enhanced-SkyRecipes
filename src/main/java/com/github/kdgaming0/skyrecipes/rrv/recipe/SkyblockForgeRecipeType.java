@@ -15,7 +15,7 @@ public class SkyblockForgeRecipeType extends AbstractSkyblockRecipeType {
     private SkyblockForgeRecipeType() {
         super("forge", "SkyBlock Forge", 129, 58,
                 Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/forge.png"),
-                9, new ItemStack(Items.ANVIL), 2);
+                9, new ItemStack(Items.BLAST_FURNACE), 1);
     }
 
     @Override

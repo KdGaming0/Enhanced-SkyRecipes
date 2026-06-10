@@ -25,7 +25,7 @@ public class SkyblockGardenMutationRecipeType extends AbstractSkyblockRecipeType
     private SkyblockGardenMutationRecipeType() {
         super("garden_mutation", "Garden Mutation", 146, 156,
                 Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/garden_mutation.png"),
-                37, new ItemStack(Items.WHEAT_SEEDS), 7);
+                37, new ItemStack(Items.WHEAT_SEEDS), 5);
     }
 
     @Override

@@ -31,7 +31,7 @@ public class SkyblockKatUpgradeRecipeType extends AbstractSkyblockRecipeType {
     private SkyblockKatUpgradeRecipeType() {
         super("kat_upgrade", "Kat Upgrade", 152, 96,
                 Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/kat.png"),
-                8, new ItemStack(Items.EGG), 5);
+                8, new ItemStack(Items.EGG), 4);
     }
 
     @Override

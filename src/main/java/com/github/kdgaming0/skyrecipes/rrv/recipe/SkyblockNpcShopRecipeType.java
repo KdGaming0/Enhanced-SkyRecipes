@@ -12,7 +12,7 @@ public class SkyblockNpcShopRecipeType extends AbstractSkyblockRecipeType {
     private SkyblockNpcShopRecipeType() {
         super("npc_shop", "NPC Shop", 156, 64,
                 Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/npc_shop.png"),
-                9, new ItemStack(Items.EMERALD), 4);
+                9, new ItemStack(Items.EMERALD), 3);
     }
 
     @Override

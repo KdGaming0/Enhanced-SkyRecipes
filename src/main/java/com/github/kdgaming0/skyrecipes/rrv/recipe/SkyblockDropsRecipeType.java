@@ -14,12 +14,11 @@ import net.minecraft.world.item.Items;
 public final class SkyblockDropsRecipeType extends AbstractSkyblockRecipeType {
 
     public static final SkyblockDropsRecipeType INSTANCE = new SkyblockDropsRecipeType();
-    private static final ItemStack ICON = new ItemStack(Items.IRON_SWORD);
 
     private SkyblockDropsRecipeType() {
         super("drops", "SkyBlock Mob Drops", 168, 151,
                 Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/mob_drops.png"),
-                54, ICON, 3);
+                54, new ItemStack(Items.ZOMBIE_HEAD), 2);
     }
 
     @Override

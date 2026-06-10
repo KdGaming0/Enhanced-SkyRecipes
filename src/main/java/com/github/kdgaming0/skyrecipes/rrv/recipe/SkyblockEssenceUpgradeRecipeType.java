@@ -31,7 +31,7 @@ public class SkyblockEssenceUpgradeRecipeType extends AbstractSkyblockRecipeType
     private SkyblockEssenceUpgradeRecipeType() {
         super("essence_upgrade", "Essence Upgrade", 152, 64,
                 Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/essence_upgrade.png"),
-                8, new ItemStack(Items.NETHER_STAR), 7);
+                8, new ItemStack(Items.NETHER_STAR), 5);
     }
 
     @Override

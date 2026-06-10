@@ -59,9 +59,11 @@ import java.util.concurrent.CompletableFuture;
  *       recipe generation and stack building in parallel on the ForkJoinPool.</li>
  *   <li>If data arrives after {@code CLIENT_STARTED}, the same component check runs
  *       before work begins.</li>
- *   <li>When stack building finishes, stack-sensitives are registered on the main thread.</li>
- *   <li>When recipe generation finishes, recipes are injected directly into
- *       {@code ClientRecipeCache} via {@code MethodHandle} on the main thread.</li>
+ *   <li>All heavy CPU work (recipe generation, stack building, search-index creation,
+ *       family resolution, and SkyBlock recipe caching) happens on background threads.</li>
+ *   <li>When all background prep is complete, a lightweight batched injector runs on
+ *       the render thread, spreading RRV cache mutations across many ticks so no
+ *       single frame drops.</li>
  *   <li>Injection happens exactly once per data load. World joins do not trigger re-injection.
  *       A mixin cancels redundant RRV {@code buildRecipeCache(true)} calls when our recipes
  *       are already loaded.</li>
@@ -153,6 +155,11 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         ALIASES = Collections.unmodifiableMap(map);
     }
 
+    // ---- Batched-injection state ------------------------------------------------
+
+    private static final int RECIPES_PER_TICK = 500;
+    private static final int STACKS_PER_TICK = 250;
+
     /**
      * True after stack-sensitives have been registered.
      */
@@ -189,6 +196,16 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      * True while a background retry loop is waiting for components to bind.
      */
     private volatile boolean startupRetryInProgress = false;
+
+    // ---- Coordinated background-completion state --------------------------------
+
+    private volatile RecipeResult pendingRecipeResult = null;
+    private volatile List<ItemStack> pendingStacks = null;
+    private volatile SkyblockSearchIndex pendingSearchIndex = null;
+    private volatile boolean backgroundPrepComplete = false;
+    private volatile boolean injectionStarted = false;
+    private StartupBatcher startupBatcher = null;
+
     private boolean wasRightArrowDown = false;
     private boolean wasTabDown = false;
 
@@ -250,9 +267,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             LOGGER.warn("================================================================================");
         }
 
-        // Exclude vanilla Minecraft recipe categories from RRV.
-        // SkyBlock recipes use minecraft:crafting; all other vanilla categories are hidden.
+        // Exclude all built-in RRV / vanilla recipe categories.
+        // SkyRecipes registers its own types (skyrecipes:*) so these are redundant.
         ItemView.excludeRecipeTypes(
+                Identifier.fromNamespaceAndPath("minecraft", "crafting"),
                 Identifier.fromNamespaceAndPath("minecraft", "furnace_smelting"),
                 Identifier.fromNamespaceAndPath("minecraft", "furnace_blasting"),
                 Identifier.fromNamespaceAndPath("minecraft", "furnace_smoking"),
@@ -260,8 +278,14 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 Identifier.fromNamespaceAndPath("minecraft", "brewing"),
                 Identifier.fromNamespaceAndPath("minecraft", "smithing"),
                 Identifier.fromNamespaceAndPath("minecraft", "stonecutting"),
-                Identifier.fromNamespaceAndPath("minecraft", "fuel"),
-                Identifier.fromNamespaceAndPath("minecraft", "anvil_combining")
+                Identifier.fromNamespaceAndPath("minecraft", "furnace_burning"),
+                Identifier.fromNamespaceAndPath("rrv", "anvil_combining"),
+                Identifier.fromNamespaceAndPath("minecraft", "entity_loot"),
+                Identifier.fromNamespaceAndPath("minecraft", "villager_trading"),
+                Identifier.fromNamespaceAndPath("rrv", "info"),
+                Identifier.fromNamespaceAndPath("rrv", "world_interaction"),
+                Identifier.fromNamespaceAndPath("rrv", "item_tag"),
+                Identifier.fromNamespaceAndPath("rrv", "block_tag")
         );
 
         // Fallback provider — RRV calls this on every buildRecipeCache.
@@ -299,7 +323,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
 
         // Right-arrow / Tab commits the autocomplete suggestion in the RRV search bar.
-        ClientTickEvents.END_CLIENT_TICK.register(this::handleSearchBarSuggestionCommit);
+        // Also drives the batched startup injector so the render thread never freezes.
+        ClientTickEvents.END_CLIENT_TICK.register(this::handleEndClientTick);
 
         LOGGER.info("SkyRecipes RRV client plugin initialized");
     }
@@ -316,6 +341,13 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         startupFinalized = false;
         pendingRecipeGen = null;
         pendingStackBuild = null;
+
+        pendingRecipeResult = null;
+        pendingStacks = null;
+        pendingSearchIndex = null;
+        backgroundPrepComplete = false;
+        injectionStarted = false;
+        startupBatcher = null;
     }
 
     /**
@@ -393,8 +425,11 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
     }
 
+    // ---- Coordinated background completion --------------------------------------
+
     /**
      * Start generating recipes on a background thread if not already running.
+     * When complete, stores the result and triggers coordinated prep.
      */
     private void startBackgroundRecipes() {
         if (!SkyRecipes.isDataReady()) return;
@@ -408,102 +443,131 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             if (pendingRecipeGen != future) return;
 
             if (result != null) {
-                Minecraft mc = Minecraft.getInstance();
-                if (mc != null) {
-                    mc.execute(() -> {
-                        cachedResult = result;
-                        LOGGER.info("Background recipe generation complete: {} recipes",
-                                result.recipes().size());
-                        tryFinalizeStartup(mc);
-                    });
-                }
+                pendingRecipeResult = result;
+                LOGGER.info("Background recipe generation complete: {} recipes",
+                        result.recipes().size());
+                maybeStartBackgroundPrep();
             }
         });
     }
 
     /**
-     * Start building ItemStacks on a background thread if not already running.
+     * Start building ItemStacks and the search index on a background thread.
+     * When complete, stores the results and triggers coordinated prep.
      */
     private void startBackgroundStacks() {
         if (!SkyRecipes.isDataReady()) return;
         if (cachedStacks != null) return;
         if (pendingStackBuild != null && !pendingStackBuild.isDone()) return;
 
-        CompletableFuture<List<ItemStack>> future = CompletableFuture.supplyAsync(this::buildAllStacks);
+        CompletableFuture<StackBuildResult> future = CompletableFuture.supplyAsync(this::buildAllStacksAndIndex);
         pendingStackBuild = future;
-        future.thenAccept(stacks -> {
+        future.thenAccept(result -> {
             // If invalidateCaches() ran while we were building, discard this result.
             if (pendingStackBuild != future) return;
 
-            cachedStacks = stacks;
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null) {
-                mc.execute(this::registerStackSensitives);
+            if (result != null) {
+                pendingStacks = result.stacks();
+                pendingSearchIndex = result.index();
+                LOGGER.info("Background stack building complete: {} stacks",
+                        result.stacks().size());
+                maybeStartBackgroundPrep();
             }
         });
     }
 
     /**
-     * Inject recipes into RRV's cache and build lookup indexes.
-     *
-     * <p>If direct injection is available, recipes are added one-by-one via
-     * {@code handleClientRecipe}. Otherwise we fall back to calling
-     * {@code buildRecipeCache(false)}.</p>
-     *
-     * <p>The heavy family-resolution and SkyBlock-ID index builds are offloaded to a
-     * background thread so the render thread only pays for the RRV injection itself.
-     * The volatile index fields in {@link SkyblockRecipeCache} make this safe — the
-     * render thread sees the new indexes only after the background build completes.</p>
+     * Once both recipe generation and stack building have finished, build the
+     * remaining heavy indexes (FamilyResolver, SkyblockRecipeCache) on a background
+     * thread, then marshal to the render thread to begin batched injection.
      */
-    private void tryFinalizeStartup(Minecraft client) {
-        if (startupFinalized) return;
-        if (cachedResult == null) return;
+    private void maybeStartBackgroundPrep() {
+        if (pendingRecipeResult == null || pendingStacks == null) return;
+        if (backgroundPrepComplete) return;
+        backgroundPrepComplete = true;
 
-        List<ReliableClientRecipe> recipes = cachedResult.recipes();
-        if (recipes.isEmpty()) {
-            LOGGER.warn("Recipe generation produced zero recipes, skipping injection");
+        CompletableFuture.supplyAsync(() -> {
+            FamilyResolver resolver = new FamilyResolver(
+                    SkyRecipes.getConstantsRegistry(),
+                    SkyRecipes.getItemRegistry()
+            );
+            SkyblockRecipeCache.setFamilyResolver(resolver);
+            SkyblockRecipeCache.rebuild(pendingRecipeResult.recipes());
+            return resolver;
+        }).thenAccept(resolver -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                mc.execute(() -> beginBatchedInjection());
+            }
+        }).exceptionally(throwable -> {
+            LOGGER.error("Background prep (FamilyResolver/SkyblockRecipeCache) failed", throwable);
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                mc.execute(() -> beginBatchedInjection());
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Begin batched injection on the render thread. Called once all background prep
+     * is complete. Clears stale caches and initialises the {@link StartupBatcher}.
+     */
+    private void beginBatchedInjection() {
+        if (injectionStarted) return;
+        injectionStarted = true;
+
+        RecipeResult result = pendingRecipeResult;
+        List<ItemStack> stacks = pendingStacks;
+        if (result == null || stacks == null) {
+            LOGGER.warn("Cannot begin batched injection: missing result or stacks");
             return;
         }
 
-        try {
-            if (DIRECT_INJECTION_AVAILABLE) {
-                injectDirectly(recipes);
-            } else {
-                // Fallback: use the stable rebuild path.
-                ClientRecipeCache.INSTANCE.buildRecipeCache(false);
-            }
+        // Publish volatile fields for provider and external access
+        cachedResult = result;
+        cachedStacks = stacks;
+        searchIndex = pendingSearchIndex;
 
-            // Offload the heavy indexing work to a background thread. RRV injection must
-            // stay on the main thread, but family scanning and recipe indexing are pure
-            // CPU work that blocks the render thread for 1-2 seconds on large packs.
-            CompletableFuture.supplyAsync(() -> {
-                FamilyResolver familyResolver = new FamilyResolver(
-                        SkyRecipes.getConstantsRegistry(),
-                        SkyRecipes.getItemRegistry()
-                );
-                SkyblockRecipeCache.setFamilyResolver(familyResolver);
-                SkyblockRecipeCache.rebuild(recipes);
-                return familyResolver;
-            }).thenAccept(familyResolver -> {
-                if (client != null) {
-                    client.execute(() -> finishStartup(client, recipes));
-                } else {
-                    finishStartup(null, recipes);
+        List<ReliableClientRecipe> recipes = result.recipes();
+
+        // Clear old caches before batching
+        if (!firstInjection) {
+            ClientRecipeCache.INSTANCE.clear();
+            LOGGER.debug("Cleared stale client recipes before re-injection");
+        }
+        ItemView.getStackSensitive().clear();
+        ClientRecipeCache.INSTANCE.clearStackSensitives();
+
+        LOGGER.info("Beginning batched RRV injection: {} recipes, {} stacks",
+                recipes.size(), stacks.size());
+        this.startupBatcher = new StartupBatcher(recipes, stacks);
+    }
+
+    /**
+     * Called every client tick. Handles the autocomplete suggestion commit and,
+     * when active, drives the batched injector forward one batch at a time.
+     */
+    private void handleEndClientTick(Minecraft client) {
+        handleSearchBarSuggestionCommit(client);
+
+        if (startupBatcher != null) {
+            try {
+                if (startupBatcher.tick(client)) {
+                    startupBatcher = null;
+                    List<ReliableClientRecipe> recipes = cachedResult != null
+                            ? cachedResult.recipes()
+                            : List.of();
+                    finishStartup(client, recipes);
                 }
-            }).exceptionally(throwable -> {
-                LOGGER.error("Failed to build SkyBlock recipe indexes", throwable);
-                if (client != null) {
-                    client.execute(() -> finishStartup(client, recipes));
-                } else {
-                    finishStartup(null, recipes);
-                }
-                return null;
-            });
-        } catch (Exception e) {
-            LOGGER.error("Failed to inject recipes into RRV", e);
-            // Even if injection fails, mark ready so the provider can serve recipes
-            // on the next natural RRV rebuild.
-            finishStartup(client, recipes);
+            } catch (Exception e) {
+                LOGGER.error("Startup batcher tick failed", e);
+                startupBatcher = null;
+                List<ReliableClientRecipe> recipes = cachedResult != null
+                        ? cachedResult.recipes()
+                        : List.of();
+                finishStartup(client, recipes);
+            }
         }
     }
 
@@ -515,29 +579,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 recipes.size());
     }
 
-    /**
-     * Direct cache injection via MethodHandle. Must run on the main thread.
-     */
-    private void injectDirectly(List<ReliableClientRecipe> recipes) {
-        ClientRecipeCache cache = ClientRecipeCache.INSTANCE;
-
-        // On reload, clear stale client recipes before re-injecting.
-        if (!firstInjection) {
-            cache.clear();
-            LOGGER.debug("Cleared stale client recipes before re-injection");
-        }
-
-        try {
-            for (int i = 0; i < recipes.size(); i++) {
-                ReliableClientRecipe recipe = recipes.get(i);
-                INJECT_RECIPE.invokeExact(cache, recipe.entryId(), recipe, i, true);
-            }
-        } catch (Throwable t) {
-            throw new RuntimeException("Direct recipe injection failed", t);
-        }
-
-        Configs.CATEGORIES.addNewCategories();
-    }
+    // ---- Core generation / build helpers ----------------------------------------
 
     /**
      * Generate all recipes. Returns null on failure.
@@ -553,6 +595,15 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             LOGGER.error("Failed to generate recipes", e);
             return null;
         }
+    }
+
+    /**
+     * Build ItemStacks for all NeuItems and the search index in one background pass.
+     */
+    private StackBuildResult buildAllStacksAndIndex() {
+        List<ItemStack> stacks = buildAllStacks();
+        SkyblockSearchIndex index = buildSearchIndex(stacks);
+        return new StackBuildResult(stacks, index);
     }
 
     /**
@@ -582,50 +633,18 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         return stacks;
     }
 
-    /**
-     * Register all built ItemStacks as stack-sensitives with RRV.
-     *
-     * <p>Must run on the main thread because it touches RRV client state.</p>
-     */
-    private void registerStackSensitives() {
-        ItemRegistry registry = SkyRecipes.getItemRegistry();
-        if (registry == null) {
-            LOGGER.warn("ItemRegistry not available, skipping stack-sensitive registration");
-            return;
-        }
-
-        List<ItemStack> stacks = cachedStacks;
-        if (stacks == null) {
-            LOGGER.warn("Stack-sensitives not yet built, skipping registration");
-            return;
-        }
-
-        ItemView.getStackSensitive().clear();
-        ClientRecipeCache.INSTANCE.clearStackSensitives();
-
-        for (ItemStack stack : stacks) {
-            ClientRecipeCache.INSTANCE.addStackSensitive(new ItemView.StackSensitive(stack));
-            ItemView.addStackSensitive(stack);
-        }
-
-        stacksReady = true;
-        LOGGER.info("Registered {} stack-sensitives with RRV", stacks.size());
-
-        // Build search index now that stacks are registered
-        buildSearchIndex(stacks);
-    }
-
-    private void buildSearchIndex(List<ItemStack> stacks) {
+    private SkyblockSearchIndex buildSearchIndex(List<ItemStack> stacks) {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         ConstantsRegistry constants = SkyRecipes.getConstantsRegistry();
         if (registry == null || constants == null) {
             LOGGER.warn("Cannot build search index: registries not available");
-            return;
+            return null;
         }
         try {
-            searchIndex = new SkyblockSearchIndex(stacks, registry, constants, ALIASES);
+            return new SkyblockSearchIndex(stacks, registry, constants, ALIASES);
         } catch (Exception e) {
             LOGGER.error("Failed to build SkyblockSearchIndex", e);
+            return null;
         }
     }
 
@@ -675,6 +694,14 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         wasTabDown = tabDown;
     }
 
+    // ---- Supporting records -----------------------------------------------------
+
+    /**
+     * Result of building stacks and search index together on a background thread.
+     */
+    private record StackBuildResult(List<ItemStack> stacks, SkyblockSearchIndex index) {
+    }
+
     /**
      * Pre-computed sort key for NeuItems. Groups family members together and
      * orders tiered items numerically (e.g. Minion I before Minion XII).
@@ -705,6 +732,100 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             if (c != 0) return c;
 
             return this.internalName.compareTo(other.internalName);
+        }
+    }
+
+    // ---- Batched injector -------------------------------------------------------
+
+    /**
+     * Injects recipes and stack-sensitives into RRV in small batches across many
+     * ticks so no single frame is dropped.
+     *
+     * <p>The batcher runs through four phases:</p>
+     * <ol>
+     *   <li>Recipe injection (batched)</li>
+     *   <li>Fallback cache rebuild (if direct injection is unavailable)</li>
+     *   <li>Category registration</li>
+     *   <li>Stack-sensitive registration (batched)</li>
+     * </ol>
+     */
+    private final class StartupBatcher {
+        private final List<ReliableClientRecipe> recipes;
+        private final List<ItemStack> stacks;
+        private int recipeIndex = 0;
+        private int stackIndex = 0;
+        private boolean categoriesAdded = false;
+        private boolean fallbackDone = false;
+
+        StartupBatcher(List<ReliableClientRecipe> recipes, List<ItemStack> stacks) {
+            this.recipes = recipes;
+            this.stacks = stacks;
+        }
+
+        /**
+         * Process one batch. Returns {@code true} when all phases are complete.
+         */
+        boolean tick(Minecraft client) {
+            // Phase 1: batch-inject recipes via direct MethodHandle
+            if (DIRECT_INJECTION_AVAILABLE && recipeIndex < recipes.size()) {
+                ClientRecipeCache cache = ClientRecipeCache.INSTANCE;
+                int end = Math.min(recipeIndex + RECIPES_PER_TICK, recipes.size());
+                try {
+                    for (int i = recipeIndex; i < end; i++) {
+                        ReliableClientRecipe recipe = recipes.get(i);
+                        INJECT_RECIPE.invokeExact(cache, recipe.entryId(), recipe, i, true);
+                    }
+                } catch (Throwable t) {
+                    LOGGER.error("Direct recipe injection failed at index {}", recipeIndex, t);
+                    // Continue with remaining recipes on next ticks
+                }
+                recipeIndex = end;
+                if (recipeIndex >= recipes.size()) {
+                    LOGGER.info("Recipe injection batch complete: {} recipes", recipes.size());
+                }
+                return false;
+            }
+
+            // Phase 2: fallback rebuild if direct injection is unavailable
+            if (!DIRECT_INJECTION_AVAILABLE && !fallbackDone) {
+                try {
+                    ClientRecipeCache.INSTANCE.buildRecipeCache(false);
+                } catch (Exception e) {
+                    LOGGER.error("Fallback recipe cache rebuild failed", e);
+                }
+                fallbackDone = true;
+                return false;
+            }
+
+            // Phase 3: register new categories once recipes are in
+            if (!categoriesAdded) {
+                try {
+                    Configs.CATEGORIES.addNewCategories();
+                } catch (Exception e) {
+                    LOGGER.warn("Failed to add new RRV categories", e);
+                }
+                categoriesAdded = true;
+                return false;
+            }
+
+            // Phase 4: batch-register stack-sensitives
+            if (stackIndex < stacks.size()) {
+                int end = Math.min(stackIndex + STACKS_PER_TICK, stacks.size());
+                for (int i = stackIndex; i < end; i++) {
+                    ItemStack stack = stacks.get(i);
+                    ClientRecipeCache.INSTANCE.addStackSensitive(new ItemView.StackSensitive(stack));
+                    ItemView.addStackSensitive(stack);
+                }
+                stackIndex = end;
+                if (stackIndex >= stacks.size()) {
+                    stacksReady = true;
+                    LOGGER.info("Stack-sensitive registration batch complete: {} stacks", stacks.size());
+                }
+                return false;
+            }
+
+            // All phases complete
+            return true;
         }
     }
 }

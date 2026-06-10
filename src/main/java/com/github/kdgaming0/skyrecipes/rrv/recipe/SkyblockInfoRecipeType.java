@@ -17,7 +17,7 @@ public class SkyblockInfoRecipeType extends AbstractSkyblockRecipeType {
     private SkyblockInfoRecipeType() {
         super("info", "SkyBlock Info", 120, 120,
                 ReliableRecipeViewer.of("textures/gui/type/info.png"),
-                1, Items.BOOK.getDefaultInstance(), 0);
+                1, Items.BOOK.getDefaultInstance(), 10);
     }
 
     @Override

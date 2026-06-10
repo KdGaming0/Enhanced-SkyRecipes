@@ -12,7 +12,7 @@ public class SkyblockTradeRecipeType extends AbstractSkyblockRecipeType {
     private SkyblockTradeRecipeType() {
         super("trade", "Trade", 80, 24,
                 ReliableRecipeViewer.of("textures/gui/type/stonecutter.png"),
-                2, new ItemStack(Items.GOLD_INGOT), 6);
+                2, new ItemStack(Items.GOLD_INGOT), 8);
     }
 
     @Override

@@ -23,7 +23,7 @@ public class SkyblockReforgeRecipeType extends AbstractSkyblockRecipeType {
     private SkyblockReforgeRecipeType() {
         super("reforge", "Reforge", 120, 146,
                 null, // rendered manually per-recipe in SkyblockReforgeClientRecipe
-                1, new ItemStack(Items.ANVIL), 8);
+                1, new ItemStack(Items.ANVIL), 5);
     }
 
     @Override
