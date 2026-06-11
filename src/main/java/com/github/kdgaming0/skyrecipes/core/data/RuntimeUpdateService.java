@@ -26,22 +26,25 @@ public class RuntimeUpdateService {
     private static final String NEU_REPO_URL =
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
-    private static final long CHECK_INTERVAL_MINUTES = 15;
-    private static final long INITIAL_DELAY_SECONDS = 5;
+    private static final long INITIAL_DELAY_SECONDS = 30;
 
     private final Path dataDir;
     private final Path cacheDir;
     private final BiConsumer<Path, Path> onDataUpdated;
     private final ScheduledExecutorService scheduler;
     private final BinaryDataCompiler compiler;
+    private final long checkIntervalSeconds;
 
     private volatile boolean running = false;
     private volatile boolean compileInProgress = false;
 
-    public RuntimeUpdateService(Path dataDir, Path cacheDir, BiConsumer<Path, Path> onDataUpdated) {
+    public RuntimeUpdateService(Path dataDir, Path cacheDir,
+                                BiConsumer<Path, Path> onDataUpdated,
+                                long checkIntervalSeconds) {
         this.dataDir = dataDir;
         this.cacheDir = cacheDir;
         this.onDataUpdated = onDataUpdated;
+        this.checkIntervalSeconds = checkIntervalSeconds;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "SkyRecipes-UpdateService");
             t.setDaemon(true);
@@ -53,7 +56,8 @@ public class RuntimeUpdateService {
     // ---- Public API ----
 
     /**
-     * Start scheduled update checks.
+     * Start scheduled update checks. The interval was fixed at construction time
+     * from {@code SkyRecipesConfig.dataRefreshIntervalHours}.
      */
     public synchronized void start() {
         if (running) return;
@@ -61,36 +65,31 @@ public class RuntimeUpdateService {
         scheduler.scheduleWithFixedDelay(
                 this::performUpdateCheck,
                 INITIAL_DELAY_SECONDS,
-                CHECK_INTERVAL_MINUTES * 60,
+                checkIntervalSeconds,
                 TimeUnit.SECONDS
         );
-        LOGGER.info("Update service started. Checking every {} minutes.", CHECK_INTERVAL_MINUTES);
+        LOGGER.info("Update service started. Checking every {} h.", checkIntervalSeconds / 3600L);
     }
 
-    /**
-     * Stop scheduled checks.
-     */
+    /** Stop scheduled checks. */
     public synchronized void shutdown() {
         running = false;
         scheduler.shutdownNow();
         LOGGER.info("Update service shut down.");
     }
 
-    /**
-     * Force an immediate update check.
-     */
+    /** Force an immediate update check on the scheduler thread. */
     public void checkNow() {
         scheduler.execute(this::performUpdateCheck);
     }
 
     /**
      * Check remote ETag against local metadata asynchronously.
-     * Calls {@code onComplete} with {@code true} if local data is up-to-date
-     * and a warm start should be attempted; {@code false} if a cold start
-     * (download + compile) is required.
+     * Calls {@code onComplete} with {@code true} if local data is up-to-date (warm start);
+     * {@code false} if a cold start (download + compile) is required.
      *
      * <p>If the network is unreachable, returns {@code true} when local data
-     * exists so the user isn't left with no recipes.</p>
+     * exists so the user is never left with no recipes.</p>
      */
     public void checkEtagAsync(Consumer<Boolean> onComplete) {
         scheduler.execute(() -> {
@@ -99,7 +98,6 @@ public class RuntimeUpdateService {
                 String remoteEtag = fetchRemoteEtag();
 
                 if (remoteEtag == null) {
-                    // Network unavailable — use warm start if we have any local data
                     LOGGER.warn("Could not fetch remote ETag (network unavailable). Using local data if present.");
                     onComplete.accept(currentEtag != null);
                     return;
@@ -115,7 +113,8 @@ public class RuntimeUpdateService {
                 if (matches) {
                     LOGGER.info("Remote ETag matches local ({}). Warm start permitted.", remoteEtag);
                 } else {
-                    LOGGER.info("Remote ETag changed (remote: {}, local: {}). Cold start required.", remoteEtag, currentEtag);
+                    LOGGER.info("Remote ETag changed (remote: {}, local: {}). Cold start required.",
+                            remoteEtag, currentEtag);
                 }
                 onComplete.accept(matches);
 
@@ -126,9 +125,7 @@ public class RuntimeUpdateService {
         });
     }
 
-    /**
-     * Compile data immediately (for cold start). Runs on the scheduler thread.
-     */
+    /** Compile data immediately (for cold start). Runs on the scheduler thread. */
     public void compileNow(Consumer<BinaryDataCompiler.CompileResult> onComplete) {
         scheduler.execute(() -> {
             try {
@@ -173,14 +170,12 @@ public class RuntimeUpdateService {
                     return;
                 }
 
-                // Validate by loading the new file
                 if (!validateCompiledFile(result.outputPath(), result.metaPath())) {
                     LOGGER.error("Validation failed for new binary. Keeping old data.");
                     cleanupTempFiles();
                     return;
                 }
 
-                // Atomic swap
                 if (!atomicSwap(result.outputPath(), result.metaPath())) {
                     LOGGER.error("Atomic swap failed. Keeping old data.");
                     cleanupTempFiles();
@@ -206,7 +201,6 @@ public class RuntimeUpdateService {
         Path zipFile = cacheDir.resolve("neu-repo.zip");
         Path etagFile = cacheDir.resolve("neu-repo.etag");
 
-        // Download if needed
         String existingEtag = null;
         if (Files.exists(etagFile)) {
             existingEtag = Files.readString(etagFile).trim();
@@ -222,7 +216,6 @@ public class RuntimeUpdateService {
         String actualEtag = downloaded ? Files.readString(etagFile).trim() : existingEtag;
         if (actualEtag == null) actualEtag = "";
 
-        // Use expectedEtag if provided (from update check), otherwise use downloaded etag
         String etagForMeta = expectedEtag != null ? expectedEtag : actualEtag;
 
         Path tempMpk = dataDir.resolve("skyrecipes_data_new.mpk");
@@ -262,10 +255,6 @@ public class RuntimeUpdateService {
         Path finalMeta = dataDir.resolve("skyrecipes_data.meta.json");
 
         try {
-            // On Windows, the old file may be memory-mapped and locked.
-            // The caller (RuntimeDataManager) should unmap before calling this.
-            // We try atomic move first, then fallback to regular replace.
-
             try {
                 Files.move(newMpk, finalMpk, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 Files.move(newMeta, finalMeta, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -275,7 +264,6 @@ public class RuntimeUpdateService {
                 Files.move(newMeta, finalMeta, StandardCopyOption.REPLACE_EXISTING);
             }
 
-            // Notify the manager to reload
             onDataUpdated.accept(finalMpk, finalMeta);
             return true;
 
@@ -322,7 +310,6 @@ public class RuntimeUpdateService {
                     LOGGER.warn("HEAD request returned {}", responseCode);
                     return null;
                 }
-
                 return conn.getHeaderField("ETag");
             } finally {
                 conn.disconnect();

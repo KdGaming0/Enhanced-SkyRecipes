@@ -6,6 +6,7 @@
     "accessor.AbstractRrvItemListOverlayAccessor",
     "accessor.AbstractRrvOverlayAccessor",
     "accessor.EditBoxAccessor",
+    "accessor.ItemViewOverlayAccessor",
     "accessor.ScreenAccessor",
     "overlay.CategoryButtonMixin",
     "overlay.ItemFiltersMixin",

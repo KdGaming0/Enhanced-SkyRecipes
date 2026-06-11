@@ -15,11 +15,14 @@ import java.util.function.Consumer;
 /**
  * Central orchestrator for the binary data lifecycle.
  *
- * <p>Manages warm starts, cold starts, and background updates.</p>
+ * <p>Manages warm starts, cold starts, and background updates.
+ * The data-refresh interval is provided at construction time from
+ * {@code SkyRecipesConfig.dataRefreshIntervalHours}.</p>
  */
 public class RuntimeDataManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RuntimeDataManager.class);
+
     private final Path dataDir;
     private final Path cacheDir;
     private final Path dataPath;
@@ -32,13 +35,19 @@ public class RuntimeDataManager {
     private ConstantsRegistry constantsRegistry;
     private BinaryMetadata currentMetadata;
 
-    public RuntimeDataManager(Path dataDir, Path cacheDir) {
+    /**
+     * @param dataDir               directory containing the compiled .mpk and .meta.json
+     * @param cacheDir              directory for the downloaded NEU repo ZIP and ETag cache
+     * @param refreshIntervalSeconds how often background update checks run, in seconds
+     */
+    public RuntimeDataManager(Path dataDir, Path cacheDir, long refreshIntervalSeconds) {
         this.dataDir = dataDir;
         this.cacheDir = cacheDir;
         this.dataPath = dataDir.resolve("skyrecipes_data.mpk");
         this.metaPath = dataDir.resolve("skyrecipes_data.meta.json");
         this.loader = new BinaryDataLoader();
-        this.updateService = new RuntimeUpdateService(dataDir, cacheDir, this::onDataReloaded);
+        this.updateService = new RuntimeUpdateService(
+                dataDir, cacheDir, this::onDataReloaded, refreshIntervalSeconds);
     }
 
     /**
@@ -94,10 +103,6 @@ public class RuntimeDataManager {
     /**
      * Launch with an ETag-first check: compare remote ETag to local metadata
      * before deciding whether to warm-start or cold-start.
-     *
-     * <p>The {@code onDecision} callback receives {@code true} if a warm start
-     * was attempted (and succeeded), or {@code false} if a cold start was
-     * triggered.</p>
      */
     public void initializeEtagFirst(Consumer<Boolean> onDecision) {
         updateService.checkEtagAsync(etagMatches -> {
@@ -118,9 +123,7 @@ public class RuntimeDataManager {
         });
     }
 
-    /**
-     * Schedule a cold start: download and compile in the background.
-     */
+    /** Schedule a cold start: download and compile in the background. */
     public synchronized void initializeCold() {
         if (state == State.READY || state == State.LOADING) {
             return;
@@ -131,7 +134,7 @@ public class RuntimeDataManager {
         updateService.compileNow(result -> {
             if (result != null) {
                 loadCompiledData(result.outputPath(), result.metaPath());
-                updateService.start(); // begin scheduled checks
+                updateService.start();
             } else {
                 state = State.ERROR;
                 LOGGER.error("Cold start compile failed. Will retry on next scheduled check.");
@@ -140,8 +143,8 @@ public class RuntimeDataManager {
     }
 
     /**
-     * Register a callback to be invoked when data becomes ready or is reloaded.
-     * If data is already ready, the callback is invoked immediately.
+     * Register a callback invoked when data becomes ready or is reloaded.
+     * If data is already ready the callback fires immediately.
      */
     public void whenReady(Consumer<DataLoadResult> callback) {
         dataReadyCallbacks.add(callback);
@@ -150,9 +153,7 @@ public class RuntimeDataManager {
         }
     }
 
-    /**
-     * Reload data from a new path (used by atomic swap during background updates).
-     */
+    /** Reload data from a new path (used by atomic swap during background updates). */
     public synchronized boolean reloadData(Path newDataPath, Path newMetaPath) {
         LOGGER.info("Reloading data from {}", newDataPath);
         try {
@@ -184,9 +185,7 @@ public class RuntimeDataManager {
         }
     }
 
-    /**
-     * Shutdown: release resources and stop background services.
-     */
+    /** Shutdown: release resources and stop background services. */
     public void shutdown() {
         updateService.shutdown();
         loader.close();
@@ -223,11 +222,11 @@ public class RuntimeDataManager {
         return updateService;
     }
 
+    // ---- Internal ----
+
     private void onDataReloaded(Path newDataPath, Path newMetaPath) {
         reloadData(newDataPath, newMetaPath);
     }
-
-    // ---- Internal ----
 
     private void loadCompiledData(Path tempPath, Path tempMeta) {
         try {
@@ -239,14 +238,13 @@ public class RuntimeDataManager {
                 return;
             }
 
-            // Capture registries BEFORE close() nulls them
+            // Capture registries before close() nulls them
             ItemRegistry loadedItems = loader.getItemRegistry();
             ConstantsRegistry loadedConstants = loader.getConstantsRegistry();
 
-            // Close loader to release file lock before moving
+            // Release file lock before moving
             loader.close();
 
-            // Move to final location for warm starts
             try {
                 java.nio.file.Files.move(tempPath, dataPath,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -286,5 +284,5 @@ public class RuntimeDataManager {
         return new DataLoadResult(itemRegistry, constantsRegistry, dataPath, currentMetadata);
     }
 
-    public enum State {UNINITIALIZED, LOADING, READY, ERROR}
+    public enum State { UNINITIALIZED, LOADING, READY, ERROR }
 }
