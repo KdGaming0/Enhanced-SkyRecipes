@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.core.util;
 
+import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
@@ -39,7 +40,9 @@ public final class SkyblockIdExtractor {
         }
 
         try {
-            CompoundTag tag = data.copyTag();
+            // Read-only view of the backing tag; copyTag() would deep-copy the
+            // whole NBT tree on every slot every frame.
+            CompoundTag tag = ((CustomDataAccessor) (Object) data).skyrecipes$getTag();
 
             // Primary: ExtraAttributes.id (present on all NEU-built and Hypixel-server stacks)
             CompoundTag extra = tag.getCompound("ExtraAttributes").orElse(null);

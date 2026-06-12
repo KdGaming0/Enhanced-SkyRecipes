@@ -5,6 +5,7 @@
   "mixins": [
     "accessor.AbstractRrvItemListOverlayAccessor",
     "accessor.AbstractRrvOverlayAccessor",
+    "accessor.CustomDataAccessor",
     "accessor.EditBoxAccessor",
     "accessor.ItemViewOverlayAccessor",
     "accessor.ScreenAccessor",

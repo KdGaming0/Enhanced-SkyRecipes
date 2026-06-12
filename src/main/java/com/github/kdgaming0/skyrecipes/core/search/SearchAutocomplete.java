@@ -33,19 +33,24 @@ public final class SearchAutocomplete {
                               List<String> pageNames) {
         Set<String> seen = new HashSet<>();
 
-        // Tier 1: display names
+        // One registry pass; internal names are deferred so display names keep
+        // first claim on colliding lowercase keys (tier priority).
+        List<String> internalNames = new ArrayList<>();
         for (NeuItem item : itemRegistry.getAllItems()) {
             String name = TextUtil.stripColorCodes(item.displayName());
             if (!name.isBlank() && seen.add(name.toLowerCase())) {
-                entries.add(new Entry(name, Tier.DISPLAY_NAME, 0));
+                entries.add(new Entry(name, Tier.DISPLAY_NAME));
+            }
+            String internalName = item.internalName();
+            if (!internalName.isBlank()) {
+                internalNames.add(internalName);
             }
         }
 
         // Tier 2: internal names
-        for (NeuItem item : itemRegistry.getAllItems()) {
-            String name = item.internalName();
-            if (!name.isBlank() && seen.add(name.toLowerCase())) {
-                entries.add(new Entry(name, Tier.INTERNAL_NAME, 0));
+        for (String name : internalNames) {
+            if (seen.add(name.toLowerCase())) {
+                entries.add(new Entry(name, Tier.INTERNAL_NAME));
             }
         }
 
@@ -59,19 +64,19 @@ public final class SearchAutocomplete {
                     .filter(name -> !name.isBlank())
                     .orElse(aliasKey);
             if (seen.add(displayName.toLowerCase())) {
-                entries.add(new Entry(displayName, Tier.ALIAS, 0));
+                entries.add(new Entry(displayName, Tier.ALIAS));
             }
         }
 
         // Tier 4: page names
         for (String page : pageNames) {
             if (!page.isBlank() && seen.add(page.toLowerCase())) {
-                entries.add(new Entry(page, Tier.PAGE_NAME, 0));
+                entries.add(new Entry(page, Tier.PAGE_NAME));
             }
         }
 
         // Sort by text for deterministic binary search
-        entries.sort(Comparator.comparing(e -> e.text().toLowerCase()));
+        entries.sort(Comparator.comparing(Entry::lower));
     }
 
     /**
@@ -90,7 +95,7 @@ public final class SearchAutocomplete {
         List<Suggestion> results = new ArrayList<>();
 
         for (Entry entry : entries) {
-            if (entry.text().toLowerCase().startsWith(q)) {
+            if (entry.lower().startsWith(q)) {
                 results.add(new Suggestion(entry.text(), entry.tier()));
                 if (results.size() >= maxResults * 2) {
                     // Soft cap before sorting to avoid huge sorts
@@ -131,7 +136,7 @@ public final class SearchAutocomplete {
         List<Suggestion> results = new ArrayList<>();
 
         for (Entry entry : entries) {
-            if (FuzzyTokenMatcher.matches(q, entry.text().toLowerCase(), maxDistance)) {
+            if (FuzzyTokenMatcher.matches(q, entry.lower(), maxDistance)) {
                 results.add(new Suggestion(entry.text(), entry.tier()));
             }
         }
@@ -162,7 +167,10 @@ public final class SearchAutocomplete {
         }
     }
 
-    private record Entry(String text, Tier tier, int priority) {
+    private record Entry(String text, String lower, Tier tier) {
+        Entry(String text, Tier tier) {
+            this(text, text.toLowerCase(), tier);
+        }
     }
 
     /**

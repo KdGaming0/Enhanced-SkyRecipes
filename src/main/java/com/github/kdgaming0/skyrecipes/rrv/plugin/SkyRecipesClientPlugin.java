@@ -248,6 +248,21 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     }
 
     /**
+     * Whether {@code ClientRecipeCacheMixin} may skip the absent-element bucket
+     * scans in RRV's {@code handleClientRecipe}.
+     *
+     * <p>Only true during direct batched injection, where the batcher passes its
+     * global loop index as RRV's dedup id — every uniqueId is therefore distinct
+     * within the batch, so a re-encountered id can only be the one this same call
+     * just appended (i.e. at the bucket tail). The provider-fallback rebuild is
+     * excluded: other mods' providers may produce colliding ids that need RRV's
+     * full remove-before-add dedup.</p>
+     */
+    public static boolean isDirectInjectionInFlight() {
+        return injectionInProgress && !internalRebuildInProgress;
+    }
+
+    /**
      * Runs RRV's {@code buildRecipeCache(false)} with the mixin guard bypassed.
      * Render thread only.
      */

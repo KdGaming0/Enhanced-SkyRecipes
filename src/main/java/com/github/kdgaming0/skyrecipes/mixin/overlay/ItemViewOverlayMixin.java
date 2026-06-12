@@ -1,9 +1,12 @@
 package com.github.kdgaming0.skyrecipes.mixin.overlay;
 
 import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
+import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
 
 import cc.cassian.rrv.common.overlay.OverlayManager;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
+import com.github.kdgaming0.skyrecipes.core.search.SearchQuery;
+import com.github.kdgaming0.skyrecipes.core.search.SearchQueryParser;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -67,11 +70,15 @@ public class ItemViewOverlayMixin {
     private static Set<String> cachedFilteredIds = Set.of();
     @Unique
     private static Set<String> cachedFilteredVanillaNames = Set.of();
+    @Unique
+    private static SearchQuery cachedParsedQuery = null;
 
     @Unique
     private static boolean enchantedBookMatches(ItemStack stack, String query) {
         if (!stack.has(DataComponents.CUSTOM_DATA)) return false;
-        CompoundTag tag = stack.get(DataComponents.CUSTOM_DATA).copyTag();
+        // Read-only view; copyTag() would deep-copy per slot per frame.
+        CompoundTag tag = ((CustomDataAccessor) (Object) stack.get(DataComponents.CUSTOM_DATA))
+                .skyrecipes$getTag();
         if (!tag.contains("StoredEnchantments")) return false;
 
         String lowerQuery = query.toLowerCase();
@@ -158,6 +165,7 @@ public class ItemViewOverlayMixin {
             cachedQuery = query;
             cachedFilteredIds = filteredIds;
             cachedFilteredVanillaNames = filteredVanillaNames;
+            cachedParsedQuery = SearchQueryParser.parse(query);
         }
 
         int left = OverlayManager.INSTANCE.currentInfo().leftPos() - 1;
@@ -188,7 +196,7 @@ public class ItemViewOverlayMixin {
                 if (!matched) {
                     var index = SkyRecipesClientPlugin.getSearchIndex();
                     if (index != null) {
-                        matched = index.itemMatchesInventoryQuery(slotId, query);
+                        matched = index.itemMatchesInventoryQuery(slotId, cachedParsedQuery);
                     }
                 }
             } else {

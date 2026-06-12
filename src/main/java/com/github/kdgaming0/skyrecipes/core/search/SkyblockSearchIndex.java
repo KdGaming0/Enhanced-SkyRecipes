@@ -347,11 +347,19 @@ public final class SkyblockSearchIndex {
      * (stats, slayer level, etc.) so the caller can fall back to lore scanning.</p>
      */
     public boolean itemMatchesInventoryQuery(String itemId, String query) {
+        return itemMatchesInventoryQuery(itemId, SearchQueryParser.parse(query));
+    }
+
+    /**
+     * Variant of {@link #itemMatchesInventoryQuery(String, String)} taking an
+     * already-parsed query, for callers that evaluate many slots against the same
+     * query per frame and cache the parse.
+     */
+    public boolean itemMatchesInventoryQuery(String itemId, SearchQuery parsed) {
         if (itemId == null || itemId.isEmpty()) {
             return false;
         }
 
-        SearchQuery parsed = SearchQueryParser.parse(query);
         if (parsed.isEmpty()) {
             return true;
         }
