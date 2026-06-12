@@ -2,26 +2,19 @@ package com.github.kdgaming0.skyrecipes.client.command;
 
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
+import com.github.kdgaming0.skyrecipes.core.data.RuntimeDataManager;
+import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.mojang.brigadier.context.CommandContext;
-import com.mojang.brigadier.suggestion.SuggestionProvider;
-import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+
+import java.util.function.Consumer;
 
 public class SkyRecipesCommand {
     public static void register() {
-        SuggestionProvider<FabricClientCommandSource> TARGET_SUGGESTER =
-                (CommandContext<FabricClientCommandSource> ctx, SuggestionsBuilder builder) -> {
-                    builder.suggest("repoData");
-                    builder.suggest("hypixel");
-                    builder.suggest("all");
-                    return builder.buildFuture();
-                };
-
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
             dispatcher.register(
                     ClientCommands.literal("skyrecipes")
@@ -29,15 +22,8 @@ public class SkyRecipesCommand {
                                     .executes(SkyRecipesCommand::executeStatus)
                             )
                             .then(ClientCommands.literal("refresh")
-                                    .then(ClientCommands.argument("target", StringArgumentType.word())
-                                            .suggests(TARGET_SUGGESTER)
-                                            .executes((CommandContext<FabricClientCommandSource> ctx) -> executeRefresh(ctx, 0))
-                                            .then(ClientCommands.argument("timeoutSeconds", IntegerArgumentType.integer(0))
-                                                    .executes((CommandContext<FabricClientCommandSource> ctx) -> {
-                                                        int timeout = IntegerArgumentType.getInteger(ctx, "timeoutSeconds");
-                                                        return executeRefresh(ctx, timeout);
-                                                    })
-                                            )
+                                    .then(ClientCommands.literal("repoData")
+                                            .executes(SkyRecipesCommand::executeRefresh)
                                     )
                             )
             );
@@ -98,6 +84,45 @@ public class SkyRecipesCommand {
         return 1;
     }
 
+    private static int executeRefresh(CommandContext<FabricClientCommandSource> ctx) {
+        RuntimeDataManager dm = SkyRecipes.getDataManager();
+        if (dm == null) {
+            ctx.getSource().sendError(Component.literal("SkyRecipes data manager not ready."));
+            return 0;
+        }
+
+        ctx.getSource().sendFeedback(Component.literal(
+                "§bSkyRecipes: Starting full refresh — clearing cache and re-downloading..."));
+
+        Consumer<String> onProgress = msg -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) mc.execute(() -> {
+                if (mc.player != null) mc.player.sendSystemMessage(Component.literal(msg));
+            });
+        };
+
+        Runnable onSuccess = () -> {
+            ItemRegistry reg = dm.getItemRegistry();
+            int items = reg != null ? reg.size() : 0;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) mc.execute(() -> {
+                if (mc.player != null) mc.player.sendSystemMessage(Component.literal(
+                        String.format("§aSkyRecipes: Refresh complete — §f%,d§a items loaded.", items)));
+            });
+        };
+
+        Runnable onFailure = () -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) mc.execute(() -> {
+                if (mc.player != null) mc.player.sendSystemMessage(Component.literal(
+                        "§cSkyRecipes: Refresh failed. Run §f/skyrecipes status§c for details."));
+            });
+        };
+
+        dm.forceRefreshNow(onProgress, onSuccess, onFailure);
+        return 1;
+    }
+
     private static String agoOrNever(long epochMs, long now) {
         if (epochMs <= 0) return "never";
         return formatDuration(Math.max(0, now - epochMs)) + " ago";
@@ -112,41 +137,4 @@ public class SkyRecipesCommand {
         if (hours < 48) return hours + "h " + (minutes % 60) + "m";
         return (hours / 24) + "d " + (hours % 24) + "h";
     }
-
-    private static int executeRefresh(CommandContext<FabricClientCommandSource> ctx, int timeoutSeconds) {
-        FabricClientCommandSource src = ctx.getSource();
-
-        if (SkyRecipes.getDataManager() == null) {
-            src.sendError(Component.literal("SkyRecipes data manager not ready."));
-            return 0;
-        }
-
-        String target = StringArgumentType.getString(ctx, "target");
-
-        switch (target.toLowerCase()) {
-            case "repodata" -> {
-                SkyRecipes.getDataManager().getUpdateService().checkNow();
-                src.sendFeedback(Component.literal("§aSkyRecipes: Repo data refresh queued."));
-            }
-            case "hypixel" -> {
-                src.sendFeedback(Component.literal("§eSkyRecipes: Hypixel refresh is not implemented yet. "
-                        + "Hypixel stats refresh automatically every 24 h."));
-            }
-            case "all" -> {
-                SkyRecipes.getDataManager().getUpdateService().checkNow();
-                src.sendFeedback(Component.literal("§aSkyRecipes: Full refresh queued."));
-            }
-            default -> {
-                src.sendError(Component.literal("Unknown refresh target: " + target));
-                return 0;
-            }
-        }
-
-        if (timeoutSeconds > 0) {
-            src.sendFeedback(Component.literal("§eSkyRecipes: Action scheduled in " + timeoutSeconds + "s (not implemented)."));
-        }
-
-        return 1;
-    }
 }
-

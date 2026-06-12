@@ -119,7 +119,7 @@ public class SkyRecipes implements ClientModInitializer {
         Path cacheDir = FabricLoader.getInstance().getGameDir().resolve("skyrecipes/cache");
 
         // Convert config hours to seconds for the update service scheduler.
-        long refreshIntervalSeconds = (long) SkyRecipesConfig.dataRefreshIntervalHours * 3600L;
+        long refreshIntervalSeconds = (long) SkyRecipesConfig.dataRefreshIntervalMinutes * 60L;
         dataManager = new RuntimeDataManager(dataDir, cacheDir, refreshIntervalSeconds);
 
         // Notify listeners on render thread once data is ready.

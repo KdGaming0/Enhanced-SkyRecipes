@@ -233,6 +233,24 @@ public class RuntimeDataManager {
         return updateService;
     }
 
+    /**
+     * Force a complete pipeline rebuild regardless of ETag, with progress and completion callbacks.
+     * A self-removing one-shot callback fires {@code onSuccess} on the update-service thread
+     * once data reloads; callers must dispatch to the render thread themselves.
+     * {@code onFailure} fires on the scheduler thread if any pipeline stage fails.
+     */
+    public void forceRefreshNow(Consumer<String> onProgress, Runnable onSuccess, Runnable onFailure) {
+        Consumer<DataLoadResult> callback = new Consumer<DataLoadResult>() {
+            @Override
+            public void accept(DataLoadResult result) {
+                dataReadyCallbacks.remove(this);
+                if (onSuccess != null) onSuccess.run();
+            }
+        };
+        dataReadyCallbacks.add(callback);
+        updateService.forceRefreshNow(onProgress, onFailure);
+    }
+
     // ---- Internal ----
 
     private boolean onDataReloaded(Path newDataPath, Path newMetaPath) {

@@ -54,9 +54,6 @@ public class SkyRecipesConfig extends MidnightConfig {
     // -----------------------------------------------------------------
     // Data settings
     // -----------------------------------------------------------------
-    @Entry(category = "data", min = 1, max = 168)
-    public static int dataRefreshIntervalHours = 24;
-
-    @Entry(category = "data", min = 1, max = 168)
-    public static int hypixelCacheTtlHours = 24;
+    @Entry(category = "data", min = 15, max = 480, isSlider = true)
+    public static int dataRefreshIntervalMinutes = 60;
 }

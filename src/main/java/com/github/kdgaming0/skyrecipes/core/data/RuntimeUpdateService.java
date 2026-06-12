@@ -41,6 +41,9 @@ public class RuntimeUpdateService {
 
     private volatile boolean running = false;
     private volatile boolean compileInProgress = false;
+    private volatile boolean forceNextCheck = false;
+    private volatile Runnable onNextFailure;
+    private volatile Consumer<String> progressCallback;
     private int retryAttempt = 0;
     private ScheduledFuture<?> pendingRetry;
 
@@ -88,6 +91,38 @@ public class RuntimeUpdateService {
     public void checkNow() {
         cancelPendingRetry();
         scheduler.execute(this::performUpdateCheck);
+    }
+
+    /**
+     * Force a complete rebuild regardless of ETag: deletes the cached ETag file so
+     * the next check always re-downloads fresh data, then runs the pipeline immediately.
+     * Progress messages are delivered via {@code onProgress} (scheduler thread; callers
+     * must dispatch to the render thread themselves).
+     * {@code onFailure} fires once on the scheduler thread if any pipeline stage fails.
+     */
+    public void forceRefreshNow(Consumer<String> onProgress, Runnable onFailure) {
+        cancelPendingRetry();
+        this.progressCallback = onProgress;
+        this.onNextFailure = onFailure;
+        try {
+            Files.deleteIfExists(cacheDir.resolve("neu-repo.etag"));
+        } catch (IOException e) {
+            LOGGER.warn("Could not clear ETag cache for forced refresh", e);
+        }
+        forceNextCheck = true;
+        scheduler.execute(this::performUpdateCheck);
+    }
+
+    private void notifyProgress(String message) {
+        Consumer<String> cb = progressCallback;
+        if (cb != null) cb.accept(message);
+    }
+
+    private void fireNextFailure() {
+        progressCallback = null;
+        Runnable r = onNextFailure;
+        onNextFailure = null;
+        if (r != null) r.run();
     }
 
     /**
@@ -220,6 +255,9 @@ public class RuntimeUpdateService {
             return;
         }
 
+        boolean forced = forceNextCheck;
+        forceNextCheck = false;
+
         try {
             long checkStart = System.currentTimeMillis();
             String currentEtag = readCurrentEtag();
@@ -231,22 +269,28 @@ public class RuntimeUpdateService {
                 if (currentEtag != null) {
                     // Offline with usable local data: benign, wait for the next scheduled check.
                     LOGGER.warn("Could not fetch remote ETag. Skipping update check.");
+                    if (forced) fireNextFailure();
                 } else {
                     LOGGER.warn("Could not fetch remote ETag and no local data exists. Retrying with backoff.");
                     PipelineStatus.recordError("check",
                             "Could not reach GitHub to download SkyBlock data", null);
+                    fireNextFailure();
                     scheduleRetry();
                 }
                 return;
             }
 
-            if (etagsMatch(remoteEtag, currentEtag)) {
+            if (!forced && etagsMatch(remoteEtag, currentEtag)) {
                 LOGGER.debug("Data is up to date (ETag match).");
                 onPipelineSuccess();
                 return;
             }
 
-            LOGGER.info("New NEU data detected (ETag changed). Starting update...");
+            if (forced) {
+                LOGGER.info("Forced full refresh — re-downloading and recompiling NEU data.");
+            } else {
+                LOGGER.info("New NEU data detected (ETag changed). Starting update...");
+            }
             compileInProgress = true;
 
             try {
@@ -254,6 +298,7 @@ public class RuntimeUpdateService {
                 if (result == null) {
                     LOGGER.error("Update compile failed. Keeping old data.");
                     PipelineStatus.recordError("compile", "NEU data compile failed", null);
+                    fireNextFailure();
                     scheduleRetry();
                     return;
                 }
@@ -262,6 +307,7 @@ public class RuntimeUpdateService {
                     LOGGER.error("Validation failed for new binary. Keeping old data.");
                     PipelineStatus.recordError("validate", "Downloaded data failed validation", null);
                     cleanupTempFiles();
+                    fireNextFailure();
                     scheduleRetry();
                     return;
                 }
@@ -270,19 +316,23 @@ public class RuntimeUpdateService {
                     LOGGER.error("Atomic swap failed. Keeping old data.");
                     PipelineStatus.recordError("swap", "Could not replace the data file on disk", null);
                     cleanupTempFiles();
+                    fireNextFailure();
                     scheduleRetry();
                     return;
                 }
 
+                notifyProgress("§7SkyRecipes: Loading compiled data...");
                 if (!onDataUpdated.test(dataDir.resolve("skyrecipes_data.mpk"),
                         dataDir.resolve("skyrecipes_data.meta.json"))) {
                     LOGGER.error("New binary swapped in but reload failed. Retrying with backoff.");
                     PipelineStatus.recordError("load", "New data file could not be loaded", null);
+                    fireNextFailure();
                     scheduleRetry();
                     return;
                 }
 
                 LOGGER.info("Update complete. Swapped to new binary with {} items.", result.itemCount());
+                progressCallback = null;
                 onPipelineSuccess();
 
             } finally {
@@ -294,6 +344,7 @@ public class RuntimeUpdateService {
             PipelineStatus.recordError("update",
                     "Data update failed: " + e.getMessage(), e);
             compileInProgress = false;
+            fireNextFailure();
             scheduleRetry();
         }
     }
@@ -311,6 +362,7 @@ public class RuntimeUpdateService {
         }
 
         PipelineStatus.transition(PipelineStatus.State.DOWNLOADING);
+        notifyProgress("§7SkyRecipes: Downloading latest SkyBlock data from GitHub...");
         long downloadStart = System.currentTimeMillis();
         BinaryDataCompiler.DownloadResult download = compiler.downloadNeuRepo(zipFile, etagFile, existingEtag);
         PipelineStatus.recordStageDuration("download", System.currentTimeMillis() - downloadStart);
@@ -336,6 +388,7 @@ public class RuntimeUpdateService {
         Path tempMeta = dataDir.resolve("skyrecipes_data_new.meta.json");
 
         PipelineStatus.transition(PipelineStatus.State.COMPILING);
+        notifyProgress("§7SkyRecipes: Compiling item and recipe data...");
         long compileStart = System.currentTimeMillis();
         BinaryDataCompiler.CompileResult result =
                 compiler.compileToPath(zipFile, tempMpk, tempMeta, etagForMeta, null);
