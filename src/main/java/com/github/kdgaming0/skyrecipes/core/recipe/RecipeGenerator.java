@@ -53,16 +53,21 @@ public final class RecipeGenerator {
 
         List<ReliableClientRecipe> recipes = new ArrayList<>();
         RecipeIndex.Builder indexBuilder = new RecipeIndex.Builder();
+        int parseAttempts = 0;
+        int parseFailures = 0;
 
         GardenMutationRegistry.load();
 
         for (NeuItem item : itemRegistry.getAllItems()) {
             // Crafting recipe
             if (item.recipe() instanceof NeuRecipe.CraftingRecipe crafting) {
+                parseAttempts++;
                 ReliableClientRecipe recipe = CraftingRecipeParser.parse(item, crafting, itemRegistry);
                 if (recipe != null) {
                     recipes.add(recipe);
                     indexRecipe(recipe, item, crafting.grid().values(), indexBuilder);
+                } else {
+                    parseFailures++;
                 }
             }
 
@@ -87,6 +92,7 @@ public final class RecipeGenerator {
             // Other recipe types
             if (item.recipes() != null) {
                 for (NeuRecipe recipeData : item.recipes()) {
+                    parseAttempts++;
                     ReliableClientRecipe recipe = switch (recipeData) {
                         case NeuRecipe.CraftingRecipe crafting ->
                                 CraftingRecipeParser.parse(item, crafting, itemRegistry);
@@ -101,6 +107,8 @@ public final class RecipeGenerator {
                     if (recipe != null) {
                         recipes.add(recipe);
                         indexRecipe(recipe, item, extractIngredients(recipeData), indexBuilder);
+                    } else {
+                        parseFailures++;
                     }
                 }
             }
@@ -128,6 +136,7 @@ public final class RecipeGenerator {
                 }
             } catch (Exception e) {
                 LOGGER.error("Failed to generate essence upgrade recipes", e);
+                parseFailures++;
             }
 
             // Reforge recipes (from constants)
@@ -151,6 +160,7 @@ public final class RecipeGenerator {
                 }
             } catch (Exception e) {
                 LOGGER.error("Failed to generate reforge recipes", e);
+                parseFailures++;
             }
 
             // Garden mutation recipes (from built-in resource)
@@ -179,14 +189,16 @@ public final class RecipeGenerator {
                 }
             } catch (Exception e) {
                 LOGGER.error("Failed to generate garden mutation recipes", e);
+                parseFailures++;
             }
         }
 
         RecipeIndex index = indexBuilder.build();
-        LOGGER.info("Generated {} recipes ({} result entries, {} ingredient entries)",
-                recipes.size(), index.resultCount(), index.ingredientCount());
+        LOGGER.info("Generated {} recipes ({} result entries, {} ingredient entries) — parse: {} ok / {} failed",
+                recipes.size(), index.resultCount(), index.ingredientCount(),
+                parseAttempts - parseFailures, parseFailures);
 
-        return new RecipeResult(recipes, index);
+        return new RecipeResult(recipes, index, parseAttempts, parseFailures);
     }
 
     private void indexRecipe(ReliableClientRecipe recipe, NeuItem item,
@@ -224,8 +236,12 @@ public final class RecipeGenerator {
     }
 
     /**
-     * Immutable result of recipe generation.
+     * Immutable result of recipe generation. {@code parseAttempts} counts every
+     * item entry that carried recipe data; {@code parseFailures} counts those
+     * whose parser produced nothing — the ratio gates injection so a systemic
+     * NEU format change can never silently publish an empty recipe set.
      */
-    public record RecipeResult(List<ReliableClientRecipe> recipes, RecipeIndex index) {
+    public record RecipeResult(List<ReliableClientRecipe> recipes, RecipeIndex index,
+                               int parseAttempts, int parseFailures) {
     }
 }

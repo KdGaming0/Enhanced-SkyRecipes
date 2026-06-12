@@ -45,6 +45,10 @@ AGENTS.md
 IMPLEMENTATION_LOG.md
 NotEnoughUpdates-REPO-master.zip
 SkyRecipes_Architecture_Report.md
+CLAUDE.md
+.claude
+graphify-out
+.graphifyignore
 
 vv_rrv docs
 NotEnoughUpdates-REPO-master

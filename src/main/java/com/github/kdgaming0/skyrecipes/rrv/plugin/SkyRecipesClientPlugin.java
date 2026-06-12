@@ -13,6 +13,7 @@ import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsCache;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsFetcher;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsRegistry;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsSnapshot;
+import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
@@ -44,6 +45,7 @@ import java.lang.invoke.MethodHandles;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -147,6 +149,12 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private static final int RECIPES_PER_TICK = 500;
     private static final int STACKS_PER_TICK = 250;
 
+    /** Above this fraction of failures, a generation/build stage is treated as systemic and the cycle aborts. */
+    private static final double MAX_FAILURE_RATE = 0.05;
+
+    /** How long generation waits for Hypixel stats before proceeding with fallback values. */
+    private static final long HYPIXEL_WAIT_SECONDS = 5;
+
     // ---- Per-instance volatile pipeline state -------------------------------
 
     private volatile boolean stacksReady = false;
@@ -160,11 +168,18 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private volatile boolean clientStarted = false;
     private volatile boolean startupRetryInProgress = false;
 
+    /** Set when direct injection fails systemically at runtime; all later cycles use the provider fallback. */
+    private volatile boolean directInjectionBroken = false;
+
+    /** True once any SkyRecipes entries may exist in RRV's cache (covers reloads that interrupt a running batcher). */
+    private volatile boolean cacheHasSkyRecipesEntries = false;
+
+    private volatile CompletableFuture<?> hypixelFetch = null;
+
     // ---- Coordinated background-completion state ----------------------------
 
     private volatile RecipeResult pendingRecipeResult = null;
-    private volatile List<ItemStack> pendingStacks = null;
-    private volatile SkyblockSearchIndex pendingSearchIndex = null;
+    private volatile StackBuildResult pendingStackResult = null;
 
     /**
      * Guards {@link #maybeStartBackgroundPrep} so exactly one prep run launches
@@ -259,7 +274,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
         // Data-ready listener: reset and restart the pipeline on every load/reload.
         SkyRecipes.addDataReadyListener(result -> {
-            invalidateCaches();
+            resetPipelineCycle();
             startHypixelFetch();
             startWorkIfReady();
 
@@ -289,24 +304,21 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // =========================================================================
 
     /**
-     * Reset all pipeline state in preparation for a new load cycle.
+     * Reset cycle bookkeeping in preparation for a new load cycle.
      *
-     * <p>{@code searchIndex} is intentionally NOT cleared here. Keeping the previous
-     * index active during the rebuild window (typically 1-3 s) ensures the item list
-     * never goes blank during background data updates. The new index will replace it
-     * atomically inside {@link #beginBatchedInjection}.</p>
+     * <p>Prepare-then-commit: live state ({@code cachedResult}, {@code cachedStacks},
+     * {@code recipesReady}, {@code searchIndex}) is intentionally NOT touched here.
+     * The previous data keeps serving recipes and search results until the new
+     * cycle's results are complete, validated against failure thresholds, and
+     * committed atomically inside {@link #beginBatchedInjection}. A cycle that
+     * fails anywhere before that commit leaves the old data fully usable.</p>
      */
-    private void invalidateCaches() {
-        cachedResult = null;
-        cachedStacks = null;
-        recipesReady = false;
-        stacksReady = false;
+    private void resetPipelineCycle() {
         startupFinalized = false;
         pendingRecipeGen = null;
         pendingStackBuild = null;
         pendingRecipeResult = null;
-        pendingStacks = null;
-        pendingSearchIndex = null;
+        pendingStackResult = null;
         backgroundPrepLaunched.set(false);
         injectionLaunched.set(false);
         startupBatcher = null;
@@ -327,6 +339,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (!clientStarted) return;
         if (!SkyRecipes.isDataReady()) return;
         if (areComponentsBound()) {
+            PipelineStatus.transition(PipelineStatus.State.GENERATING);
             startBackgroundRecipes();
             startBackgroundStacks();
             return;
@@ -343,6 +356,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 Minecraft mc = Minecraft.getInstance();
                 if (mc != null) {
                     mc.execute(() -> {
+                        PipelineStatus.transition(PipelineStatus.State.GENERATING);
                         startBackgroundRecipes();
                         startBackgroundStacks();
                     });
@@ -357,7 +371,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     }
 
     private void startHypixelFetch() {
-        CompletableFuture.runAsync(() -> {
+        hypixelFetch = CompletableFuture.runAsync(() -> {
             try {
                 Path cacheFile = FabricLoader.getInstance().getGameDir()
                         .resolve("skyblockdata").resolve("hypixel_items.json");
@@ -398,10 +412,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // Background work: phase 1 (parallel) — recipes and stacks
     // =========================================================================
 
-    /** Start recipe generation if not already running. Must be called on the render thread. */
+    /** Start recipe generation if not already running this cycle. Must be called on the render thread. */
     private void startBackgroundRecipes() {
         if (!SkyRecipes.isDataReady()) return;
-        if (cachedResult != null) return;
+        if (pendingRecipeResult != null) return; // already complete this cycle
         if (pendingRecipeGen != null && !pendingRecipeGen.isDone()) return;
 
         CompletableFuture<RecipeResult> future = CompletableFuture.supplyAsync(this::generateRecipes);
@@ -412,14 +426,21 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 pendingRecipeResult = result;
                 LOGGER.info("Background recipe generation complete: {} recipes", result.recipes().size());
                 maybeStartBackgroundPrep();
+            } else {
+                LOGGER.error("Recipe generation produced no result — previous data (if any) keeps serving");
+                PipelineStatus.recordError("generate", "Recipe generation failed — see log for details", null);
             }
+        }).exceptionally(t -> {
+            LOGGER.error("Recipe generation crashed", t);
+            PipelineStatus.recordError("generate", "Recipe generation crashed: " + t.getMessage(), t);
+            return null;
         });
     }
 
-    /** Start stack and search-index building if not already running. Must be called on the render thread. */
+    /** Start stack and search-index building if not already running this cycle. Must be called on the render thread. */
     private void startBackgroundStacks() {
         if (!SkyRecipes.isDataReady()) return;
-        if (cachedStacks != null) return;
+        if (pendingStackResult != null) return; // already complete this cycle
         if (pendingStackBuild != null && !pendingStackBuild.isDone()) return;
 
         CompletableFuture<StackBuildResult> future = CompletableFuture.supplyAsync(this::buildAllStacksAndIndex);
@@ -427,11 +448,18 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         future.thenAccept(result -> {
             if (pendingStackBuild != future) return; // invalidated while running
             if (result != null) {
-                pendingStacks = result.stacks();
-                pendingSearchIndex = result.index();
-                LOGGER.info("Background stack building complete: {} stacks", result.stacks().size());
+                pendingStackResult = result;
+                LOGGER.info("Background stack building complete: {} stacks ({} failed)",
+                        result.stacks().size(), result.failedItems());
                 maybeStartBackgroundPrep();
+            } else {
+                LOGGER.error("Stack building produced no result — previous data (if any) keeps serving");
+                PipelineStatus.recordError("stacks", "Item stack building failed — see log for details", null);
             }
+        }).exceptionally(t -> {
+            LOGGER.error("Stack building crashed", t);
+            PipelineStatus.recordError("stacks", "Item stack building crashed: " + t.getMessage(), t);
+            return null;
         });
     }
 
@@ -440,20 +468,31 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // =========================================================================
 
     /**
-     * Called by both phase-1 futures on completion. {@code compareAndSet} ensures
-     * phase 2 launches exactly once even when both futures complete concurrently.
+     * Called by both phase-1 futures on completion. The failure-threshold gate
+     * runs first: a cycle that produced nothing (or failed systemically) is
+     * aborted here, before any live state is touched. {@code compareAndSet}
+     * ensures phase 2 launches exactly once even when both futures complete
+     * concurrently.
      */
     private void maybeStartBackgroundPrep() {
-        if (pendingRecipeResult == null || pendingStacks == null) return;
+        RecipeResult recipeResult = pendingRecipeResult;
+        StackBuildResult stackResult = pendingStackResult;
+        if (recipeResult == null || stackResult == null) return;
+        if (!meetsGenerationThresholds(recipeResult, stackResult)) return;
         if (!backgroundPrepLaunched.compareAndSet(false, true)) return;
 
+        PipelineStatus.recordGenerationCounts(recipeResult.recipes().size(),
+                stackResult.stacks().size(), recipeResult.parseFailures(), stackResult.failedItems());
+
         CompletableFuture.supplyAsync(() -> {
+            long start = System.currentTimeMillis();
             FamilyResolver resolver = new FamilyResolver(
                     SkyRecipes.getConstantsRegistry(),
                     SkyRecipes.getItemRegistry()
             );
             SkyblockRecipeCache.setFamilyResolver(resolver);
-            SkyblockRecipeCache.rebuild(pendingRecipeResult.recipes());
+            SkyblockRecipeCache.rebuild(recipeResult.recipes());
+            PipelineStatus.recordStageDuration("prep", System.currentTimeMillis() - start);
             return resolver;
         }).thenAccept(resolver -> {
             Minecraft mc = Minecraft.getInstance();
@@ -464,6 +503,43 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             if (mc != null) mc.execute(this::beginBatchedInjection);
             return null;
         });
+    }
+
+    /**
+     * All-or-nothing gate between generation and injection. An empty result or
+     * a failure rate above {@link #MAX_FAILURE_RATE} indicates a systemic
+     * problem (e.g. a NEU format change), not bad individual entries — the
+     * cycle aborts and the previous data keeps serving.
+     */
+    private boolean meetsGenerationThresholds(RecipeResult recipes, StackBuildResult stacks) {
+        String problem = null;
+        if (recipes.recipes().isEmpty()) {
+            problem = "generated 0 recipes";
+        } else if (stacks.stacks().isEmpty()) {
+            problem = "built 0 item stacks";
+        } else if (exceedsFailureRate(recipes.parseFailures(), recipes.parseAttempts())) {
+            problem = String.format("recipe parse failure rate too high (%d of %d failed)",
+                    recipes.parseFailures(), recipes.parseAttempts());
+        } else if (exceedsFailureRate(stacks.failedItems(), stacks.attemptedItems())) {
+            problem = String.format("stack build failure rate too high (%d of %d failed)",
+                    stacks.failedItems(), stacks.attemptedItems());
+        }
+
+        if (problem != null) {
+            LOGGER.error("Generation cycle aborted: {} — possible NEU format change. Previous data keeps serving.",
+                    problem);
+            PipelineStatus.recordError("generate", "SkyBlock data generation aborted: " + problem, null);
+            return false;
+        }
+
+        LOGGER.info("Generation thresholds passed: recipes {} ok / {} failed; stacks {} ok / {} failed",
+                recipes.recipes().size(), recipes.parseFailures(),
+                stacks.stacks().size(), stacks.failedItems());
+        return true;
+    }
+
+    private static boolean exceedsFailureRate(int failures, int attempts) {
+        return attempts > 0 && (double) failures / attempts > MAX_FAILURE_RATE;
     }
 
     // =========================================================================
@@ -485,31 +561,37 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (!injectionLaunched.compareAndSet(false, true)) return;
 
         RecipeResult result = pendingRecipeResult;
-        List<ItemStack> stacks = pendingStacks;
-        if (result == null || stacks == null) {
+        StackBuildResult stackResult = pendingStackResult;
+        if (result == null || stackResult == null) {
             LOGGER.warn("Cannot begin batched injection: missing result or stacks");
             return;
         }
 
+        PipelineStatus.transition(PipelineStatus.State.INJECTING);
+
+        // Commit point: from here the new cycle's data replaces the old.
         cachedResult = result;
-        cachedStacks = stacks;
-        searchIndex = pendingSearchIndex;
+        cachedStacks = stackResult.stacks();
+        searchIndex = stackResult.index();
 
         // If the overlay is open, force it to re-filter with the new index immediately.
         refreshOverlayQuery();
 
         List<ReliableClientRecipe> recipes = result.recipes();
 
-        if (!firstInjection) {
+        // Clear when any SkyRecipes entries may exist — also covers a reload
+        // that interrupted a previous batcher mid-flight.
+        if (!firstInjection || cacheHasSkyRecipesEntries) {
             ClientRecipeCache.INSTANCE.clear();
             LOGGER.debug("Cleared stale client recipes before re-injection");
         }
         ItemView.getStackSensitive().clear();
         ClientRecipeCache.INSTANCE.clearStackSensitives();
+        cacheHasSkyRecipesEntries = true;
 
         LOGGER.info("Beginning batched RRV injection: {} recipes, {} stacks",
-                recipes.size(), stacks.size());
-        this.startupBatcher = new StartupBatcher(recipes, stacks);
+                recipes.size(), stackResult.stacks().size());
+        this.startupBatcher = new StartupBatcher(recipes, stackResult.stacks());
     }
 
     /**
@@ -525,7 +607,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         ((ItemViewOverlayAccessor) ItemViewOverlay.INSTANCE).skyrecipes$updateQuery(current);
     }
 
-    private void finishStartup(Minecraft client, List<ReliableClientRecipe> recipes) {
+    private void finishStartup(Minecraft client, List<ReliableClientRecipe> recipes, StartupBatcher batcher) {
         recipesReady = true;
         startupFinalized = true;
         firstInjection = false;
@@ -537,7 +619,22 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             LOGGER.debug("Could not set RRV localCacheBuilt via accessor", e);
         }
 
-        LOGGER.info("SkyRecipes startup complete: {} recipes injected into RRV", recipes.size());
+        int skipped = batcher != null ? batcher.failedRecipes() : 0;
+        int injected = recipes.size() - skipped;
+        boolean providerOnly = !DIRECT_INJECTION_AVAILABLE || directInjectionBroken;
+        if (batcher != null) {
+            PipelineStatus.recordStageDuration("inject", batcher.workMillis());
+        }
+        PipelineStatus.recordInjectionResult(injected, skipped, providerOnly);
+        PipelineStatus.transition(PipelineStatus.State.READY);
+
+        PipelineStatus.Snapshot snap = PipelineStatus.snapshot();
+        long totalMs = snap.stageDurationsMs().values().stream().mapToLong(Long::longValue).sum();
+        LOGGER.info("SkyRecipes ready in {} ms: {} recipes injected ({} skipped){}{} — stages (ms): {}",
+                totalMs, injected, skipped,
+                providerOnly ? " [provider-only mode]" : "",
+                batcher != null ? " across " + batcher.ticksUsed() + " ticks" : "",
+                snap.stageDurationsMs());
     }
 
     // =========================================================================
@@ -548,13 +645,14 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         handleSearchBarSuggestionCommit(client);
 
         if (startupBatcher != null) {
+            StartupBatcher batcher = startupBatcher;
             try {
-                if (startupBatcher.tick(client)) {
+                if (batcher.tick(client)) {
                     startupBatcher = null;
                     List<ReliableClientRecipe> recipes = cachedResult != null
                             ? cachedResult.recipes()
                             : List.of();
-                    finishStartup(client, recipes);
+                    finishStartup(client, recipes, batcher);
                 }
             } catch (Exception e) {
                 LOGGER.error("Startup batcher tick failed", e);
@@ -562,7 +660,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 List<ReliableClientRecipe> recipes = cachedResult != null
                         ? cachedResult.recipes()
                         : List.of();
-                finishStartup(client, recipes);
+                finishStartup(client, recipes, batcher);
             }
         }
     }
@@ -571,13 +669,33 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // Recipe and stack generation helpers
     // =========================================================================
 
+    /**
+     * Wait briefly for the Hypixel stats fetch so starred-item lore is built
+     * from fresh values when possible. Proceeds with fallback values after
+     * {@link #HYPIXEL_WAIT_SECONDS} — never blocks the pipeline indefinitely.
+     */
+    private void awaitHypixelFetch() {
+        CompletableFuture<?> fetch = hypixelFetch;
+        if (fetch == null) return;
+        try {
+            fetch.get(HYPIXEL_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            LOGGER.debug("Hypixel stats not ready after {} s — proceeding with fallback values",
+                    HYPIXEL_WAIT_SECONDS);
+        }
+    }
+
     private RecipeResult generateRecipes() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) return null;
         try {
+            awaitHypixelFetch();
+            long start = System.currentTimeMillis();
             ConstantsRegistry constants = SkyRecipes.getConstantsRegistry();
             RecipeGenerator generator = new RecipeGenerator(registry, constants);
-            return generator.generate();
+            RecipeResult result = generator.generate();
+            PipelineStatus.recordStageDuration("generate", System.currentTimeMillis() - start);
+            return result;
         } catch (Exception e) {
             LOGGER.error("Failed to generate recipes", e);
             return null;
@@ -585,33 +703,52 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     }
 
     private StackBuildResult buildAllStacksAndIndex() {
-        List<ItemStack> stacks = buildAllStacks();
-        SkyblockSearchIndex index = buildSearchIndex(stacks);
-        return new StackBuildResult(stacks, index);
-    }
+        awaitHypixelFetch();
 
-    private List<ItemStack> buildAllStacks() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
-        List<ItemStack> stacks = new ArrayList<>();
-        if (registry == null) return stacks;
+        if (registry == null) return null;
 
+        long stacksStart = System.currentTimeMillis();
         List<NeuItem> items = registry.getAllItems().stream()
                 .map(item -> new java.util.AbstractMap.SimpleEntry<>(ItemSortKey.of(item), item))
                 .sorted(java.util.Comparator.comparing(java.util.Map.Entry::getKey))
                 .map(java.util.Map.Entry::getValue)
                 .toList();
 
-        for (NeuItem item : items) {
+        // Stack building is CPU-bound and per-item independent (ItemStackBuilder
+        // holds no mutable shared state), so fan out across the common pool.
+        // The index-addressed array preserves the sorted order deterministically;
+        // nulls (failures) are compacted out afterwards.
+        ItemStack[] built = new ItemStack[items.size()];
+        java.util.stream.IntStream.range(0, items.size()).parallel().forEach(i -> {
+            NeuItem item = items.get(i);
             try {
                 ItemStack stack = ItemStackBuilder.build(item);
                 if (!stack.isEmpty() && stack.getItem() != Items.BARRIER) {
-                    stacks.add(stack);
+                    built[i] = stack;
                 }
             } catch (Exception e) {
                 LOGGER.debug("Failed to build stack for {}", item.internalName(), e);
             }
+        });
+
+        List<ItemStack> stacks = new ArrayList<>(items.size());
+        int failed = 0;
+        for (ItemStack stack : built) {
+            if (stack != null) {
+                stacks.add(stack);
+            } else {
+                failed++;
+            }
         }
-        return stacks;
+        PipelineStatus.recordStageDuration("stacks", System.currentTimeMillis() - stacksStart);
+        LOGGER.info("Stack build: {} ok / {} failed", stacks.size(), failed);
+
+        long indexStart = System.currentTimeMillis();
+        SkyblockSearchIndex index = buildSearchIndex(stacks);
+        PipelineStatus.recordStageDuration("index", System.currentTimeMillis() - indexStart);
+
+        return new StackBuildResult(stacks, index, items.size(), failed);
     }
 
     private SkyblockSearchIndex buildSearchIndex(List<ItemStack> stacks) {
@@ -683,7 +820,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // Supporting types
     // =========================================================================
 
-    private record StackBuildResult(List<ItemStack> stacks, SkyblockSearchIndex index) {}
+    private record StackBuildResult(List<ItemStack> stacks, SkyblockSearchIndex index,
+                                    int attemptedItems, int failedItems) {}
 
     private record ItemSortKey(String familyBase, int tier, String cleanDisplayName, String internalName)
             implements Comparable<ItemSortKey> {
@@ -730,38 +868,105 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         private final List<ItemStack> stacks;
         private int recipeIndex = 0;
         private int stackIndex = 0;
+        private int failedRecipes = 0;
         private boolean categoriesAdded = false;
         private boolean fallbackDone = false;
+        private long workNanos = 0;
+        private int ticksUsed = 0;
 
         StartupBatcher(List<ReliableClientRecipe> recipes, List<ItemStack> stacks) {
             this.recipes = recipes;
             this.stacks = stacks;
         }
 
+        int failedRecipes() {
+            return failedRecipes;
+        }
+
+        long workMillis() {
+            return workNanos / 1_000_000L;
+        }
+
+        int ticksUsed() {
+            return ticksUsed;
+        }
+
+        /**
+         * Failure count above which direct injection is considered systemically
+         * broken (vs. individually malformed recipes, which are skipped).
+         */
+        private int systemicFailureThreshold() {
+            return Math.max(50, recipes.size() / 100);
+        }
+
+        /**
+         * Remove every partially injected entry and switch this and all future
+         * cycles to the provider fallback. Safe because all directly injected
+         * entries are tracked by RRV's clientEntryMap (fromNewSystem=true) and
+         * removed by clear().
+         */
+        private void rollbackToProviderMode() {
+            LOGGER.error("Direct recipe injection failing systemically ({} failures in first {} recipes). "
+                    + "Rolling back partial injection and switching to provider-only mode.",
+                    failedRecipes, recipeIndex);
+            directInjectionBroken = true;
+            recipeIndex = recipes.size(); // skip remaining direct injection
+            try {
+                ClientRecipeCache.INSTANCE.clear();
+            } catch (Exception e) {
+                LOGGER.error("Rollback of partial injection failed", e);
+            }
+        }
+
         /** @return true when all phases are complete */
         boolean tick(Minecraft client) {
+            ticksUsed++;
+            long tickStart = System.nanoTime();
+            try {
+                return tickInternal();
+            } finally {
+                workNanos += System.nanoTime() - tickStart;
+            }
+        }
+
+        private boolean tickInternal() {
+            boolean useDirectInjection = DIRECT_INJECTION_AVAILABLE && !directInjectionBroken;
+
             // Phase 1: batch-inject recipes via direct MethodHandle
-            if (DIRECT_INJECTION_AVAILABLE && recipeIndex < recipes.size()) {
+            if (useDirectInjection && recipeIndex < recipes.size()) {
                 ClientRecipeCache cache = ClientRecipeCache.INSTANCE;
                 int end = Math.min(recipeIndex + RECIPES_PER_TICK, recipes.size());
-                try {
-                    for (int i = recipeIndex; i < end; i++) {
-                        ReliableClientRecipe recipe = recipes.get(i);
+                for (int i = recipeIndex; i < end; i++) {
+                    ReliableClientRecipe recipe = recipes.get(i);
+                    try {
                         INJECT_RECIPE.invokeExact(cache, recipe.entryId(), recipe, i, true);
+                    } catch (Throwable t) {
+                        failedRecipes++;
+                        if (failedRecipes <= 5) {
+                            LOGGER.warn("Failed to inject recipe {}: {}", recipe.getId(), t.toString());
+                        }
                     }
-                } catch (Throwable t) {
-                    LOGGER.error("Direct recipe injection failed at index {}", recipeIndex, t);
                 }
                 recipeIndex = end;
+                if (failedRecipes > systemicFailureThreshold()) {
+                    rollbackToProviderMode();
+                    return false;
+                }
                 if (recipeIndex >= recipes.size()) {
-                    LOGGER.info("Recipe injection batch complete: {} recipes", recipes.size());
+                    LOGGER.info("Recipe injection batch complete: {} ok / {} skipped",
+                            recipes.size() - failedRecipes, failedRecipes);
                 }
                 return false;
             }
 
-            // Phase 2: fallback rebuild
-            if (!DIRECT_INJECTION_AVAILABLE && !fallbackDone) {
+            // Phase 2: fallback rebuild (provider-only mode, or after rollback)
+            if (!useDirectInjection && !fallbackDone) {
+                // The provider only serves recipes once recipesReady is set, and the
+                // rebuild below is what invokes it — so the flag must go first here.
+                recipesReady = true;
                 try {
+                    ((com.github.kdgaming0.skyrecipes.mixin.recipe.ClientRecipeCacheAccessor)
+                            ClientRecipeCache.INSTANCE).skyrecipes$setLocalCacheBuilt(false);
                     ClientRecipeCache.INSTANCE.buildRecipeCache(false);
                 } catch (Exception e) {
                     LOGGER.error("Fallback recipe cache rebuild failed", e);

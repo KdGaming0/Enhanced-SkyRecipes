@@ -1,0 +1,15 @@
+# .graphifyignore
+node_modules/
+dist/
+*.generated.py
+
+# only index src/, ignore everything else
+*
+!src/
+!src/**
+!.gradle/loom-cache
+!NotEnoughUpdates-REPO-master
+!build.gradle.kts
+!settings.gradle.kts
+!stonecutter.gradle.kts
+!stonecutter.properties.toml

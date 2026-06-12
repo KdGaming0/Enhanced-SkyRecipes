@@ -34,6 +34,7 @@ public class RuntimeDataManager {
     private ItemRegistry itemRegistry;
     private ConstantsRegistry constantsRegistry;
     private BinaryMetadata currentMetadata;
+    private volatile Path currentLoadedPath;
 
     /**
      * @param dataDir               directory containing the compiled .mpk and .meta.json
@@ -60,32 +61,33 @@ public class RuntimeDataManager {
             return true;
         }
 
-        if (!Files.exists(dataPath) || !Files.exists(metaPath)) {
+        if (!Files.exists(dataPath)) {
             LOGGER.info("No existing binary found at {} — cold start required", dataPath);
             return false;
         }
 
         state = State.LOADING;
+        PipelineStatus.transition(PipelineStatus.State.LOADING);
         try {
-            BinaryMetadata metadata = BinaryMetadata.read(metaPath);
-            if (!metadata.isCompatibleWith(BinaryDataLoader.EXPECTED_SCHEMA)) {
-                LOGGER.warn("Existing binary has incompatible schema version {}. Recompiling.",
-                        metadata.schemaVersion());
-                state = State.UNINITIALIZED;
-                return false;
-            }
-
+            long loadStart = System.currentTimeMillis();
             boolean loaded = loader.load(dataPath);
+            PipelineStatus.recordStageDuration("load", System.currentTimeMillis() - loadStart);
             if (!loaded) {
-                LOGGER.error("Failed to load existing binary — will recompile");
+                if (loader.getLastFailure() == BinaryDataLoader.LoadFailure.CORRUPT) {
+                    quarantineCorruptFile(dataPath);
+                } else {
+                    LOGGER.warn("Existing binary has an incompatible schema. Recompiling.");
+                }
                 state = State.UNINITIALIZED;
                 return false;
             }
 
             this.itemRegistry = loader.getItemRegistry();
             this.constantsRegistry = loader.getConstantsRegistry();
-            this.currentMetadata = metadata;
+            this.currentMetadata = loader.getMetadata();
+            this.currentLoadedPath = dataPath;
             this.state = State.READY;
+            recordDataInfo();
 
             LOGGER.info("Warm start successful: {} items from {}", itemRegistry.size(), dataPath);
             notifyCallbacks();
@@ -134,19 +136,29 @@ public class RuntimeDataManager {
         updateService.compileNow(result -> {
             if (result != null) {
                 loadCompiledData(result.outputPath(), result.metaPath());
-                updateService.start();
             } else {
                 state = State.ERROR;
-                LOGGER.error("Cold start compile failed. Will retry on next scheduled check.");
             }
+
+            if (state == State.READY) {
+                updateService.onPipelineSuccess();
+            } else {
+                LOGGER.error("Cold start failed — automatic retry scheduled.");
+                updateService.scheduleRetry();
+            }
+            // Regular cadence must exist regardless of outcome, so recovery
+            // does not depend on a successful first attempt.
+            updateService.start();
         });
     }
 
     /**
      * Register a callback invoked when data becomes ready or is reloaded.
      * If data is already ready the callback fires immediately.
+     * Synchronized with {@link #notifyCallbacks()} so a callback registered
+     * during a notify cannot fire twice for the same load.
      */
-    public void whenReady(Consumer<DataLoadResult> callback) {
+    public synchronized void whenReady(Consumer<DataLoadResult> callback) {
         dataReadyCallbacks.add(callback);
         if (state == State.READY) {
             callback.accept(createResult());
@@ -156,15 +168,12 @@ public class RuntimeDataManager {
     /** Reload data from a new path (used by atomic swap during background updates). */
     public synchronized boolean reloadData(Path newDataPath, Path newMetaPath) {
         LOGGER.info("Reloading data from {}", newDataPath);
+        PipelineStatus.transition(PipelineStatus.State.LOADING);
         try {
-            BinaryMetadata metadata = BinaryMetadata.read(newMetaPath);
-            if (!metadata.isCompatibleWith(BinaryDataLoader.EXPECTED_SCHEMA)) {
-                LOGGER.error("New binary has incompatible schema version {}", metadata.schemaVersion());
-                return false;
-            }
-
             loader.close();
+            long loadStart = System.currentTimeMillis();
             boolean loaded = loader.load(newDataPath);
+            PipelineStatus.recordStageDuration("load", System.currentTimeMillis() - loadStart);
             if (!loaded) {
                 LOGGER.error("Failed to load new binary after swap");
                 return false;
@@ -172,8 +181,10 @@ public class RuntimeDataManager {
 
             this.itemRegistry = loader.getItemRegistry();
             this.constantsRegistry = loader.getConstantsRegistry();
-            this.currentMetadata = metadata;
+            this.currentMetadata = loader.getMetadata();
+            this.currentLoadedPath = newDataPath;
             this.state = State.READY;
+            recordDataInfo();
 
             LOGGER.info("Data reloaded successfully: {} items", itemRegistry.size());
             notifyCallbacks();
@@ -224,41 +235,45 @@ public class RuntimeDataManager {
 
     // ---- Internal ----
 
-    private void onDataReloaded(Path newDataPath, Path newMetaPath) {
-        reloadData(newDataPath, newMetaPath);
+    private boolean onDataReloaded(Path newDataPath, Path newMetaPath) {
+        return reloadData(newDataPath, newMetaPath);
     }
 
-    private void loadCompiledData(Path tempPath, Path tempMeta) {
+    private synchronized void loadCompiledData(Path tempPath, Path tempMeta) {
+        PipelineStatus.transition(PipelineStatus.State.LOADING);
         try {
-            BinaryMetadata metadata = BinaryMetadata.read(tempMeta);
-            boolean loaded = loader.load(tempPath);
-            if (!loaded) {
-                state = State.ERROR;
-                LOGGER.error("Failed to load freshly compiled binary");
-                return;
-            }
-
-            // Capture registries before close() nulls them
-            ItemRegistry loadedItems = loader.getItemRegistry();
-            ConstantsRegistry loadedConstants = loader.getConstantsRegistry();
-
-            // Release file lock before moving
-            loader.close();
-
+            // Move first, while no loader holds the temp file, then load from
+            // wherever the data actually ended up.
+            Path loadPath = tempPath;
+            Path loadMeta = tempMeta;
             try {
                 java.nio.file.Files.move(tempPath, dataPath,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 java.nio.file.Files.move(tempMeta, metaPath,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                loadPath = dataPath;
+                loadMeta = metaPath;
                 LOGGER.info("Moved compiled files to final location: {}", dataPath);
             } catch (IOException moveEx) {
-                LOGGER.warn("Failed to move compiled files to final location, keeping at temp path", moveEx);
+                LOGGER.warn("Failed to move compiled files to final location, loading from temp path", moveEx);
             }
 
-            this.itemRegistry = loadedItems;
-            this.constantsRegistry = loadedConstants;
-            this.currentMetadata = metadata;
+            long loadStart = System.currentTimeMillis();
+            boolean loaded = loader.load(loadPath);
+            PipelineStatus.recordStageDuration("load", System.currentTimeMillis() - loadStart);
+            if (!loaded) {
+                state = State.ERROR;
+                LOGGER.error("Failed to load freshly compiled binary");
+                PipelineStatus.recordError("load", "Freshly compiled data could not be loaded", null);
+                return;
+            }
+
+            this.itemRegistry = loader.getItemRegistry();
+            this.constantsRegistry = loader.getConstantsRegistry();
+            this.currentMetadata = loader.getMetadata();
+            this.currentLoadedPath = loadPath;
             this.state = State.READY;
+            recordDataInfo();
 
             LOGGER.info("Cold start complete: {} items loaded", itemRegistry.size());
             notifyCallbacks();
@@ -266,10 +281,34 @@ public class RuntimeDataManager {
         } catch (Exception e) {
             state = State.ERROR;
             LOGGER.error("Failed to read metadata or load compiled binary", e);
+            PipelineStatus.recordError("load", "Compiled data could not be loaded: " + e.getMessage(), e);
         }
     }
 
-    private void notifyCallbacks() {
+    private void recordDataInfo() {
+        if (currentMetadata != null && itemRegistry != null) {
+            PipelineStatus.recordDataInfo(currentMetadata.buildTimestamp(),
+                    currentMetadata.etag(), itemRegistry.size());
+        }
+    }
+
+    /**
+     * Move a corrupt binary aside so the cold start cannot be poisoned by it
+     * and the file remains available for bug reports. The loader may still
+     * hold a mapping from the failed load, so it is closed first.
+     */
+    private void quarantineCorruptFile(Path path) {
+        loader.close();
+        Path corrupt = path.resolveSibling(path.getFileName() + ".corrupt");
+        try {
+            Files.move(path, corrupt, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            LOGGER.warn("Quarantined corrupt binary to {} — recompiling", corrupt);
+        } catch (IOException e) {
+            LOGGER.warn("Failed to quarantine corrupt binary at {}", path, e);
+        }
+    }
+
+    private synchronized void notifyCallbacks() {
         DataLoadResult result = createResult();
         for (Consumer<DataLoadResult> callback : dataReadyCallbacks) {
             try {
@@ -281,7 +320,8 @@ public class RuntimeDataManager {
     }
 
     private DataLoadResult createResult() {
-        return new DataLoadResult(itemRegistry, constantsRegistry, dataPath, currentMetadata);
+        Path loadedPath = currentLoadedPath != null ? currentLoadedPath : dataPath;
+        return new DataLoadResult(itemRegistry, constantsRegistry, loadedPath, currentMetadata);
     }
 
     public enum State { UNINITIALIZED, LOADING, READY, ERROR }

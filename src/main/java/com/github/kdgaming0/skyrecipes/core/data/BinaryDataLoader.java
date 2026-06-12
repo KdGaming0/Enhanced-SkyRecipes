@@ -11,7 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.*;
@@ -24,28 +24,45 @@ import java.util.*;
  */
 public class BinaryDataLoader {
 
-    public static final int EXPECTED_SCHEMA = 7;
+    public static final int EXPECTED_SCHEMA = 8;
+    private static final int HEADER_SIZE = 96;
+    private static final long MAX_METADATA_LENGTH = 1 << 20;
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
     private static final byte[] EXPECTED_MAGIC = new byte[]{'S', 'K', 'Y', '2'};
     private ByteBuffer fileBuffer;
     private ItemRegistry itemRegistry;
     private ConstantsRegistry constantsRegistry;
+    private BinaryMetadata metadata;
+    private LoadFailure lastFailure = LoadFailure.NONE;
+
+    /**
+     * Why the most recent {@link #load(Path)} returned false. Lets callers
+     * distinguish a stale-but-intact file (recompile) from real corruption
+     * (quarantine before recompiling).
+     */
+    public enum LoadFailure { NONE, SCHEMA_MISMATCH, CORRUPT }
 
     /**
      * Load binary data from a file path.
+     *
+     * <p>Validation order: size, magic, schema, section bounds, payload
+     * CRC32C, metadata section, items, constants. Each rejection logs a
+     * distinct reason and sets {@link #getLastFailure()}.</p>
      *
      * @param path path to the .mpk file
      * @return true if loaded successfully
      */
     public boolean load(Path path) {
         long startTime = System.currentTimeMillis();
+        lastFailure = LoadFailure.CORRUPT;
         try {
             close(); // release any previous mapping
 
             this.fileBuffer = MmapUtil.mapFile(path);
 
-            if (fileBuffer.remaining() < 64) {
-                LOGGER.error("Binary file too small ({} bytes). Expected at least 64 bytes.", fileBuffer.remaining());
+            if (fileBuffer.remaining() < HEADER_SIZE) {
+                LOGGER.error("Binary file too small ({} bytes). Expected at least {} bytes.",
+                        fileBuffer.remaining(), HEADER_SIZE);
                 return false;
             }
 
@@ -66,16 +83,43 @@ public class BinaryDataLoader {
             long itemsLength = fileBuffer.getLong();
             long constantsOffset = fileBuffer.getLong();
             long constantsLength = fileBuffer.getLong();
+            long metadataOffset = fileBuffer.getLong();
+            long metadataLength = fileBuffer.getLong();
+            int expectedCrc = fileBuffer.getInt();
 
             if (schemaVersion != EXPECTED_SCHEMA) {
                 LOGGER.error("Binary schema version mismatch: expected {}, got {}. Data may be stale or incompatible.",
                         EXPECTED_SCHEMA, schemaVersion);
+                lastFailure = LoadFailure.SCHEMA_MISMATCH;
                 return false;
             }
 
             long fileSize = fileBuffer.capacity();
-            if (itemsOffset + itemsLength > fileSize || constantsOffset + constantsLength > fileSize) {
+            if (itemsOffset + itemsLength > fileSize
+                    || constantsOffset + constantsLength > fileSize
+                    || metadataOffset + metadataLength > fileSize) {
                 LOGGER.error("Binary section offsets exceed file size. File may be truncated.");
+                return false;
+            }
+            if (metadataLength <= 0 || metadataLength > MAX_METADATA_LENGTH) {
+                LOGGER.error("Binary metadata section has implausible length {}.", metadataLength);
+                return false;
+            }
+
+            java.util.zip.CRC32C crc = new java.util.zip.CRC32C();
+            crc.update(fileBuffer.duplicate().position(HEADER_SIZE));
+            if ((int) crc.getValue() != expectedCrc) {
+                LOGGER.error("Binary checksum mismatch (expected {}, got {}). File is corrupt.",
+                        Integer.toHexString(expectedCrc), Long.toHexString(crc.getValue() & 0xFFFFFFFFL));
+                return false;
+            }
+
+            byte[] metadataBytes = new byte[(int) metadataLength];
+            fileBuffer.duplicate().position((int) metadataOffset).get(metadataBytes);
+            try {
+                this.metadata = BinaryMetadata.fromBytes(metadataBytes);
+            } catch (Exception e) {
+                LOGGER.error("Binary metadata section is unreadable.", e);
                 return false;
             }
 
@@ -108,6 +152,7 @@ public class BinaryDataLoader {
                     constantsRegistry.getAllMobDefinitions().size(),
                     constantsRegistry.getAllMobSkins().size()
             );
+            lastFailure = LoadFailure.NONE;
             return true;
 
         } catch (IOException e) {
@@ -117,74 +162,34 @@ public class BinaryDataLoader {
     }
 
     /**
-     * Legacy load from InputStream. Reads entire stream into memory.
+     * Read only the embedded metadata section from a v8 binary, without
+     * deserializing items or constants. Used for cheap ETag comparisons.
      */
-    public boolean load(InputStream input) {
-        long startTime = System.currentTimeMillis();
-        try {
-            // Read header
+    public static BinaryMetadata readEmbeddedMetadata(Path path) throws IOException {
+        try (RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r")) {
+            if (raf.length() < HEADER_SIZE) {
+                throw new IOException("Binary file too small");
+            }
             byte[] magic = new byte[4];
-            if (input.read(magic) != 4 || !Arrays.equals(magic, EXPECTED_MAGIC)) {
-                LOGGER.error("Invalid binary magic bytes. Expected SKY2.");
-                return false;
+            raf.readFully(magic);
+            if (!Arrays.equals(magic, EXPECTED_MAGIC)) {
+                throw new IOException("Invalid binary magic bytes");
             }
-
-            int schemaVersion = readInt(input);
-            long buildTimestamp = readLong(input);
-            int itemCount = readInt(input);
-            int sectionCount = readInt(input);
-            long commitHash = readLong(input);
-            long itemsOffset = readLong(input);
-            long itemsLength = readLong(input);
-            long constantsOffset = readLong(input);
-            long constantsLength = readLong(input);
-
+            int schemaVersion = raf.readInt();
             if (schemaVersion != EXPECTED_SCHEMA) {
-                LOGGER.error("Binary schema version mismatch: expected {}, got {}.",
-                        EXPECTED_SCHEMA, schemaVersion);
-                return false;
+                throw new IOException("Schema version mismatch: " + schemaVersion);
             }
-
-            LOGGER.info("Loading binary: schema={}, items={}, sections={}, built={}",
-                    schemaVersion, itemCount, sectionCount, new Date(buildTimestamp));
-
-            skip(input, itemsOffset - 64);
-            byte[] itemsBytes = new byte[(int) itemsLength];
-            if (input.read(itemsBytes) != itemsLength) {
-                LOGGER.error("Failed to read full items section");
-                return false;
+            raf.seek(64);
+            long metadataOffset = raf.readLong();
+            long metadataLength = raf.readLong();
+            if (metadataLength <= 0 || metadataLength > MAX_METADATA_LENGTH
+                    || metadataOffset + metadataLength > raf.length()) {
+                throw new IOException("Invalid metadata section bounds");
             }
-
-            List<NeuItem> items = unpackItems(itemsBytes, itemCount);
-            this.itemRegistry = new ItemRegistry(items);
-
-            skip(input, constantsOffset - itemsOffset - itemsLength);
-            byte[] constantsBytes = new byte[(int) constantsLength];
-            if (input.read(constantsBytes) != constantsLength) {
-                LOGGER.error("Failed to read full constants section");
-                return false;
-            }
-
-            this.constantsRegistry = unpackConstants(constantsBytes);
-
-            long elapsed = System.currentTimeMillis() - startTime;
-            LOGGER.info("Binary loaded in {} ms. Items: {}, Parents: {}, Essence: {}, Bazaar: {}, Museum: {}, Reforges: {}, ReforgeStones: {}, MobDefs: {}, MobSkins: {}",
-                    elapsed,
-                    itemRegistry.size(),
-                    constantsRegistry.getAllParents().size(),
-                    constantsRegistry.getAllEssenceCosts().size(),
-                    constantsRegistry.getBazaarItems().size(),
-                    constantsRegistry.getAllMuseumCategories().size(),
-                    constantsRegistry.getAllReforges().size(),
-                    constantsRegistry.getAllReforgeStones().size(),
-                    constantsRegistry.getAllMobDefinitions().size(),
-                    constantsRegistry.getAllMobSkins().size()
-            );
-            return true;
-
-        } catch (IOException e) {
-            LOGGER.error("Failed to load binary data", e);
-            return false;
+            raf.seek(metadataOffset);
+            byte[] bytes = new byte[(int) metadataLength];
+            raf.readFully(bytes);
+            return BinaryMetadata.fromBytes(bytes);
         }
     }
 
@@ -198,6 +203,7 @@ public class BinaryDataLoader {
         }
         itemRegistry = null;
         constantsRegistry = null;
+        metadata = null;
     }
 
     public ItemRegistry getItemRegistry() {
@@ -208,39 +214,19 @@ public class BinaryDataLoader {
         return constantsRegistry;
     }
 
-    // ---- Header reading helpers (legacy InputStream) ----
-
-    private int readInt(InputStream in) throws IOException {
-        return (in.read() << 24) | (in.read() << 16) | (in.read() << 8) | in.read();
+    /** Metadata embedded in the loaded binary; non-null after a successful {@link #load(Path)}. */
+    public BinaryMetadata getMetadata() {
+        return metadata;
     }
 
-    private long readLong(InputStream in) throws IOException {
-        long value = 0;
-        for (int i = 0; i < 8; i++) {
-            value = (value << 8) | (in.read() & 0xFFL);
-        }
-        return value;
-    }
-
-    private void skip(InputStream in, long bytes) throws IOException {
-        long remaining = bytes;
-        while (remaining > 0) {
-            long skipped = in.skip(remaining);
-            if (skipped <= 0) break;
-            remaining -= skipped;
-        }
+    public LoadFailure getLastFailure() {
+        return lastFailure;
     }
 
     // ---- MessagePack deserialization ----
 
     private List<NeuItem> unpackItems(byte[] data, int expectedCount) throws IOException {
         try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(data)) {
-            return unpackItemsInternal(unpacker, expectedCount);
-        }
-    }
-
-    private List<NeuItem> unpackItems(ByteBuffer buffer, int expectedCount) throws IOException {
-        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(buffer)) {
             return unpackItemsInternal(unpacker, expectedCount);
         }
     }
@@ -466,12 +452,6 @@ public class BinaryDataLoader {
 
     private ConstantsRegistry unpackConstants(byte[] data) throws IOException {
         try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(data)) {
-            return unpackConstantsInternal(unpacker);
-        }
-    }
-
-    private ConstantsRegistry unpackConstants(ByteBuffer buffer) throws IOException {
-        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(buffer)) {
             return unpackConstantsInternal(unpacker);
         }
     }

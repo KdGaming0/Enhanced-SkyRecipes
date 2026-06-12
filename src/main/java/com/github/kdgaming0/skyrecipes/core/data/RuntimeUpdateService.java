@@ -11,8 +11,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 /**
@@ -28,18 +29,23 @@ public class RuntimeUpdateService {
 
     private static final long INITIAL_DELAY_SECONDS = 30;
 
+    /** Retry delays after pipeline failures: 1 min, 5 min, 15 min, then hourly forever. */
+    private static final long[] BACKOFF_SECONDS = {60, 300, 900, 3600};
+
     private final Path dataDir;
     private final Path cacheDir;
-    private final BiConsumer<Path, Path> onDataUpdated;
+    private final BiPredicate<Path, Path> onDataUpdated;
     private final ScheduledExecutorService scheduler;
     private final BinaryDataCompiler compiler;
     private final long checkIntervalSeconds;
 
     private volatile boolean running = false;
     private volatile boolean compileInProgress = false;
+    private int retryAttempt = 0;
+    private ScheduledFuture<?> pendingRetry;
 
     public RuntimeUpdateService(Path dataDir, Path cacheDir,
-                                BiConsumer<Path, Path> onDataUpdated,
+                                BiPredicate<Path, Path> onDataUpdated,
                                 long checkIntervalSeconds) {
         this.dataDir = dataDir;
         this.cacheDir = cacheDir;
@@ -78,9 +84,74 @@ public class RuntimeUpdateService {
         LOGGER.info("Update service shut down.");
     }
 
-    /** Force an immediate update check on the scheduler thread. */
+    /** Force an immediate update check on the scheduler thread. Cancels any pending backoff retry. */
     public void checkNow() {
+        cancelPendingRetry();
         scheduler.execute(this::performUpdateCheck);
+    }
+
+    /**
+     * Schedule a one-shot retry of the update pipeline with escalating backoff.
+     * Each failed attempt advances to the next delay tier; the last tier repeats forever.
+     * A successful pipeline run ({@link #onPipelineSuccess()}) resets the tier.
+     */
+    public synchronized void scheduleRetry() {
+        if (pendingRetry != null && !pendingRetry.isDone()) {
+            return;
+        }
+        long delay = BACKOFF_SECONDS[Math.min(retryAttempt, BACKOFF_SECONDS.length - 1)];
+        retryAttempt++;
+        LOGGER.warn("Data pipeline failed — retry #{} scheduled in {} s", retryAttempt, delay);
+        pendingRetry = scheduler.schedule(this::performUpdateCheck, delay, TimeUnit.SECONDS);
+        PipelineStatus.recordNextRetry(System.currentTimeMillis() + delay * 1000L);
+    }
+
+    /** Cancel a pending backoff retry (used by manual refresh, which runs immediately instead). */
+    public synchronized void cancelPendingRetry() {
+        if (pendingRetry != null) {
+            pendingRetry.cancel(false);
+            pendingRetry = null;
+        }
+        PipelineStatus.recordNextRetry(0L);
+    }
+
+    /** Reset the backoff tier after a successful pipeline run. */
+    public synchronized void onPipelineSuccess() {
+        retryAttempt = 0;
+        cancelPendingRetry();
+    }
+
+    /** Epoch millis of the next scheduled retry, or 0 if none is pending. */
+    public synchronized long getNextRetryTime() {
+        if (pendingRetry == null || pendingRetry.isDone()) {
+            return 0L;
+        }
+        return System.currentTimeMillis() + pendingRetry.getDelay(TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Normalize an HTTP ETag for comparison: strips the weak-validator prefix
+     * ({@code W/}) and surrounding quotes, so weak and strong forms of the
+     * same tag compare equal regardless of which request produced them.
+     */
+    public static String normalizeEtag(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.trim();
+        if (s.startsWith("W/")) {
+            s = s.substring(2);
+        }
+        if (s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"")) {
+            s = s.substring(1, s.length() - 1);
+        }
+        return s;
+    }
+
+    private static boolean etagsMatch(String a, String b) {
+        String na = normalizeEtag(a);
+        String nb = normalizeEtag(b);
+        return na != null && na.equals(nb);
     }
 
     /**
@@ -94,8 +165,11 @@ public class RuntimeUpdateService {
     public void checkEtagAsync(Consumer<Boolean> onComplete) {
         scheduler.execute(() -> {
             try {
+                long checkStart = System.currentTimeMillis();
                 String currentEtag = readCurrentEtag();
                 String remoteEtag = fetchRemoteEtag();
+                PipelineStatus.recordCheckTime(System.currentTimeMillis());
+                PipelineStatus.recordStageDuration("check", System.currentTimeMillis() - checkStart);
 
                 if (remoteEtag == null) {
                     LOGGER.warn("Could not fetch remote ETag (network unavailable). Using local data if present.");
@@ -109,7 +183,7 @@ public class RuntimeUpdateService {
                     return;
                 }
 
-                boolean matches = remoteEtag.equals(currentEtag);
+                boolean matches = etagsMatch(remoteEtag, currentEtag);
                 if (matches) {
                     LOGGER.info("Remote ETag matches local ({}). Warm start permitted.", remoteEtag);
                 } else {
@@ -147,16 +221,28 @@ public class RuntimeUpdateService {
         }
 
         try {
+            long checkStart = System.currentTimeMillis();
             String currentEtag = readCurrentEtag();
             String remoteEtag = fetchRemoteEtag();
+            PipelineStatus.recordCheckTime(System.currentTimeMillis());
+            PipelineStatus.recordStageDuration("check", System.currentTimeMillis() - checkStart);
 
             if (remoteEtag == null) {
-                LOGGER.warn("Could not fetch remote ETag. Skipping update check.");
+                if (currentEtag != null) {
+                    // Offline with usable local data: benign, wait for the next scheduled check.
+                    LOGGER.warn("Could not fetch remote ETag. Skipping update check.");
+                } else {
+                    LOGGER.warn("Could not fetch remote ETag and no local data exists. Retrying with backoff.");
+                    PipelineStatus.recordError("check",
+                            "Could not reach GitHub to download SkyBlock data", null);
+                    scheduleRetry();
+                }
                 return;
             }
 
-            if (remoteEtag.equals(currentEtag)) {
+            if (etagsMatch(remoteEtag, currentEtag)) {
                 LOGGER.debug("Data is up to date (ETag match).");
+                onPipelineSuccess();
                 return;
             }
 
@@ -167,22 +253,37 @@ public class RuntimeUpdateService {
                 BinaryDataCompiler.CompileResult result = downloadAndCompile(remoteEtag);
                 if (result == null) {
                     LOGGER.error("Update compile failed. Keeping old data.");
+                    PipelineStatus.recordError("compile", "NEU data compile failed", null);
+                    scheduleRetry();
                     return;
                 }
 
-                if (!validateCompiledFile(result.outputPath(), result.metaPath())) {
+                if (!validateCompiledFile(result.outputPath())) {
                     LOGGER.error("Validation failed for new binary. Keeping old data.");
+                    PipelineStatus.recordError("validate", "Downloaded data failed validation", null);
                     cleanupTempFiles();
+                    scheduleRetry();
                     return;
                 }
 
                 if (!atomicSwap(result.outputPath(), result.metaPath())) {
                     LOGGER.error("Atomic swap failed. Keeping old data.");
+                    PipelineStatus.recordError("swap", "Could not replace the data file on disk", null);
                     cleanupTempFiles();
+                    scheduleRetry();
+                    return;
+                }
+
+                if (!onDataUpdated.test(dataDir.resolve("skyrecipes_data.mpk"),
+                        dataDir.resolve("skyrecipes_data.meta.json"))) {
+                    LOGGER.error("New binary swapped in but reload failed. Retrying with backoff.");
+                    PipelineStatus.recordError("load", "New data file could not be loaded", null);
+                    scheduleRetry();
                     return;
                 }
 
                 LOGGER.info("Update complete. Swapped to new binary with {} items.", result.itemCount());
+                onPipelineSuccess();
 
             } finally {
                 compileInProgress = false;
@@ -190,7 +291,10 @@ public class RuntimeUpdateService {
 
         } catch (Exception e) {
             LOGGER.error("Update check failed", e);
+            PipelineStatus.recordError("update",
+                    "Data update failed: " + e.getMessage(), e);
             compileInProgress = false;
+            scheduleRetry();
         }
     }
 
@@ -206,12 +310,22 @@ public class RuntimeUpdateService {
             existingEtag = Files.readString(etagFile).trim();
         }
 
-        boolean downloaded = compiler.downloadNeuRepo(zipFile, etagFile, existingEtag);
-        if (downloaded) {
-            LOGGER.info("Downloaded fresh NEU repo.");
-        } else {
-            LOGGER.info("Using cached NEU repo.");
-        }
+        PipelineStatus.transition(PipelineStatus.State.DOWNLOADING);
+        long downloadStart = System.currentTimeMillis();
+        BinaryDataCompiler.DownloadResult download = compiler.downloadNeuRepo(zipFile, etagFile, existingEtag);
+        PipelineStatus.recordStageDuration("download", System.currentTimeMillis() - downloadStart);
+        boolean downloaded = switch (download) {
+            case DOWNLOADED -> {
+                LOGGER.info("Downloaded fresh NEU repo.");
+                yield true;
+            }
+            case CACHE_HIT -> {
+                LOGGER.info("Using cached NEU repo.");
+                yield false;
+            }
+            case FAILED_NO_CACHE -> throw new IOException(
+                    "NEU repo download failed and no cached copy exists");
+        };
 
         String actualEtag = downloaded ? Files.readString(etagFile).trim() : existingEtag;
         if (actualEtag == null) actualEtag = "";
@@ -221,33 +335,28 @@ public class RuntimeUpdateService {
         Path tempMpk = dataDir.resolve("skyrecipes_data_new.mpk");
         Path tempMeta = dataDir.resolve("skyrecipes_data_new.meta.json");
 
-        return compiler.compileToPath(zipFile, tempMpk, tempMeta, etagForMeta, null);
+        PipelineStatus.transition(PipelineStatus.State.COMPILING);
+        long compileStart = System.currentTimeMillis();
+        BinaryDataCompiler.CompileResult result =
+                compiler.compileToPath(zipFile, tempMpk, tempMeta, etagForMeta, null);
+        PipelineStatus.recordStageDuration("compile", System.currentTimeMillis() - compileStart);
+        return result;
     }
 
-    private boolean validateCompiledFile(Path mpkPath, Path metaPath) {
-        try {
-            BinaryMetadata metadata = BinaryMetadata.read(metaPath);
-            if (!metadata.isCompatibleWith(BinaryDataLoader.EXPECTED_SCHEMA)) {
-                LOGGER.error("Validation failed: incompatible schema version {}", metadata.schemaVersion());
-                return false;
-            }
+    private boolean validateCompiledFile(Path mpkPath) {
+        // A full load exercises every check the runtime performs: header,
+        // schema, CRC32C, embedded metadata, and complete deserialization.
+        BinaryDataLoader validator = new BinaryDataLoader();
+        boolean loaded = validator.load(mpkPath);
+        validator.close();
 
-            BinaryDataLoader validator = new BinaryDataLoader();
-            boolean loaded = validator.load(mpkPath);
-            validator.close();
-
-            if (!loaded) {
-                LOGGER.error("Validation failed: could not load binary.");
-                return false;
-            }
-
-            LOGGER.debug("Validation passed for new binary.");
-            return true;
-
-        } catch (IOException e) {
-            LOGGER.error("Validation failed with exception", e);
+        if (!loaded) {
+            LOGGER.error("Validation failed: could not load binary.");
             return false;
         }
+
+        LOGGER.debug("Validation passed for new binary.");
+        return true;
     }
 
     private boolean atomicSwap(Path newMpk, Path newMeta) {
@@ -257,20 +366,22 @@ public class RuntimeUpdateService {
         try {
             try {
                 Files.move(newMpk, finalMpk, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                Files.move(newMeta, finalMeta, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 LOGGER.warn("Atomic move failed, falling back to regular replace", e);
                 Files.move(newMpk, finalMpk, StandardCopyOption.REPLACE_EXISTING);
-                Files.move(newMeta, finalMeta, StandardCopyOption.REPLACE_EXISTING);
             }
-
-            onDataUpdated.accept(finalMpk, finalMeta);
-            return true;
-
         } catch (IOException e) {
-            LOGGER.error("Atomic swap failed", e);
+            LOGGER.error("Swap of new binary failed", e);
             return false;
         }
+
+        // Sidecar is write-only diagnostics; its move is best-effort.
+        try {
+            Files.move(newMeta, finalMeta, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            LOGGER.debug("Failed to move metadata sidecar", e);
+        }
+        return true;
     }
 
     private void cleanupTempFiles() {
@@ -283,41 +394,52 @@ public class RuntimeUpdateService {
     }
 
     public String readCurrentEtag() {
-        Path metaPath = dataDir.resolve("skyrecipes_data.meta.json");
+        Path mpkPath = dataDir.resolve("skyrecipes_data.mpk");
         try {
-            if (Files.exists(metaPath)) {
-                BinaryMetadata metadata = BinaryMetadata.read(metaPath);
-                return metadata.etag();
+            if (Files.exists(mpkPath)) {
+                return BinaryDataLoader.readEmbeddedMetadata(mpkPath).etag();
             }
         } catch (IOException e) {
-            LOGGER.debug("Failed to read current ETag", e);
+            LOGGER.debug("Failed to read current ETag from binary", e);
         }
         return null;
     }
 
     private String fetchRemoteEtag() {
-        try {
-            URL url = new URL(NEU_REPO_URL);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("HEAD");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
-            conn.setInstanceFollowRedirects(true);
-
+        IOException lastFailure = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
             try {
-                int responseCode = conn.getResponseCode();
-                if (responseCode != 200) {
-                    LOGGER.warn("HEAD request returned {}", responseCode);
-                    return null;
-                }
-                return conn.getHeaderField("ETag");
-            } finally {
-                conn.disconnect();
-            }
+                URL url = new URL(NEU_REPO_URL);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("HEAD");
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                conn.setInstanceFollowRedirects(true);
 
-        } catch (IOException e) {
-            LOGGER.warn("Failed to fetch remote ETag", e);
-            return null;
+                try {
+                    int responseCode = conn.getResponseCode();
+                    if (responseCode != 200) {
+                        LOGGER.warn("HEAD request returned {}", responseCode);
+                        return null;
+                    }
+                    return conn.getHeaderField("ETag");
+                } finally {
+                    conn.disconnect();
+                }
+
+            } catch (IOException e) {
+                lastFailure = e;
+                if (attempt == 1) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
         }
+        LOGGER.warn("Failed to fetch remote ETag", lastFailure);
+        return null;
     }
 }

@@ -39,7 +39,11 @@ public class BinaryDataCompiler {
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[]{'S', 'K', 'Y', '2'};
-    private static final int SCHEMA_VERSION = 7;
+    private static final int SCHEMA_VERSION = 8;
+    private static final int HEADER_SIZE = 96;
+    private static final int SECTION_COUNT = 3; // items, constants, metadata
+    /** Same all-or-nothing budget as generation/injection: >5% parse failures aborts the compile. */
+    private static final double MAX_PARSE_FAILURE_RATE = 0.05;
     private PetStatResolver petResolver;
 
     // ---- Legacy build-time entrypoint (kept for compatibility) ----
@@ -78,12 +82,19 @@ public class BinaryDataCompiler {
 
         // ETag-based download
         String etag = readEtag(etagFile);
-        boolean downloaded = downloadNeuRepo(zipFile, etagFile, etag);
-        if (downloaded) {
-            LOGGER.info("Downloaded fresh NEU repo from GitHub");
-        } else {
-            LOGGER.info("Using cached NEU repo (ETag match)");
-        }
+        DownloadResult download = downloadNeuRepo(zipFile, etagFile, etag);
+        boolean downloaded = switch (download) {
+            case DOWNLOADED -> {
+                LOGGER.info("Downloaded fresh NEU repo from GitHub");
+                yield true;
+            }
+            case CACHE_HIT -> {
+                LOGGER.info("Using cached NEU repo (ETag match)");
+                yield false;
+            }
+            case FAILED_NO_CACHE -> throw new IOException(
+                    "NEU repo download failed and no cached copy exists");
+        };
 
         String actualEtag = downloaded ? readEtag(etagFile) : etag;
         if (actualEtag == null) actualEtag = "";
@@ -123,7 +134,19 @@ public class BinaryDataCompiler {
         Map<String, byte[]> mobSkins = new LinkedHashMap<>();
         this.petResolver = null;
 
-        parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, mobDefinitions, mobSkins);
+        ParseStats parseStats = parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, mobDefinitions, mobSkins);
+
+        // All-or-nothing gate: an empty or mostly-failed parse means the
+        // archive is corrupt or NEU changed format — refuse to write a binary
+        // that would silently replace good data with a near-empty one.
+        if (items.isEmpty()) {
+            throw new IOException("Parsed 0 items from NEU repo ZIP — archive corrupt or format changed");
+        }
+        if (parseStats.itemFailures() > parseStats.itemAttempts() * MAX_PARSE_FAILURE_RATE) {
+            throw new IOException(String.format(
+                    "NEU item parse failure rate too high: %d of %d failed — possible NEU format change",
+                    parseStats.itemFailures(), parseStats.itemAttempts()));
+        }
 
         // Generate stat whitelist from gear item lore
         Set<String> knownStats = buildKnownStats(items);
@@ -132,7 +155,7 @@ public class BinaryDataCompiler {
 
         if (callback != null) callback.onProgress("Serializing", 50);
 
-        LOGGER.info("Parsed {} items", items.size());
+        LOGGER.info("Parsed items: {} ok / {} failed", items.size(), parseStats.itemFailures());
         LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones, {} known stats, {} reforge name mappings, {} mob defs, {} mob skins",
                 parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size(), mobDefinitions.size(), mobSkins.size());
 
@@ -140,58 +163,67 @@ public class BinaryDataCompiler {
         Files.createDirectories(outputPath.getParent());
 
         long commitHash = hashEtag(etag);
-
-        try (OutputStream fos = Files.newOutputStream(outputPath);
-             BufferedOutputStream bos = new BufferedOutputStream(fos)) {
-
-            // Reserve space for header
-            byte[] header = new byte[64];
-            bos.write(header);
-
-            // Write items section
-            ByteArrayOutputStream itemsBaos = new ByteArrayOutputStream();
-            try (MessagePacker packer = MessagePack.newDefaultPacker(itemsBaos)) {
-                packItems(packer, items);
-            }
-            byte[] itemsBytes = itemsBaos.toByteArray();
-            bos.write(itemsBytes);
-
-            long itemDataLength = itemsBytes.length;
-
-            // Write constants section
-            ByteArrayOutputStream constantsBaos = new ByteArrayOutputStream();
-            try (MessagePacker packer = MessagePack.newDefaultPacker(constantsBaos)) {
-                packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
-            }
-            byte[] constantsBytes = constantsBaos.toByteArray();
-            bos.write(constantsBytes);
-
-            long constantsLength = constantsBytes.length;
-
-            // Write header at the beginning
-            try (RandomAccessFile raf = new RandomAccessFile(outputPath.toFile(), "rw")) {
-                raf.write(MAGIC);
-                raf.writeInt(SCHEMA_VERSION);
-                raf.writeLong(System.currentTimeMillis());
-                raf.writeInt(items.size());
-                raf.writeInt(2); // section count: items + constants
-                raf.writeLong(commitHash);
-                raf.writeLong(64); // item data offset
-                raf.writeLong(itemDataLength);
-                raf.writeLong(64 + itemDataLength); // constants offset
-                raf.writeLong(constantsLength);
-            }
-        }
-
-        // Write metadata sidecar
+        long buildTimestamp = System.currentTimeMillis();
         BinaryMetadata metadata = new BinaryMetadata(
                 SCHEMA_VERSION,
-                System.currentTimeMillis(),
+                buildTimestamp,
                 items.size(),
                 etag,
                 Long.toHexString(commitHash),
                 NEU_REPO_URL
         );
+        byte[] metadataBytes = metadata.toBytes();
+
+        // Stream all sections through one CRC32C-checked counter so the
+        // payload checksum and section offsets fall out of a single pass,
+        // with no intermediate in-memory copies of the sections.
+        long itemsLength;
+        long constantsLength;
+        long payloadCrc;
+        try (OutputStream fos = Files.newOutputStream(outputPath);
+             BufferedOutputStream bos = new BufferedOutputStream(fos)) {
+
+            bos.write(new byte[HEADER_SIZE]); // placeholder, patched below; excluded from CRC
+
+            java.util.zip.CRC32C crc = new java.util.zip.CRC32C();
+            CountingOutputStream counter = new CountingOutputStream(
+                    new java.util.zip.CheckedOutputStream(bos, crc));
+
+            // One packer writes both msgpack sections; consecutive complete
+            // values are byte-identical to two separately packed streams.
+            MessagePacker packer = MessagePack.newDefaultPacker(counter);
+            packItems(packer, items);
+            packer.flush();
+            itemsLength = counter.count();
+
+            packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
+            packer.flush();
+            constantsLength = counter.count() - itemsLength;
+
+            counter.write(metadataBytes);
+            counter.flush();
+            payloadCrc = crc.getValue();
+        }
+
+        // Patch the real header over the placeholder
+        try (RandomAccessFile raf = new RandomAccessFile(outputPath.toFile(), "rw")) {
+            raf.write(MAGIC);
+            raf.writeInt(SCHEMA_VERSION);
+            raf.writeLong(buildTimestamp);
+            raf.writeInt(items.size());
+            raf.writeInt(SECTION_COUNT);
+            raf.writeLong(commitHash);
+            raf.writeLong(HEADER_SIZE);
+            raf.writeLong(itemsLength);
+            raf.writeLong(HEADER_SIZE + itemsLength);
+            raf.writeLong(constantsLength);
+            raf.writeLong(HEADER_SIZE + itemsLength + constantsLength);
+            raf.writeLong(metadataBytes.length);
+            raf.writeInt((int) payloadCrc);
+            // bytes 84-95 remain zero (reserved)
+        }
+
+        // Sidecar is diagnostics only; the embedded metadata section is authoritative
         metadata.write(metaPath);
 
         long duration = System.currentTimeMillis() - startTime;
@@ -200,6 +232,31 @@ public class BinaryDataCompiler {
         if (callback != null) callback.onProgress("Complete", 100);
 
         return new CompileResult(outputPath, metaPath, items.size(), etag, duration);
+    }
+
+    /** Tracks bytes written so section offsets can be recorded during a single streaming pass. */
+    private static final class CountingOutputStream extends FilterOutputStream {
+        private long count;
+
+        CountingOutputStream(OutputStream out) {
+            super(out);
+        }
+
+        long count() {
+            return count;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            out.write(b);
+            count++;
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            out.write(b, off, len);
+            count += len;
+        }
     }
 
     private String readEtag(Path etagFile) {
@@ -232,7 +289,10 @@ public class BinaryDataCompiler {
 
     // ---- Parsing (unchanged from original) ----
 
-    public boolean downloadNeuRepo(Path zipFile, Path etagFile, String existingEtag) {
+    /** Outcome of {@link #downloadNeuRepo}: distinguishes fresh data, usable cache, and hard failure. */
+    public enum DownloadResult { DOWNLOADED, CACHE_HIT, FAILED_NO_CACHE }
+
+    public DownloadResult downloadNeuRepo(Path zipFile, Path etagFile, String existingEtag) {
         try {
             URL url = new URL(NEU_REPO_URL);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -246,7 +306,7 @@ public class BinaryDataCompiler {
                 int responseCode = conn.getResponseCode();
                 if (responseCode != 200) {
                     LOGGER.warn("HEAD request returned {}, using cache if available", responseCode);
-                    return false;
+                    return cacheFallback(zipFile);
                 }
 
                 newEtag = conn.getHeaderField("ETag");
@@ -254,34 +314,105 @@ public class BinaryDataCompiler {
                 conn.disconnect();
             }
 
-            if (newEtag != null && newEtag.equals(existingEtag) && Files.exists(zipFile)) {
-                return false; // Cache hit
+            if (newEtag != null && Files.exists(zipFile)
+                    && Objects.equals(RuntimeUpdateService.normalizeEtag(newEtag),
+                            RuntimeUpdateService.normalizeEtag(existingEtag))) {
+                return DownloadResult.CACHE_HIT;
             }
 
-            // Download full ZIP
-            LOGGER.info("Downloading NEU repo...");
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(30000);
-            conn.setReadTimeout(60000);
-            conn.setInstanceFollowRedirects(true);
-
-            try (InputStream in = conn.getInputStream();
-                 OutputStream out = Files.newOutputStream(zipFile)) {
-                in.transferTo(out);
+            IOException lastFailure = null;
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    downloadZipToTemp(url, zipFile, newEtag);
+                    if (newEtag != null) {
+                        Files.writeString(etagFile, newEtag, StandardCharsets.UTF_8);
+                    }
+                    return DownloadResult.DOWNLOADED;
+                } catch (IOException e) {
+                    lastFailure = e;
+                    LOGGER.warn("NEU repo download attempt {} failed: {}", attempt, e.getMessage());
+                }
             }
-
-            if (newEtag != null) {
-                Files.writeString(etagFile, newEtag, StandardCharsets.UTF_8);
-            }
-            return true;
+            LOGGER.warn("NEU repo download failed after retries", lastFailure);
+            return cacheFallback(zipFile);
 
         } catch (IOException e) {
             LOGGER.warn("Failed to check/download NEU repo, using cache if available", e);
-            return false;
+            return cacheFallback(zipFile);
         }
     }
 
-    private void parseZip(Path zipFile, List<NeuItem> items, Map<String, List<String>> parents,
+    private static DownloadResult cacheFallback(Path zipFile) {
+        return Files.exists(zipFile) ? DownloadResult.CACHE_HIT : DownloadResult.FAILED_NO_CACHE;
+    }
+
+    /**
+     * Download the repo ZIP to a sibling temp file, verify its integrity,
+     * and atomically move it over the cached copy. A failed or truncated
+     * transfer never replaces an existing usable cache.
+     */
+    private void downloadZipToTemp(URL url, Path zipFile, String headEtag) throws IOException {
+        LOGGER.info("Downloading NEU repo...");
+        Path tmp = zipFile.resolveSibling(zipFile.getFileName() + ".tmp");
+
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(60000);
+        conn.setInstanceFollowRedirects(true);
+
+        try {
+            long expectedLength = conn.getContentLengthLong();
+            String getEtag = conn.getHeaderField("ETag");
+            LOGGER.debug("NEU repo ETags — HEAD: {}, GET: {}", headEtag, getEtag);
+
+            long transferred;
+            try (InputStream in = conn.getInputStream();
+                 OutputStream out = Files.newOutputStream(tmp)) {
+                transferred = in.transferTo(out);
+            }
+
+            if (expectedLength > 0 && transferred != expectedLength) {
+                throw new IOException("Truncated download: got " + transferred
+                        + " of " + expectedLength + " bytes");
+            }
+            verifyRepoZip(tmp);
+
+            try {
+                Files.move(tmp, zipFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException atomicEx) {
+                Files.move(tmp, zipFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException cleanupEx) {
+                LOGGER.debug("Failed to delete temp download", cleanupEx);
+            }
+            throw e;
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    /**
+     * Reads the ZIP central directory (which a truncated transfer corrupts)
+     * and requires at least one item entry, rejecting wrong or empty archives.
+     */
+    private static void verifyRepoZip(Path zip) throws IOException {
+        try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(zip.toFile())) {
+            boolean hasItems = zf.stream().anyMatch(e -> e.getName().contains("items/"));
+            if (!hasItems) {
+                throw new IOException("Downloaded ZIP contains no items/ entries");
+            }
+        }
+    }
+
+    /** Item-parse counters from a ZIP scan, used to detect systemic NEU format changes. */
+    record ParseStats(int itemAttempts, int itemFailures) {
+    }
+
+    private ParseStats parseZip(Path zipFile, List<NeuItem> items, Map<String, List<String>> parents,
                           Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
                           Map<String, String> museumCategories,
                           Map<String, ReforgeData> reforges,
@@ -291,48 +422,81 @@ public class BinaryDataCompiler {
 
         String prefix = null;
 
-        try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile))) {
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                String name = entry.getName();
+        // The ZIP is read sequentially (ZipInputStream cannot be parallelized),
+        // but item JSON parsing — the dominant compile cost — fans out to a
+        // worker pool. Futures are joined in entry order so the resulting item
+        // list, and therefore the binary, stays deterministic.
+        int workers = Math.max(2, Runtime.getRuntime().availableProcessors() - 2);
+        java.util.concurrent.ExecutorService pool =
+                java.util.concurrent.Executors.newFixedThreadPool(workers, r -> {
+                    Thread t = new Thread(r, "SkyRecipes-ParseWorker");
+                    t.setDaemon(true);
+                    return t;
+                });
+        List<java.util.concurrent.Future<NeuItem>> itemFutures = new ArrayList<>(9_000);
 
-                if (prefix == null && name.contains("/")) {
-                    prefix = name.substring(0, name.indexOf('/') + 1);
-                }
+        try {
+            try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile))) {
+                ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    String name = entry.getName();
 
-                if (entry.isDirectory()) continue;
-
-                byte[] bytes = zis.readAllBytes();
-
-                try {
-                    if (name.startsWith(prefix + "items/") && name.endsWith(".json")) {
-                        NeuItem item = parseItem(bytes);
-                        if (item != null) {
-                            items.add(item);
-                        }
-                    } else if (name.equals(prefix + "constants/parents.json")) {
-                        parseParents(bytes, parents);
-                    } else if (name.equals(prefix + "constants/essencecosts.json")) {
-                        parseEssenceCosts(bytes, essenceCosts);
-                    } else if (name.equals(prefix + "constants/bazaarstocks.json")) {
-                        parseBazaarStocks(bytes, bazaarItems);
-                    } else if (name.equals(prefix + "constants/museum.json")) {
-                        parseMuseum(bytes, museumCategories);
-                    } else if (name.equals(prefix + "constants/reforges.json")) {
-                        parseReforges(bytes, reforges);
-                    } else if (name.equals(prefix + "constants/reforgestones.json")) {
-                        parseReforgeStones(bytes, reforgeStones);
-                    } else if (name.equals(prefix + "constants/petnums.json")) {
-                        this.petResolver = PetStatResolver.load(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject());
-                    } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".json")) {
-                        parseMobJson(bytes, name, prefix, mobDefinitions);
-                    } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".png")) {
-                        parseMobPng(bytes, name, prefix, mobSkins);
+                    if (prefix == null && name.contains("/")) {
+                        prefix = name.substring(0, name.indexOf('/') + 1);
                     }
-                } catch (Exception e) {
-                    LOGGER.warn("Failed to parse {}", name, e);
+
+                    if (entry.isDirectory()) continue;
+
+                    byte[] bytes = zis.readAllBytes();
+
+                    try {
+                        if (name.startsWith(prefix + "items/") && name.endsWith(".json")) {
+                            itemFutures.add(pool.submit(() -> parseItem(bytes)));
+                        } else if (name.equals(prefix + "constants/parents.json")) {
+                            parseParents(bytes, parents);
+                        } else if (name.equals(prefix + "constants/essencecosts.json")) {
+                            parseEssenceCosts(bytes, essenceCosts);
+                        } else if (name.equals(prefix + "constants/bazaarstocks.json")) {
+                            parseBazaarStocks(bytes, bazaarItems);
+                        } else if (name.equals(prefix + "constants/museum.json")) {
+                            parseMuseum(bytes, museumCategories);
+                        } else if (name.equals(prefix + "constants/reforges.json")) {
+                            parseReforges(bytes, reforges);
+                        } else if (name.equals(prefix + "constants/reforgestones.json")) {
+                            parseReforgeStones(bytes, reforgeStones);
+                        } else if (name.equals(prefix + "constants/petnums.json")) {
+                            this.petResolver = PetStatResolver.load(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject());
+                        } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".json")) {
+                            parseMobJson(bytes, name, prefix, mobDefinitions);
+                        } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".png")) {
+                            parseMobPng(bytes, name, prefix, mobSkins);
+                        }
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to parse {}", name, e);
+                    }
                 }
             }
+
+            int itemFailures = 0;
+            for (java.util.concurrent.Future<NeuItem> future : itemFutures) {
+                try {
+                    NeuItem item = future.get();
+                    if (item != null) {
+                        items.add(item);
+                    } else {
+                        itemFailures++;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while parsing NEU items", e);
+                } catch (java.util.concurrent.ExecutionException e) {
+                    itemFailures++;
+                    LOGGER.warn("Item parse task failed", e.getCause());
+                }
+            }
+            return new ParseStats(itemFutures.size(), itemFailures);
+        } finally {
+            pool.shutdown();
         }
     }
 

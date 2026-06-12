@@ -11,8 +11,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Sidecar metadata for the compiled binary .mpk file.
- * Stored as JSON alongside the binary for human-readable version tracking.
+ * Metadata for the compiled binary .mpk file.
+ *
+ * <p>Authoritative copy is embedded in the binary's metadata section
+ * (schema v8+). A JSON sidecar is still written for human inspection
+ * but is never read at runtime.</p>
  */
 public record BinaryMetadata(
         int schemaVersion,
@@ -51,5 +54,15 @@ public record BinaryMetadata(
      */
     public boolean isCompatibleWith(int expectedSchema) {
         return this.schemaVersion == expectedSchema;
+    }
+
+    /** Serialize for embedding in the binary's metadata section. */
+    public byte[] toBytes() {
+        return GSON.toJson(this).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Deserialize from the binary's metadata section. */
+    public static BinaryMetadata fromBytes(byte[] bytes) {
+        return GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), BinaryMetadata.class);
     }
 }
