@@ -21,7 +21,11 @@ import java.util.List;
  * <p><b>Rebuild suppression:</b> RRV calls {@code buildRecipeCache(true)} on every
  * {@code ClientRecipeSynchronizedEvent}, which fires on every world join / server switch.
  * For Hypixel SkyBlock players who switch lobbies frequently, this causes expensive full-cache
- * rebuilds even though SkyRecipes' client-only recipes never change between joins.</p>
+ * rebuilds even though SkyRecipes' client-only recipes never change between joins.
+ * Suppression also covers the batched-injection window: on servers without RRV,
+ * {@code ItemViewOverlay.openRecipeView} triggers {@code buildRecipeCache(false)}, whose
+ * {@code clear()} is quadratic over the partially injected entries (a multi-second
+ * render-thread freeze) and silently drops every recipe injected so far.</p>
  *
  * <p><b>Lookup short-circuit:</b> RRV indexes recipes by vanilla {@code Item} type. Because
  * ~8,000 SkyBlock items map to ~200 base items (mostly {@code minecraft:player_head}),
@@ -44,13 +48,13 @@ public class ClientRecipeCacheMixin {
 
     @Inject(method = "buildRecipeCache", at = @At("HEAD"), cancellable = true)
     private void skyrecipes$skipRedundantRebuild(boolean rebuildFromSynchronizedRecipes, CallbackInfo ci) {
-        if (SkyRecipesClientPlugin.areRecipesReady()) {
+        if (SkyRecipesClientPlugin.shouldSuppressRrvRebuild()) {
             if (rebuildFromSynchronizedRecipes) {
                 InternalRecipeManager.INSTANCE.setRecipesSynced(true);
             }
             ci.cancel();
             org.slf4j.LoggerFactory.getLogger(ClientRecipeCacheMixin.class)
-                    .debug("Cancelled redundant RRV buildRecipeCache({}) — SkyRecipes recipes already loaded",
+                    .debug("Cancelled RRV buildRecipeCache({}) — SkyRecipes recipes loaded or injection in flight",
                             rebuildFromSynchronizedRecipes);
         }
     }

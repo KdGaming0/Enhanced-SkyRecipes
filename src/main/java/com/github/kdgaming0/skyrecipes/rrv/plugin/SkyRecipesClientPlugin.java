@@ -81,6 +81,24 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private static final boolean DIRECT_INJECTION_AVAILABLE;
 
     private static volatile boolean recipesReady = false;
+
+    /**
+     * True from the injection commit point in {@link #beginBatchedInjection} until
+     * {@link #finishStartup}. While set, RRV-initiated cache rebuilds are suppressed:
+     * RRV's {@code clear()} scans every per-item bucket per entry (quadratic over the
+     * partially injected recipes) and would silently drop everything injected so far —
+     * the "first click on Hypixel" render-thread freeze.
+     */
+    private static volatile boolean injectionInProgress = false;
+
+    /**
+     * True only while SkyRecipes itself runs an intentional rebuild (provider-only
+     * fallback). Lets that one call bypass the suppression in
+     * {@code ClientRecipeCacheMixin}, which would otherwise cancel it because
+     * {@code recipesReady} is already set at that point.
+     */
+    private static volatile boolean internalRebuildInProgress = false;
+
     private static volatile SkyblockSearchIndex searchIndex = null;
 
     static {
@@ -216,8 +234,30 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         return searchIndex;
     }
 
-    public static boolean areRecipesReady() {
-        return recipesReady;
+    /**
+     * Whether {@code ClientRecipeCacheMixin} should cancel an RRV-initiated
+     * {@code buildRecipeCache} call.
+     *
+     * <p>Suppression covers two windows: after recipes are fully injected (a rebuild
+     * would redundantly wipe and rebuild them on every lobby switch) and while a
+     * batch is in flight (see {@link #injectionInProgress}). SkyRecipes' own
+     * fallback rebuild bypasses the guard via {@link #runInternalRebuild()}.</p>
+     */
+    public static boolean shouldSuppressRrvRebuild() {
+        return (recipesReady || injectionInProgress) && !internalRebuildInProgress;
+    }
+
+    /**
+     * Runs RRV's {@code buildRecipeCache(false)} with the mixin guard bypassed.
+     * Render thread only.
+     */
+    private static void runInternalRebuild() {
+        internalRebuildInProgress = true;
+        try {
+            ClientRecipeCache.INSTANCE.buildRecipeCache(false);
+        } finally {
+            internalRebuildInProgress = false;
+        }
     }
 
     private static Item resolveAliasItem(NeuItem neuItem) {
@@ -570,12 +610,19 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         PipelineStatus.transition(PipelineStatus.State.INJECTING);
 
         // Commit point: from here the new cycle's data replaces the old.
+        injectionInProgress = true;
         cachedResult = result;
         cachedStacks = stackResult.stacks();
         searchIndex = stackResult.index();
 
         // If the overlay is open, force it to re-filter with the new index immediately.
         refreshOverlayQuery();
+
+        // SkyRecipes now serves recipes on servers without RRV, so RRV's one-time
+        // "cannot request recipes" chat warning no longer applies. Pre-mark it as
+        // shown; if the pipeline fails before this point the native warning (and
+        // RRV's local fallback trigger) keep working.
+        ItemViewOverlay.INSTANCE.setWarned(true);
 
         List<ReliableClientRecipe> recipes = result.recipes();
 
@@ -608,7 +655,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     }
 
     private void finishStartup(Minecraft client, List<ReliableClientRecipe> recipes, StartupBatcher batcher) {
+        // Order matters for the mixin guard: recipesReady must be visible before
+        // injectionInProgress drops so suppression never has a gap.
         recipesReady = true;
+        injectionInProgress = false;
         startupFinalized = true;
         firstInjection = false;
 
@@ -967,7 +1017,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 try {
                     ((com.github.kdgaming0.skyrecipes.mixin.recipe.ClientRecipeCacheAccessor)
                             ClientRecipeCache.INSTANCE).skyrecipes$setLocalCacheBuilt(false);
-                    ClientRecipeCache.INSTANCE.buildRecipeCache(false);
+                    runInternalRebuild();
                 } catch (Exception e) {
                     LOGGER.error("Fallback recipe cache rebuild failed", e);
                 }
