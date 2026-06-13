@@ -2,6 +2,7 @@
   "required": true,
   "package": "com.github.kdgaming0.skyrecipes.mixin",
   "compatibilityLevel": "JAVA_25",
+  "plugin": "com.github.kdgaming0.skyrecipes.mixin.SkyRecipesMixinPlugin",
   "mixins": [
     "accessor.AbstractRrvItemListOverlayAccessor",
     "accessor.AbstractRrvOverlayAccessor",
@@ -26,7 +27,8 @@
     "rrv.fix.AbstractContainerMenuFixesMixin",
     "rrv.fix.QuickNavRecipeViewMixin",
     "rrv.fix.RecipeViewMenuFixesMixin",
-    "rrv.fix.RrvScreenNullItemGuardMixin"
+    "rrv.fix.RrvScreenNullItemGuardMixin",
+    "skyblocker.GardenPlotsWidgetMixin"
   ],
   "injectors": {
     "defaultRequire": 1
