@@ -116,7 +116,7 @@ public final class MobPreviewRenderer {
 
     @Nullable
     private static LivingEntity topEntity(List<LivingEntity> entityStack) {
-        return entityStack.isEmpty() ? null : entityStack.get(0);
+        return entityStack.isEmpty() ? null : entityStack.getFirst();
     }
 
     public static void renderPlaceholder(GuiGraphicsExtractor gfx, int recipeLeft, int recipeTop) {
@@ -203,7 +203,6 @@ public final class MobPreviewRenderer {
         boolean anyRendered = false;
 
         for (LivingEntity entity : entityStack) {
-            @SuppressWarnings("unchecked")
             EntityRenderer<? super LivingEntity, ?> renderer = dispatcher.getRenderer(entity);
             EntityRenderState state = renderer.createRenderState(entity, 1.0F);
             state.lightCoords = 15728880;

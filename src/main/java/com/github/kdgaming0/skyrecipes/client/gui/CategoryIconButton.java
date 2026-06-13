@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
+import org.jspecify.annotations.NonNull;
 
 /**
  * A square icon button that renders one of four category-filter sprites depending on its
@@ -80,7 +81,7 @@ public final class CategoryIconButton extends AbstractButton {
     // ── AbstractButton contract ───────────────────────────────────────────────────
 
     @Override
-    public void onPress(InputWithModifiers input) {
+    public void onPress(@NonNull InputWithModifiers input) {
         pressHandler.onPress(this);
     }
 
@@ -92,7 +93,7 @@ public final class CategoryIconButton extends AbstractButton {
     }
 
     @Override
-    protected void updateWidgetNarration(NarrationElementOutput output) {
+    protected void updateWidgetNarration(@NonNull NarrationElementOutput output) {
         defaultButtonNarrationText(output);
     }
 

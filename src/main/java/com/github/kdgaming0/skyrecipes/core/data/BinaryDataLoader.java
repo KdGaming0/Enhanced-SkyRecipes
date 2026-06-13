@@ -103,7 +103,7 @@ public class BinaryDataLoader {
             long buildTimestamp = fileBuffer.getLong();
             int itemCount = fileBuffer.getInt();
             int sectionCount = fileBuffer.getInt();
-            long commitHash = fileBuffer.getLong();
+            fileBuffer.getLong();
             long itemsOffset = fileBuffer.getLong();
             long itemsLength = fileBuffer.getLong();
             long constantsOffset = fileBuffer.getLong();

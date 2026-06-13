@@ -120,9 +120,11 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
 
         PlayerSkinRenderCache cache = Minecraft.getInstance().playerSkinRenderCache();
         PlayerSkinRenderCache.RenderInfo renderInfo = cache.getOrDefault(profile);
+        //noinspection ConstantValue
         if (renderInfo == null) return;
 
         Identifier texture = renderInfo.playerSkin().body().texturePath();
+        //noinspection ConstantValue
         if (texture == null) return;
 
         PlayerSkinRenderer.render(graphics, texture,
@@ -168,7 +170,7 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
             int wikiRight = pos.left() + getType().getDisplayWidth() - 16;
             int btnX = wikiRight - BUTTON_GAP - NPC_INFO_BUTTON_WIDTH;
 
-            Button infoBtn = Button.builder(Component.literal("NPC Info"), b -> RecipeViewOpener.open(infoRecipe))
+            Button infoBtn = Button.builder(Component.literal("NPC Info"), _ -> RecipeViewOpener.open(infoRecipe))
                     .pos(btnX, btnY)
                     .size(NPC_INFO_BUTTON_WIDTH, NPC_INFO_BUTTON_HEIGHT)
                     .build();

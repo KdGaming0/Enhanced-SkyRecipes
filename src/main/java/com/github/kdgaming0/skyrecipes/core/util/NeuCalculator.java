@@ -134,7 +134,7 @@ public final class NeuCalculator {
                     token.operatorValue += d;
                     token.tokenLength++;
                 }
-                if (token.operatorValue.length() == 0 || inParenthesis) {
+                if (token.operatorValue.isEmpty() || inParenthesis) {
                     throw new CalculatorException("Unterminated variable literal", token.tokenStart, token.tokenLength);
                 }
             } else if (digits.indexOf(c) != -1) {
@@ -159,18 +159,13 @@ public final class NeuCalculator {
     }
 
     static int getPrecedence(Token token) throws CalculatorException {
-        switch (token.operatorValue.intern()) {
-            case "+":
-            case "-":
-                return 0;
-            case "*":
-            case "/":
-            case "x":
-                return 1;
-            case "^":
-                return 2;
-        }
-        throw new CalculatorException("Unknown operator " + token.operatorValue, token.tokenStart, token.tokenLength);
+        return switch (token.operatorValue.intern()) {
+            case "+", "-" -> 0;
+            case "*", "/", "x" -> 1;
+            case "^" -> 2;
+            default ->
+                    throw new CalculatorException("Unknown operator " + token.operatorValue, token.tokenStart, token.tokenLength);
+        };
     }
 
     public static List<Token> shuntingYard(List<Token> toShunt) throws CalculatorException {
@@ -206,7 +201,7 @@ public final class NeuCalculator {
                     op.push(currentlyShunting);
                     break;
                 case RPAREN:
-                    while (1 > 0) {
+                    while (true) {
                         if (op.isEmpty())
                             throw new CalculatorException(
                                     "Unbalanced right parenthesis",
@@ -392,6 +387,7 @@ public final class NeuCalculator {
             return length;
         }
 
+        @SuppressWarnings("unused")
         public int getOffset() {
             return offset;
         }

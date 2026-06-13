@@ -96,6 +96,7 @@ public class SkyRecipesCommand {
 
         Consumer<String> onProgress = msg -> {
             Minecraft mc = Minecraft.getInstance();
+            //noinspection ConstantValue
             if (mc != null) mc.execute(() -> {
                 if (mc.player != null) mc.player.sendSystemMessage(Component.literal(msg));
             });
@@ -105,6 +106,7 @@ public class SkyRecipesCommand {
             ItemRegistry reg = dm.getItemRegistry();
             int items = reg != null ? reg.size() : 0;
             Minecraft mc = Minecraft.getInstance();
+            //noinspection ConstantValue
             if (mc != null) mc.execute(() -> {
                 if (mc.player != null) mc.player.sendSystemMessage(Component.literal(
                         String.format("§aSkyRecipes: Refresh complete — §f%,d§a items loaded.", items)));
@@ -113,6 +115,7 @@ public class SkyRecipesCommand {
 
         Runnable onFailure = () -> {
             Minecraft mc = Minecraft.getInstance();
+            //noinspection ConstantValue
             if (mc != null) mc.execute(() -> {
                 if (mc.player != null) mc.player.sendSystemMessage(Component.literal(
                         "§cSkyRecipes: Refresh failed. Run §f/skyrecipes status§c for details."));

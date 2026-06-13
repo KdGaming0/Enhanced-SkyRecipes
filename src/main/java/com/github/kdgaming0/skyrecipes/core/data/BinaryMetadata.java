@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
+import com.github.kdgaming0.skyrecipes.core.util.PathValidator;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -34,6 +35,7 @@ public record BinaryMetadata(
      * Read metadata from a JSON file.
      */
     public static BinaryMetadata read(Path path) throws IOException {
+        path = PathValidator.requireSafePath(path, "path");
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             return GSON.fromJson(reader, BinaryMetadata.class);
         }
@@ -50,6 +52,7 @@ public record BinaryMetadata(
      * Write metadata to a JSON file.
      */
     public void write(Path path) throws IOException {
+        path = PathValidator.requireSafePath(path, "path");
         Files.createDirectories(path.getParent());
         try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
             GSON.toJson(this, writer);
@@ -59,6 +62,7 @@ public record BinaryMetadata(
     /**
      * Check if this metadata indicates the binary is compatible with the given schema.
      */
+    @SuppressWarnings("unused")
     public boolean isCompatibleWith(int expectedSchema) {
         return this.schemaVersion == expectedSchema;
     }

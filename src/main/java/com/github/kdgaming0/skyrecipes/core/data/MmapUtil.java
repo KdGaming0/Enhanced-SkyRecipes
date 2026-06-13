@@ -66,8 +66,7 @@ public final class MmapUtil {
         }
 
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
-            MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
-            return buffer;
+            return channel.map(FileChannel.MapMode.READ_ONLY, 0, size);
         } catch (IOException e) {
             LOGGER.warn("Memory mapping failed for {}, falling back to heap read", path, e);
             // Fallback: read into heap buffer (msgpack-core cannot read from direct buffers on Java 25+)

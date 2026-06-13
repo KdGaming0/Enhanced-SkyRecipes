@@ -100,7 +100,7 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
             if (chance == null || chance.isEmpty()) continue;
             if (i >= drops.size() || drops.get(i).isEmpty()) continue;
             Component line = Component.literal("§7Drop chance: §e§l" + chance);
-            mods[i] = (stack, tooltip) -> {
+            mods[i] = (_, tooltip) -> {
                 tooltip.addLast(Component.empty());
                 tooltip.addLast(line);
             };
@@ -194,15 +194,6 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
                 List.of(tip),
                 pos.left() + mouseX,
                 pos.top() + mouseY);
-    }
-
-    private List<DropEntry> getDrops() {
-        List<DropEntry> list = new ArrayList<>();
-        for (int i = 0; i < drops.size() && i < chances.length; i++) {
-            ItemStack stack = drops.get(i).getByIndex(0);
-            list.add(new DropEntry(stack, "", chances[i]));
-        }
-        return list;
     }
 
     public record DropEntry(ItemStack stack, String internalName, String chance) {

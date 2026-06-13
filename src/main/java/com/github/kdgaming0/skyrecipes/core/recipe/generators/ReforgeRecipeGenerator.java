@@ -52,7 +52,7 @@ public final class ReforgeRecipeGenerator {
             itemsByInternalName.put(item.internalName(), item);
             String loreType = ReforgeTypeResolver.extractLoreType(item);
             if (loreType != null) {
-                itemsByLoreType.computeIfAbsent(loreType, k -> new ArrayList<>()).add(item);
+                itemsByLoreType.computeIfAbsent(loreType, _ -> new ArrayList<>()).add(item);
             }
         }
 

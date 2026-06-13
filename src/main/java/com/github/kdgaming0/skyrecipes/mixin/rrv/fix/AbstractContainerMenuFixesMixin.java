@@ -31,13 +31,10 @@ import java.util.List;
  * </ul>
  */
 @Mixin(AbstractContainerMenu.class)
-public class AbstractContainerMenuFixesMixin {
+public record AbstractContainerMenuFixesMixin(@Shadow NonNullList<Slot> slots) {
 
     @Unique
     private static final Slot SKYRECIPES$SAFE_DUMMY_SLOT = new SafeDummySlot();
-    @Shadow
-    public final NonNullList<Slot> slots = null;
-
     // ── Slot safety ───────────────────────────────────────────────────────────
 
     @Unique

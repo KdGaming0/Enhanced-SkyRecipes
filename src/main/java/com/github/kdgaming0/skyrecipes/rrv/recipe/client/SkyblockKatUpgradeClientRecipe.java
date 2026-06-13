@@ -15,7 +15,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -119,7 +118,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         if (semi < 0 || semi == internalName.length() - 1) return 0;
         try {
             int tier = Integer.parseInt(internalName.substring(semi + 1));
-            return Math.max(0, Math.min(RARITY_OFFSETS.length - 1, tier));
+            return Math.clamp(tier, 0, RARITY_OFFSETS.length - 1);
         } catch (NumberFormatException e) {
             return 0;
         }
@@ -204,7 +203,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
     @Override
     @Nullable
     protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
-        Button wiki = addWikiButton(screen, pos);
+        addWikiButton(screen, pos);
 
         int absSliderX = pos.left() + SLIDER_X;
         int absSliderY = pos.top() + SLIDER_Y;
@@ -261,9 +260,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
             stack.set(DataComponents.LORE, new ItemLore(newLore));
         }
 
-        CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
-            existing.putInt("petLevel", level);
-        });
+        CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> existing.putInt("petLevel", level));
 
         return stack;
     }
@@ -308,7 +305,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
 
     private int computeOutputLevel(int inputLevel) {
         int result = inputLevel + RARITY_OFFSETS[inputTier] - RARITY_OFFSETS[outputTier];
-        return Math.max(1, Math.min(100, result));
+        return Math.clamp(result, 1, 100);
     }
 
     private long computeDiscountedCoins(int level) {

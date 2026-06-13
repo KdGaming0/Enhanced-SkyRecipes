@@ -8,6 +8,7 @@ import com.github.kdgaming0.skyrecipes.client.gui.SearchBarCalculator;
 import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -36,6 +37,7 @@ public class SearchBarMixin {
      * @return the part of {@code fullMatch} that follows {@code query}, or null if
      * {@code fullMatch} does not start with {@code query} (case-insensitive)
      */
+    @Unique
     private static String computeSuggestionSuffix(String query, String fullMatch) {
         String q = query.toLowerCase();
         String fm = fullMatch.toLowerCase();
@@ -45,6 +47,7 @@ public class SearchBarMixin {
         return fullMatch.substring(query.length());
     }
 
+    @Unique
     private static boolean looksLikeMath(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);

@@ -103,7 +103,7 @@ public class CategoryButtonMixin {
                     x, y, btnSize,
                     spriteName,
                     category == active,
-                    b -> skyrecipes$onToggle(category)
+                    _ -> skyrecipes$onToggle(category)
             );
             btn.setToggled(category == active);
             btn.setTooltipText(category.getDisplayName());

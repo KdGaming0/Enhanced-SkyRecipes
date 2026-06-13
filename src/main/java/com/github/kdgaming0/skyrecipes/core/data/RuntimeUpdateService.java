@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -119,6 +120,7 @@ public class RuntimeUpdateService {
     /**
      * Force an immediate update check on the scheduler thread. Cancels any pending backoff retry.
      */
+    @SuppressWarnings("unused")
     public void checkNow() {
         cancelPendingRetry();
         scheduler.execute(this::performUpdateCheck);
@@ -194,6 +196,7 @@ public class RuntimeUpdateService {
     /**
      * Epoch millis of the next scheduled retry, or 0 if none is pending.
      */
+    @SuppressWarnings("unused")
     public synchronized long getNextRetryTime() {
         if (pendingRetry == null || pendingRetry.isDone()) {
             return 0L;
@@ -476,7 +479,7 @@ public class RuntimeUpdateService {
         IOException lastFailure = null;
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
-                URL url = new URL(NEU_REPO_URL);
+                URL url = URI.create(NEU_REPO_URL).toURL();
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("HEAD");
                 conn.setConnectTimeout(10000);

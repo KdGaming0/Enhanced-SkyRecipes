@@ -3,6 +3,7 @@ package com.github.kdgaming0.skyrecipes.core.data;
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.model.*;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;
+import com.github.kdgaming0.skyrecipes.core.util.PathValidator;
 import com.github.kdgaming0.skyrecipes.core.util.PetStatResolver;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.google.gson.JsonElement;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -53,6 +55,11 @@ public class BinaryDataCompiler {
         String outputDir = args.length > 0 ? args[0] : "build/generated/skyrecipes/data";
         String cacheDir = System.getProperty("skyrecipes.cacheDir",
                 System.getProperty("user.home") + "/.gradle/skyrecipes-cache");
+
+        // Validate at the entry point where untrusted command-line/system-property
+        // input reaches filesystem operations.
+        outputDir = PathValidator.requireSafePath(outputDir, "outputDir").toString();
+        cacheDir = PathValidator.requireSafePath(cacheDir, "cacheDir").toString();
 
         new BinaryDataCompiler().compile(outputDir, cacheDir);
     }
@@ -94,7 +101,7 @@ public class BinaryDataCompiler {
     }
 
     public void compile(String outputDirPath, String cacheDirPath) throws Exception {
-        Path cacheDir = Path.of(cacheDirPath);
+        Path cacheDir = PathValidator.requireSafePath(cacheDirPath, "cacheDirPath");
         Files.createDirectories(cacheDir);
 
         Path zipFile = cacheDir.resolve("neu-repo.zip");
@@ -119,8 +126,9 @@ public class BinaryDataCompiler {
         String actualEtag = downloaded ? readEtag(etagFile) : etag;
         if (actualEtag == null) actualEtag = "";
 
-        Path outputPath = Path.of(outputDirPath, "skyrecipes_data_v" + SCHEMA_VERSION + ".mpk");
-        Path metaPath = Path.of(outputDirPath, "skyrecipes_data_v" + SCHEMA_VERSION + ".meta.json");
+        Path outputDir = PathValidator.requireSafePath(outputDirPath, "outputDirPath");
+        Path outputPath = outputDir.resolve("skyrecipes_data_v" + SCHEMA_VERSION + ".mpk");
+        Path metaPath = outputDir.resolve("skyrecipes_data_v" + SCHEMA_VERSION + ".meta.json");
         compileToPath(zipFile, outputPath, metaPath, actualEtag, null);
     }
 
@@ -137,6 +145,10 @@ public class BinaryDataCompiler {
      */
     public CompileResult compileToPath(Path zipPath, Path outputPath, Path metaPath,
                                        String etag, ProgressCallback callback) throws Exception {
+        zipPath = PathValidator.requireSafePath(zipPath, "zipPath");
+        outputPath = PathValidator.requireSafePath(outputPath, "outputPath");
+        metaPath = PathValidator.requireSafePath(metaPath, "metaPath");
+
         long startTime = System.currentTimeMillis();
 
         if (callback != null) callback.onProgress("Parsing", 0);
@@ -283,8 +295,11 @@ public class BinaryDataCompiler {
     }
 
     public DownloadResult downloadNeuRepo(Path zipFile, Path etagFile, String existingEtag) {
+        zipFile = PathValidator.requireSafePath(zipFile, "zipFile");
+        etagFile = PathValidator.requireSafePath(etagFile, "etagFile");
+
         try {
-            URL url = new URL(NEU_REPO_URL);
+            URL url = URI.create(NEU_REPO_URL).toURL();
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("HEAD");
             conn.setConnectTimeout(10000);
@@ -396,6 +411,7 @@ public class BinaryDataCompiler {
         // worker pool. Futures are joined in entry order so the resulting item
         // list, and therefore the binary, stays deterministic.
         int workers = Math.max(2, Runtime.getRuntime().availableProcessors() - 2);
+        @SuppressWarnings("resource")
         java.util.concurrent.ExecutorService pool =
                 java.util.concurrent.Executors.newFixedThreadPool(workers, r -> {
                     Thread t = new Thread(r, "SkyRecipes-ParseWorker");
@@ -436,8 +452,10 @@ public class BinaryDataCompiler {
                         } else if (name.equals(prefix + "constants/petnums.json")) {
                             this.petResolver = PetStatResolver.load(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject());
                         } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".json")) {
+                            //noinspection DataFlowIssue
                             parseMobJson(bytes, name, prefix, mobDefinitions);
                         } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".png")) {
+                            //noinspection DataFlowIssue
                             parseMobPng(bytes, name, prefix, mobSkins);
                         }
                     } catch (Exception e) {
@@ -891,7 +909,7 @@ public class BinaryDataCompiler {
             for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
                 if (e.getValue().isJsonArray()) {
                     for (JsonElement item : e.getValue().getAsJsonArray()) {
-                        if (sb.length() > 0) sb.append(",");
+                        if (!sb.isEmpty()) sb.append(",");
                         sb.append(item.getAsString());
                     }
                 }
@@ -1403,6 +1421,7 @@ public class BinaryDataCompiler {
             count++;
         }
 
+        @SuppressWarnings("NullableProblems")
         @Override
         public void write(byte[] b, int off, int len) throws IOException {
             out.write(b, off, len);

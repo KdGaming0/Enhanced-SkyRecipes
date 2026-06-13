@@ -183,6 +183,7 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         return sentinel;
     }
 
+    @SuppressWarnings({"NullableProblems", "ConstantValue"})
     @Nullable
     private Button placeNavigateButton(RecipeViewScreen screen, RecipePosition pos,
                                        boolean hasWikiButton) {
@@ -196,7 +197,7 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
             btnX = pos.left() + getType().getDisplayWidth() - NAV_BUTTON_WIDTH - 4;
         }
 
-        Button btn = Button.builder(Component.literal("⬈ Navigate"), b -> sendNavigateCommand())
+        Button btn = Button.builder(Component.literal("⬈ Navigate"), _ -> sendNavigateCommand())
                 .pos(btnX, btnY)
                 .size(NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT)
                 .build();

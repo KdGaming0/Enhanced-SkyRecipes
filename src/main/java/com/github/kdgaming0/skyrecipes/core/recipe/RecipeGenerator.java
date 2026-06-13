@@ -96,7 +96,6 @@ public final class RecipeGenerator {
                         case NeuRecipe.NpcShopRecipe shop -> NpcShopRecipeParser.parse(item, shop, itemRegistry);
                         case NeuRecipe.DropsRecipe drops -> DropsRecipeParser.parse(item, drops, itemRegistry);
                         case NeuRecipe.TradeRecipe trade -> TradeRecipeParser.parse(item, trade, itemRegistry);
-                        default -> null;
                     };
 
                     if (recipe != null) {

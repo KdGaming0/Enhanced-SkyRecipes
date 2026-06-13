@@ -64,6 +64,7 @@ public final class PipelineStatus {
      * if live data exists, otherwise {@code FAILED}, and a one-shot chat
      * notification is armed (see {@link #consumeErrorNotification()}).
      */
+    @SuppressWarnings("unused")
     public static synchronized void recordError(String stage, String userMessage, Throwable t) {
         lastErrorStage = stage;
         lastErrorMessage = userMessage;

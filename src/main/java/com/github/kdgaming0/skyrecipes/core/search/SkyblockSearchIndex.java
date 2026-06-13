@@ -59,13 +59,18 @@ public final class SkyblockSearchIndex {
     // Precomputed sort helpers
     private final String[] displayNames;
     private final boolean[] hasCraftingRecipe;
+    @SuppressWarnings("MismatchedReadAndWriteOfArray")
     private final boolean[] hasForgeRecipe;
+    @SuppressWarnings("MismatchedReadAndWriteOfArray")
     private final boolean[] hasNpcShop;
+    @SuppressWarnings("MismatchedReadAndWriteOfArray")
     private final boolean[] isBazaar;
 
+    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     private final Map<String, String> aliases;
     private final StatParser statParser;
 
+    @SuppressWarnings("unused")
     public SkyblockSearchIndex(List<ItemStack> items, ItemRegistry itemRegistry,
                                ConstantsRegistry constantsRegistry) {
         this(items, itemRegistry, constantsRegistry, Map.of());
@@ -159,7 +164,7 @@ public final class SkyblockSearchIndex {
     }
 
     private static <K> void addToken(Map<K, BitSet> index, K key, int itemIndex) {
-        index.computeIfAbsent(key, k -> new BitSet()).set(itemIndex);
+        index.computeIfAbsent(key, _ -> new BitSet()).set(itemIndex);
     }
 
     private static void tokenize(String raw, TokenConsumer consumer) {
@@ -429,6 +434,7 @@ public final class SkyblockSearchIndex {
     /**
      * Returns the set of SkyBlock IDs that match the given query.
      */
+    @SuppressWarnings("unused")
     public Set<String> getMatchingIds(String query) {
         SearchQuery parsed = SearchQueryParser.parse(query);
         if (parsed.isEmpty()) {
@@ -850,6 +856,7 @@ public final class SkyblockSearchIndex {
             indexNeuItem(itemIndex, stack, neuItem, itemTokens, constantsRegistry);
         }
 
+        //noinspection ConstantValue
         if (itemId != null && itemTokens != null && !itemTokens.isEmpty()) {
             idToTokens.put(itemId, Set.copyOf(itemTokens));
         }
@@ -864,6 +871,7 @@ public final class SkyblockSearchIndex {
         }
     }
 
+    @SuppressWarnings("unused")
     private void indexNeuItemInternal(int itemIndex, ItemStack stack, NeuItem neuItem,
                                       Set<String> itemTokens, ConstantsRegistry constantsRegistry) {
         // Internal name
@@ -977,6 +985,7 @@ public final class SkyblockSearchIndex {
                             addAnyToken(token, itemIndex);
                             if (itemTokens != null) itemTokens.add(token);
                         });
+                        //noinspection UnusedAssignment
                         reforgeIndexed = true;
                         break;
                     }
@@ -1017,11 +1026,11 @@ public final class SkyblockSearchIndex {
 
     private void indexStat(int itemIndex, String statName, int value, Set<String> itemTokens) {
         // Index stat
-        TreeMap<Integer, BitSet> valueMap = statIndex.computeIfAbsent(statName, k -> new TreeMap<>());
-        valueMap.computeIfAbsent(value, k -> new BitSet()).set(itemIndex);
+        TreeMap<Integer, BitSet> valueMap = statIndex.computeIfAbsent(statName, _ -> new TreeMap<>());
+        valueMap.computeIfAbsent(value, _ -> new BitSet()).set(itemIndex);
 
         // Store per-item value for sorting
-        int[] perItem = statValuesPerItem.computeIfAbsent(statName, k -> {
+        int[] perItem = statValuesPerItem.computeIfAbsent(statName, _ -> {
             int[] arr = new int[itemCount];
             Arrays.fill(arr, Integer.MIN_VALUE);
             return arr;
@@ -1079,8 +1088,8 @@ public final class SkyblockSearchIndex {
             addAnyToken("skill", itemIndex);
             if (itemTokens != null) itemTokens.add("skill");
 
-            TreeMap<Integer, BitSet> levelMap = skillLevelIndex.computeIfAbsent(skillName, k -> new TreeMap<>());
-            levelMap.computeIfAbsent(level, k -> new BitSet()).set(itemIndex);
+            TreeMap<Integer, BitSet> levelMap = skillLevelIndex.computeIfAbsent(skillName, _ -> new TreeMap<>());
+            levelMap.computeIfAbsent(level, _ -> new BitSet()).set(itemIndex);
         }
     }
 
@@ -1108,8 +1117,8 @@ public final class SkyblockSearchIndex {
                         if (itemTokens != null) itemTokens.add("catacombs");
                         addToken(catacombsTypeIndex, "catacombs", itemIndex);
                         TreeMap<Integer, BitSet> levelMap = catacombsLevelIndex
-                                .computeIfAbsent("catacombs", k -> new TreeMap<>());
-                        levelMap.computeIfAbsent(level, k -> new BitSet()).set(itemIndex);
+                                .computeIfAbsent("catacombs", _ -> new TreeMap<>());
+                        levelMap.computeIfAbsent(level, _ -> new BitSet()).set(itemIndex);
                     }
                 }
                 continue;
@@ -1131,8 +1140,8 @@ public final class SkyblockSearchIndex {
                         if (itemTokens != null) itemTokens.add("catacombs");
                         addToken(catacombsTypeIndex, "catacombs", itemIndex);
                         TreeMap<Integer, BitSet> levelMap = catacombsLevelIndex
-                                .computeIfAbsent("catacombs", k -> new TreeMap<>());
-                        levelMap.computeIfAbsent(level, k -> new BitSet()).set(itemIndex);
+                                .computeIfAbsent("catacombs", _ -> new TreeMap<>());
+                        levelMap.computeIfAbsent(level, _ -> new BitSet()).set(itemIndex);
                     } catch (NumberFormatException ignored) {
                     }
                 }
@@ -1278,10 +1287,7 @@ public final class SkyblockSearchIndex {
 
     private void indexSlayer(int itemIndex, String slayerType, int slayerLevel, Set<String> itemTokens) {
         // Canonicalize slayer type names
-        slayerType = switch (slayerType) {
-            case "ender" -> "enderman";
-            default -> slayerType;
-        };
+        if ("ender".equals(slayerType)) slayerType = "enderman";
         addAnyToken(slayerType, itemIndex);
         if (itemTokens != null) itemTokens.add(slayerType);
         addToken(slayerTypeIndex, slayerType, itemIndex);
@@ -1292,8 +1298,8 @@ public final class SkyblockSearchIndex {
             if (itemTokens != null) itemTokens.add(composite);
 
             TreeMap<Integer, BitSet> levelMap = slayerLevelIndex
-                    .computeIfAbsent(slayerType, k -> new TreeMap<>());
-            levelMap.computeIfAbsent(slayerLevel, k -> new BitSet()).set(itemIndex);
+                    .computeIfAbsent(slayerType, _ -> new TreeMap<>());
+            levelMap.computeIfAbsent(slayerLevel, _ -> new BitSet()).set(itemIndex);
         }
     }
 

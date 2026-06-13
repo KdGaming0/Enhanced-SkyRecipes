@@ -23,8 +23,6 @@ public class RuntimeDataManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RuntimeDataManager.class);
 
-    private final Path dataDir;
-    private final Path cacheDir;
     private final Path dataPath;
     private final Path metaPath;
     private final BinaryDataLoader loader;
@@ -42,8 +40,6 @@ public class RuntimeDataManager {
      * @param refreshIntervalSeconds how often background update checks run, in seconds
      */
     public RuntimeDataManager(Path dataDir, Path cacheDir, long refreshIntervalSeconds) {
-        this.dataDir = dataDir;
-        this.cacheDir = cacheDir;
         this.dataPath = dataDir.resolve("skyrecipes_data.mpk");
         this.metaPath = dataDir.resolve("skyrecipes_data.meta.json");
         this.loader = new BinaryDataLoader();
@@ -231,10 +227,12 @@ public class RuntimeDataManager {
         return dataPath;
     }
 
+    @SuppressWarnings("unused")
     public Path getMetaPath() {
         return metaPath;
     }
 
+    @SuppressWarnings("unused")
     public RuntimeUpdateService getUpdateService() {
         return updateService;
     }
@@ -246,7 +244,7 @@ public class RuntimeDataManager {
      * {@code onFailure} fires on the scheduler thread if any pipeline stage fails.
      */
     public void forceRefreshNow(Consumer<String> onProgress, Runnable onSuccess, Runnable onFailure) {
-        Consumer<DataLoadResult> callback = new Consumer<DataLoadResult>() {
+        Consumer<DataLoadResult> callback = new Consumer<>() {
             @Override
             public void accept(DataLoadResult result) {
                 dataReadyCallbacks.remove(this);
@@ -269,14 +267,12 @@ public class RuntimeDataManager {
             // Move first, while no loader holds the temp file, then load from
             // wherever the data actually ended up.
             Path loadPath = tempPath;
-            Path loadMeta = tempMeta;
             try {
                 java.nio.file.Files.move(tempPath, dataPath,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 java.nio.file.Files.move(tempMeta, metaPath,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 loadPath = dataPath;
-                loadMeta = metaPath;
                 LOGGER.info("Moved compiled files to final location: {}", dataPath);
             } catch (IOException moveEx) {
                 LOGGER.warn("Failed to move compiled files to final location, loading from temp path", moveEx);

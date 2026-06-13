@@ -112,7 +112,7 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
         }
         int x = pos.left() + OUTPUT_SLOT_X + CRAFT_BUTTON_X_OFFSET;
         int y = pos.top() + OUTPUT_SLOT_Y + CRAFT_BUTTON_Y_OFFSET;
-        Button craft = Button.builder(Component.literal("+"), b -> sendViewRecipeCommand(itemId))
+        Button craft = Button.builder(Component.literal("+"), _ -> sendViewRecipeCommand(itemId))
                 .pos(x, y)
                 .size(CRAFT_BUTTON_SIZE, CRAFT_BUTTON_SIZE)
                 .tooltip(Tooltip.create(Component.literal("Craft")))

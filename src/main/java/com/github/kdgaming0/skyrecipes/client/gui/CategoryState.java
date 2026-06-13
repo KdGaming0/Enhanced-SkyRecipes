@@ -23,10 +23,6 @@ public final class CategoryState {
         return buttonCategory;
     }
 
-    public static boolean hasButtonCategory() {
-        return buttonCategory != null;
-    }
-
     public static void toggle(SkyblockItemCategory category) {
         buttonCategory = (category == buttonCategory) ? null : category;
     }

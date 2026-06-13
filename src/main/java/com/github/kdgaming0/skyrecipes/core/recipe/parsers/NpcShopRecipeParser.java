@@ -11,8 +11,6 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockNpcShopClientRe
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,8 +19,6 @@ import java.util.List;
  * Parses NEU npc_shop recipes (items purchased from NPCs).
  */
 public final class NpcShopRecipeParser {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(NpcShopRecipeParser.class);
 
     private NpcShopRecipeParser() {
     }

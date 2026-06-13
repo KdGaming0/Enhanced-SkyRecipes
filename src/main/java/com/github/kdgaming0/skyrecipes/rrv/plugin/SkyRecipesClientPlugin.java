@@ -69,6 +69,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *       the live {@code searchIndex} so the item list stays visible during the gap.</li>
  * </ol>
  */
+@SuppressWarnings("UnstableApiUsage")
 public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin {
 
     /**
@@ -186,13 +187,16 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      * cycle, even if {@code mc.execute} queues it twice.
      */
     private final AtomicBoolean injectionLaunched = new AtomicBoolean(false);
+    @SuppressWarnings("unused")
     private volatile boolean stacksReady = false;
+    @SuppressWarnings("unused")
     private volatile boolean startupFinalized = false;
     /**
      * True only for the very first injection; controls whether to clear the cache beforehand.
      */
     private volatile boolean firstInjection = true;
     private volatile RecipeResult cachedResult = null;
+    @SuppressWarnings("unused")
     private volatile List<ItemStack> cachedStacks = null;
     private volatile CompletableFuture<?> pendingRecipeGen = null;
     private volatile CompletableFuture<?> pendingStackBuild = null;
@@ -336,7 +340,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
 
         // Data-ready listener: reset and restart the pipeline on every load/reload.
-        SkyRecipes.addDataReadyListener(result -> {
+        SkyRecipes.addDataReadyListener(_ -> {
             resetPipelineCycle();
             startHypixelFetch();
             startWorkIfReady();
@@ -351,7 +355,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
 
         // Wait for full client initialization before touching Minecraft objects.
-        ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
+        ClientLifecycleEvents.CLIENT_STARTED.register(_ -> {
             clientStarted = true;
             startWorkIfReady();
         });
@@ -408,6 +412,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         CompletableFuture.runAsync(() -> {
             try {
                 while (!areComponentsBound()) {
+                    //noinspection BusyWait
                     Thread.sleep(50);
                 }
                 // Marshal back to render thread — startBackground* methods check
@@ -557,7 +562,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             SkyblockRecipeCache.rebuild(recipeResult.recipes());
             PipelineStatus.recordStageDuration("prep", System.currentTimeMillis() - start);
             return resolver;
-        }).thenAccept(resolver -> {
+        }).thenAccept(_ -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) mc.execute(this::beginBatchedInjection);
         }).exceptionally(throwable -> {
@@ -673,6 +678,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         ((ItemViewOverlayAccessor) ItemViewOverlay.INSTANCE).skyrecipes$updateQuery(current);
     }
 
+    @SuppressWarnings("unused")
     private void finishStartup(Minecraft client, List<ReliableClientRecipe> recipes, StartupBatcher batcher) {
         // Order matters for the mixin guard: recipesReady must be visible before
         // injectionInProgress drops so suppression never has a gap.
@@ -780,7 +786,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         long stacksStart = System.currentTimeMillis();
         List<NeuItem> items = registry.getAllItems().stream()
                 .map(item -> new java.util.AbstractMap.SimpleEntry<>(ItemSortKey.of(item), item))
-                .sorted(java.util.Comparator.comparing(java.util.Map.Entry::getKey))
+                .sorted(java.util.Map.Entry.comparingByKey())
                 .map(java.util.Map.Entry::getValue)
                 .toList();
 

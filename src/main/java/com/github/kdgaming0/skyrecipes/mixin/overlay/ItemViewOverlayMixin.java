@@ -182,7 +182,7 @@ public class ItemViewOverlayMixin {
                 continue;
             }
 
-            boolean matched = false;
+            boolean matched;
             ItemStack slotStack = slot.getItem();
             String slotId = SkyblockIdExtractor.extract(slotStack);
 

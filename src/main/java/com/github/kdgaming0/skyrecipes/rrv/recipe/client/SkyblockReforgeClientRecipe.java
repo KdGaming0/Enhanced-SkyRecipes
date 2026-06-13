@@ -127,7 +127,6 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
             String content = remaining.substring(leading.length());
 
             String prefix = activeCodes;
-            int prefixVis = font.width(prefix); // should be 0, but safe
             int fit = fitLength(font, prefix + content, maxWidth);
             int contentFit = Math.max(1, fit - prefix.length());
 
@@ -319,8 +318,10 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
             if (profile != null) {
                 PlayerSkinRenderCache cache = Minecraft.getInstance().playerSkinRenderCache();
                 PlayerSkinRenderCache.RenderInfo renderInfo = cache.getOrDefault(profile);
+                //noinspection ConstantValue
                 if (renderInfo != null) {
                     Identifier texture = renderInfo.playerSkin().body().texturePath();
+                    //noinspection ConstantValue
                     if (texture != null) {
                         PlayerSkinRenderer.render(graphics, texture,
                                 pos.left() + NPC_X, pos.top() + NPC_Y,

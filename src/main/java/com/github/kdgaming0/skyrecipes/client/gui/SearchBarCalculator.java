@@ -48,9 +48,7 @@ public final class SearchBarCalculator {
 
     private static String formatResult(BigDecimal value, int precision) {
         StringBuilder pattern = new StringBuilder("#,##0.");
-        for (int i = 0; i < precision; i++) {
-            pattern.append("#");
-        }
+        pattern.repeat("#", Math.max(0, precision));
         return new DecimalFormat(pattern.toString()).format(value);
     }
 }

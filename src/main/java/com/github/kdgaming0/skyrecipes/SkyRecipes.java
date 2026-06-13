@@ -129,6 +129,7 @@ public class SkyRecipes implements ClientModInitializer {
                 PipelineStatus.transition(PipelineStatus.State.READY);
             }
             Minecraft mc = Minecraft.getInstance();
+            //noinspection ConstantValue
             if (mc != null) {
                 mc.execute(() -> {
                     buildSearchAutocomplete();
@@ -141,6 +142,7 @@ public class SkyRecipes implements ClientModInitializer {
         // ETag-first startup: compare remote ETag before loading local data.
         dataManager.initializeEtagFirst(warmLoaded -> {
             Minecraft mc = Minecraft.getInstance();
+            //noinspection ConstantValue
             if (mc != null) {
                 mc.execute(() -> {
                     if (warmLoaded) {
@@ -156,7 +158,7 @@ public class SkyRecipes implements ClientModInitializer {
 
         // One-shot chat notice per error episode: tell the player the pipeline
         // is failed/degraded when they join a world, instead of failing silently.
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+        ClientPlayConnectionEvents.JOIN.register((_, _, client) -> {
             PipelineStatus.Snapshot snap = PipelineStatus.snapshot();
             boolean troubled = snap.state() == PipelineStatus.State.FAILED
                     || snap.state() == PipelineStatus.State.DEGRADED;
