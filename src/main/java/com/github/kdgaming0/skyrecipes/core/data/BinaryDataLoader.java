@@ -36,11 +36,36 @@ public class BinaryDataLoader {
     private LoadFailure lastFailure = LoadFailure.NONE;
 
     /**
-     * Why the most recent {@link #load(Path)} returned false. Lets callers
-     * distinguish a stale-but-intact file (recompile) from real corruption
-     * (quarantine before recompiling).
+     * Read only the embedded metadata section from a v8 binary, without
+     * deserializing items or constants. Used for cheap ETag comparisons.
      */
-    public enum LoadFailure { NONE, SCHEMA_MISMATCH, CORRUPT }
+    public static BinaryMetadata readEmbeddedMetadata(Path path) throws IOException {
+        try (RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r")) {
+            if (raf.length() < HEADER_SIZE) {
+                throw new IOException("Binary file too small");
+            }
+            byte[] magic = new byte[4];
+            raf.readFully(magic);
+            if (!Arrays.equals(magic, EXPECTED_MAGIC)) {
+                throw new IOException("Invalid binary magic bytes");
+            }
+            int schemaVersion = raf.readInt();
+            if (schemaVersion != EXPECTED_SCHEMA) {
+                throw new IOException("Schema version mismatch: " + schemaVersion);
+            }
+            raf.seek(64);
+            long metadataOffset = raf.readLong();
+            long metadataLength = raf.readLong();
+            if (metadataLength <= 0 || metadataLength > MAX_METADATA_LENGTH
+                    || metadataOffset + metadataLength > raf.length()) {
+                throw new IOException("Invalid metadata section bounds");
+            }
+            raf.seek(metadataOffset);
+            byte[] bytes = new byte[(int) metadataLength];
+            raf.readFully(bytes);
+            return BinaryMetadata.fromBytes(bytes);
+        }
+    }
 
     /**
      * Load binary data from a file path.
@@ -162,38 +187,6 @@ public class BinaryDataLoader {
     }
 
     /**
-     * Read only the embedded metadata section from a v8 binary, without
-     * deserializing items or constants. Used for cheap ETag comparisons.
-     */
-    public static BinaryMetadata readEmbeddedMetadata(Path path) throws IOException {
-        try (RandomAccessFile raf = new RandomAccessFile(path.toFile(), "r")) {
-            if (raf.length() < HEADER_SIZE) {
-                throw new IOException("Binary file too small");
-            }
-            byte[] magic = new byte[4];
-            raf.readFully(magic);
-            if (!Arrays.equals(magic, EXPECTED_MAGIC)) {
-                throw new IOException("Invalid binary magic bytes");
-            }
-            int schemaVersion = raf.readInt();
-            if (schemaVersion != EXPECTED_SCHEMA) {
-                throw new IOException("Schema version mismatch: " + schemaVersion);
-            }
-            raf.seek(64);
-            long metadataOffset = raf.readLong();
-            long metadataLength = raf.readLong();
-            if (metadataLength <= 0 || metadataLength > MAX_METADATA_LENGTH
-                    || metadataOffset + metadataLength > raf.length()) {
-                throw new IOException("Invalid metadata section bounds");
-            }
-            raf.seek(metadataOffset);
-            byte[] bytes = new byte[(int) metadataLength];
-            raf.readFully(bytes);
-            return BinaryMetadata.fromBytes(bytes);
-        }
-    }
-
-    /**
      * Release resources. Unmaps the file if memory-mapped.
      */
     public void close() {
@@ -214,7 +207,9 @@ public class BinaryDataLoader {
         return constantsRegistry;
     }
 
-    /** Metadata embedded in the loaded binary; non-null after a successful {@link #load(Path)}. */
+    /**
+     * Metadata embedded in the loaded binary; non-null after a successful {@link #load(Path)}.
+     */
     public BinaryMetadata getMetadata() {
         return metadata;
     }
@@ -223,13 +218,13 @@ public class BinaryDataLoader {
         return lastFailure;
     }
 
-    // ---- MessagePack deserialization ----
-
     private List<NeuItem> unpackItems(byte[] data, int expectedCount) throws IOException {
         try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(data)) {
             return unpackItemsInternal(unpacker, expectedCount);
         }
     }
+
+    // ---- MessagePack deserialization ----
 
     private List<NeuItem> unpackItemsInternal(MessageUnpacker unpacker, int expectedCount) throws IOException {
         List<NeuItem> items = new ArrayList<>(expectedCount);
@@ -646,4 +641,11 @@ public class BinaryDataLoader {
         if (entityKind.isEmpty()) return null;
         return new MobRenderDefinition(entityKind, horseKind, skinPath, helmetItemId, rider);
     }
+
+    /**
+     * Why the most recent {@link #load(Path)} returned false. Lets callers
+     * distinguish a stale-but-intact file (recompile) from real corruption
+     * (quarantine before recompiling).
+     */
+    public enum LoadFailure {NONE, SCHEMA_MISMATCH, CORRUPT}
 }

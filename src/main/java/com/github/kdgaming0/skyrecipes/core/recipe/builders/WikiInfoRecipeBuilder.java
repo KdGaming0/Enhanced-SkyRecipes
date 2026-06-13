@@ -1,7 +1,5 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.builders;
 
-import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
-
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;

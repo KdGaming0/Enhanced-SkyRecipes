@@ -9,12 +9,7 @@ import com.github.kdgaming0.skyrecipes.core.recipe.builders.NpcInfoRecipeBuilder
 import com.github.kdgaming0.skyrecipes.core.recipe.builders.WikiInfoRecipeBuilder;
 import com.github.kdgaming0.skyrecipes.core.recipe.generators.EssenceUpgradeGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.generators.ReforgeRecipeGenerator;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.CraftingRecipeParser;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.DropsRecipeParser;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.ForgeRecipeParser;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.KatUpgradeRecipeParser;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.NpcShopRecipeParser;
-import com.github.kdgaming0.skyrecipes.core.recipe.parsers.TradeRecipeParser;
+import com.github.kdgaming0.skyrecipes.core.recipe.parsers.*;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;

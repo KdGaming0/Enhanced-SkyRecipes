@@ -38,8 +38,8 @@ public class SidePanelOverlayWidthMixin {
         int percent = SkyRecipesConfig.rrvSidePanelWidthPercent;
         if (percent >= 100) return;
 
-        AbstractRrvOverlayAccessor overlay = (AbstractRrvOverlayAccessor) (Object) this;
-        AbstractRrvItemListOverlayAccessor itemList = (AbstractRrvItemListOverlayAccessor) (Object) this;
+        AbstractRrvOverlayAccessor overlay = (AbstractRrvOverlayAccessor) this;
+        AbstractRrvItemListOverlayAccessor itemList = (AbstractRrvItemListOverlayAccessor) this;
 
         int newWidth = (overlay.skyrecipes$getWidth() * percent) / 100;
         newWidth -= (newWidth - 4) % ITEM_ENTRY_SIZE;

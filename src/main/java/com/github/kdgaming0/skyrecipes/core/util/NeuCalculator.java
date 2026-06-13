@@ -26,13 +26,7 @@ package com.github.kdgaming0.skyrecipes.core.util;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.Locale;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Mathematical expression evaluator using the shunting-yard algorithm.
@@ -47,9 +41,10 @@ import java.util.Optional;
  */
 public final class NeuCalculator {
 
-    public interface VariableProvider {
-        Optional<BigDecimal> provideVariable(String name) throws CalculatorException;
-    }
+    static String binops = "+-*/^x";
+    static String postops = "mkbtse%";
+    static String digits = "0123456789";
+    static String nameCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ_";
 
     public static BigDecimal calculate(String source, int precision) throws CalculatorException {
         return calculate(source, (ignored) -> Optional.empty(), precision);
@@ -58,24 +53,6 @@ public final class NeuCalculator {
     public static BigDecimal calculate(String source, VariableProvider variables, int precision) throws CalculatorException {
         return evaluate(variables, shuntingYard(lex(source)), precision);
     }
-
-    public enum TokenType {
-        NUMBER, BINOP, LPAREN, RPAREN, POSTOP, PREOP, VARIABLE
-    }
-
-    public static class Token {
-        public TokenType type;
-        String operatorValue;
-        long numericValue;
-        int exponent;
-        int tokenStart;
-        int tokenLength;
-    }
-
-    static String binops = "+-*/^x";
-    static String postops = "mkbtse%";
-    static String digits = "0123456789";
-    static String nameCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ_";
 
     static void readDigitsInto(Token token, String source, boolean decimals) {
         int startIndex = token.tokenStart + token.tokenLength;
@@ -91,24 +68,6 @@ public final class NeuCalculator {
             } else {
                 return;
             }
-        }
-    }
-
-    public static class CalculatorException extends Exception {
-        int offset, length;
-
-        public CalculatorException(String message, int offset, int length) {
-            super(message);
-            this.offset = offset;
-            this.length = length;
-        }
-
-        public int getLength() {
-            return length;
-        }
-
-        public int getOffset() {
-            return offset;
         }
     }
 
@@ -400,6 +359,41 @@ public final class NeuCalculator {
             return peek.stripTrailingZeros();
         } catch (NoSuchElementException e) {
             throw new CalculatorException("Unfinished expression", 0, 0);
+        }
+    }
+
+    public enum TokenType {
+        NUMBER, BINOP, LPAREN, RPAREN, POSTOP, PREOP, VARIABLE
+    }
+
+    public interface VariableProvider {
+        Optional<BigDecimal> provideVariable(String name) throws CalculatorException;
+    }
+
+    public static class Token {
+        public TokenType type;
+        String operatorValue;
+        long numericValue;
+        int exponent;
+        int tokenStart;
+        int tokenLength;
+    }
+
+    public static class CalculatorException extends Exception {
+        int offset, length;
+
+        public CalculatorException(String message, int offset, int length) {
+            super(message);
+            this.offset = offset;
+            this.length = length;
+        }
+
+        public int getLength() {
+            return length;
+        }
+
+        public int getOffset() {
+            return offset;
         }
     }
 }

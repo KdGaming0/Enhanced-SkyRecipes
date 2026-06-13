@@ -1,11 +1,8 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.type;
 
-import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockRecipeType;
-
-import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockCraftingClientRecipe;
-
 import cc.cassian.rrv.common.ReliableRecipeViewer;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockRecipeType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 

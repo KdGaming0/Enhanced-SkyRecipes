@@ -1,9 +1,5 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.client;
 
-import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
-
-import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockKatUpgradeRecipeType;
-
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
@@ -12,6 +8,8 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockKatUpgradeRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;

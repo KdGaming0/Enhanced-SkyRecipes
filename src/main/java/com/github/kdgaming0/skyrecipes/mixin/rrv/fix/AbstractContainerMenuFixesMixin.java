@@ -2,10 +2,10 @@ package com.github.kdgaming0.skyrecipes.mixin.rrv.fix;
 
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
+import com.github.kdgaming0.skyrecipes.rrv.util.SafeDummySlot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.NonNullList;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import com.github.kdgaming0.skyrecipes.rrv.util.SafeDummySlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,13 +33,23 @@ import java.util.List;
 @Mixin(AbstractContainerMenu.class)
 public class AbstractContainerMenuFixesMixin {
 
+    @Unique
+    private static final Slot SKYRECIPES$SAFE_DUMMY_SLOT = new SafeDummySlot();
     @Shadow
     public final NonNullList<Slot> slots = null;
 
-    @Unique
-    private static final Slot SKYRECIPES$SAFE_DUMMY_SLOT = new SafeDummySlot();
-
     // ── Slot safety ───────────────────────────────────────────────────────────
+
+    @Unique
+    private static boolean skyrecipes$shouldSuppress(AbstractContainerMenu menu) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.screen instanceof RecipeViewScreen && mc.player != null) {
+            return menu == mc.player.containerMenu && menu.containerId != 0;
+        }
+        return false;
+    }
+
+    // ── Packet suppression ────────────────────────────────────────────────────
 
     @Inject(
             method = "getSlot(I)Lnet/minecraft/world/inventory/Slot;",
@@ -53,8 +63,6 @@ public class AbstractContainerMenuFixesMixin {
         }
     }
 
-    // ── Packet suppression ────────────────────────────────────────────────────
-
     @Inject(method = "initializeContents", at = @At("HEAD"), cancellable = true)
     private void skyrecipes$suppressInitializeContentsWhenRrvOpen(int stateId, List<ItemStack> items, ItemStack carried, CallbackInfo ci) {
         if (skyrecipes$shouldSuppress((AbstractContainerMenu) (Object) this)) {
@@ -67,14 +75,5 @@ public class AbstractContainerMenuFixesMixin {
         if (skyrecipes$shouldSuppress((AbstractContainerMenu) (Object) this)) {
             ci.cancel();
         }
-    }
-
-    @Unique
-    private static boolean skyrecipes$shouldSuppress(AbstractContainerMenu menu) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.screen instanceof RecipeViewScreen && mc.player != null) {
-            return menu == mc.player.containerMenu && menu.containerId != 0;
-        }
-        return false;
     }
 }

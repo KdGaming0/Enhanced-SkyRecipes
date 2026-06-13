@@ -1,14 +1,12 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.client;
 
-import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
-
-import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockForgeRecipeType;
-
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import cc.cassian.rrv.common.recipe.rendering.AnimationTicker;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockForgeRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;

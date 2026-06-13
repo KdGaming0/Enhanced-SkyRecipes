@@ -37,8 +37,8 @@ public class RuntimeDataManager {
     private volatile Path currentLoadedPath;
 
     /**
-     * @param dataDir               directory containing the compiled .mpk and .meta.json
-     * @param cacheDir              directory for the downloaded NEU repo ZIP and ETag cache
+     * @param dataDir                directory containing the compiled .mpk and .meta.json
+     * @param cacheDir               directory for the downloaded NEU repo ZIP and ETag cache
      * @param refreshIntervalSeconds how often background update checks run, in seconds
      */
     public RuntimeDataManager(Path dataDir, Path cacheDir, long refreshIntervalSeconds) {
@@ -125,7 +125,9 @@ public class RuntimeDataManager {
         });
     }
 
-    /** Schedule a cold start: download and compile in the background. */
+    /**
+     * Schedule a cold start: download and compile in the background.
+     */
     public synchronized void initializeCold() {
         if (state == State.READY || state == State.LOADING) {
             return;
@@ -165,7 +167,9 @@ public class RuntimeDataManager {
         }
     }
 
-    /** Reload data from a new path (used by atomic swap during background updates). */
+    /**
+     * Reload data from a new path (used by atomic swap during background updates).
+     */
     public synchronized boolean reloadData(Path newDataPath, Path newMetaPath) {
         LOGGER.info("Reloading data from {}", newDataPath);
         PipelineStatus.transition(PipelineStatus.State.LOADING);
@@ -196,7 +200,9 @@ public class RuntimeDataManager {
         }
     }
 
-    /** Shutdown: release resources and stop background services. */
+    /**
+     * Shutdown: release resources and stop background services.
+     */
     public void shutdown() {
         updateService.shutdown();
         loader.close();
@@ -342,5 +348,5 @@ public class RuntimeDataManager {
         return new DataLoadResult(itemRegistry, constantsRegistry, loadedPath, currentMetadata);
     }
 
-    public enum State { UNINITIALIZED, LOADING, READY, ERROR }
+    public enum State {UNINITIALIZED, LOADING, READY, ERROR}
 }

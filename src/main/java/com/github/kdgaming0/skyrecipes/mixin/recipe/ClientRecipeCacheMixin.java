@@ -54,11 +54,21 @@ import java.util.Set;
 @Mixin(value = ClientRecipeCache.class, remap = false)
 public class ClientRecipeCacheMixin {
 
-    @Shadow @Final private HashMap<Identifier, ReliableClientRecipe> recipeMap;
-    @Shadow @Final private HashMap<Identifier, Identifier> clientEntryMap;
-    @Shadow @Final private HashMap<Identifier, List<Identifier>> multiRecipeMap;
-    @Shadow @Final private HashMap<Item, List<Identifier>> byItemIngredient;
-    @Shadow @Final private HashMap<Item, List<Identifier>> byItemResult;
+    @Shadow
+    @Final
+    private HashMap<Identifier, ReliableClientRecipe> recipeMap;
+    @Shadow
+    @Final
+    private HashMap<Identifier, Identifier> clientEntryMap;
+    @Shadow
+    @Final
+    private HashMap<Identifier, List<Identifier>> multiRecipeMap;
+    @Shadow
+    @Final
+    private HashMap<Item, List<Identifier>> byItemIngredient;
+    @Shadow
+    @Final
+    private HashMap<Item, List<Identifier>> byItemResult;
 
     /**
      * Replaces RRV's quadratic {@code clear()} with a set-based sweep.

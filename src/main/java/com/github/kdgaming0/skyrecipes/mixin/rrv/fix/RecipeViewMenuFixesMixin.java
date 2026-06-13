@@ -1,8 +1,8 @@
 package com.github.kdgaming0.skyrecipes.mixin.rrv.fix;
 
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
-import net.minecraft.core.NonNullList;
 import com.github.kdgaming0.skyrecipes.rrv.util.SafeDummySlot;
+import net.minecraft.core.NonNullList;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
@@ -11,6 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Arrays;
 import java.util.HashMap;
 
 /**
@@ -69,8 +70,6 @@ public class RecipeViewMenuFixesMixin {
         AbstractContainerMenu menu = (AbstractContainerMenu) (Object) this;
         int currentSize = menu.slots.size();
 
-        for (int i = currentSize; i < SKYRECIPES$MINIMUM_SLOT_COUNT; i++) {
-            menu.slots.add(SKYRECIPES$DUMMY_SLOTS[i]);
-        }
+        menu.slots.addAll(Arrays.asList(SKYRECIPES$DUMMY_SLOTS).subList(currentSize, SKYRECIPES$MINIMUM_SLOT_COUNT));
     }
 }

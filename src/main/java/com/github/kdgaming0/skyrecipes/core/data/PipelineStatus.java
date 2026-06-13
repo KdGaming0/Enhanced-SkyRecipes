@@ -21,20 +21,7 @@ import java.util.Map;
  */
 public final class PipelineStatus {
 
-    public enum State {
-        STARTING, DOWNLOADING, COMPILING, LOADING, GENERATING, INJECTING,
-        READY, DEGRADED, FAILED;
-
-        boolean isWorking() {
-            return this == DOWNLOADING || this == COMPILING || this == LOADING
-                    || this == GENERATING || this == INJECTING;
-        }
-
-        boolean hasLiveData() {
-            return this == READY || this == DEGRADED;
-        }
-    }
-
+    private static final Map<String, Long> stageDurationsMs = new LinkedHashMap<>();
     private static State state = State.STARTING;
     private static boolean refreshInProgress = false;
     private static boolean providerOnlyMode = false;
@@ -56,8 +43,6 @@ public final class PipelineStatus {
 
     private static long lastCheckTime = 0L;
     private static long nextRetryTime = 0L;
-
-    private static final Map<String, Long> stageDurationsMs = new LinkedHashMap<>();
 
     private PipelineStatus() {
     }
@@ -116,7 +101,9 @@ public final class PipelineStatus {
         lastCheckTime = epochMs;
     }
 
-    /** Epoch millis of the next automatic retry; 0 clears it. */
+    /**
+     * Epoch millis of the next automatic retry; 0 clears it.
+     */
     public static synchronized void recordNextRetry(long epochMs) {
         nextRetryTime = epochMs;
     }
@@ -142,6 +129,20 @@ public final class PipelineStatus {
                 injectedRecipes, skippedRecipes,
                 lastCheckTime, nextRetryTime,
                 new LinkedHashMap<>(stageDurationsMs));
+    }
+
+    public enum State {
+        STARTING, DOWNLOADING, COMPILING, LOADING, GENERATING, INJECTING,
+        READY, DEGRADED, FAILED;
+
+        boolean isWorking() {
+            return this == DOWNLOADING || this == COMPILING || this == LOADING
+                    || this == GENERATING || this == INJECTING;
+        }
+
+        boolean hasLiveData() {
+            return this == READY || this == DEGRADED;
+        }
     }
 
     public record Snapshot(State state, boolean refreshInProgress, boolean providerOnlyMode,

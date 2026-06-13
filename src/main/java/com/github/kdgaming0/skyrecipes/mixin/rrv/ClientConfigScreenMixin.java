@@ -19,12 +19,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = ClientConfigScreen.class, remap = false)
 public abstract class ClientConfigScreenMixin extends Screen {
 
+    @Shadow
+    private HeaderAndFooterLayout layout;
+
     protected ClientConfigScreenMixin(Component title) {
         super(title);
     }
-
-    @Shadow
-    private HeaderAndFooterLayout layout;
 
     @Inject(method = "init", at = @At("TAIL"), remap = true)
     private void skyrecipes$addConfigButton(CallbackInfo ci) {

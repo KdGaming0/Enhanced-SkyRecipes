@@ -40,6 +40,13 @@ public record BinaryMetadata(
     }
 
     /**
+     * Deserialize from the binary's metadata section.
+     */
+    public static BinaryMetadata fromBytes(byte[] bytes) {
+        return GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), BinaryMetadata.class);
+    }
+
+    /**
      * Write metadata to a JSON file.
      */
     public void write(Path path) throws IOException {
@@ -56,13 +63,10 @@ public record BinaryMetadata(
         return this.schemaVersion == expectedSchema;
     }
 
-    /** Serialize for embedding in the binary's metadata section. */
+    /**
+     * Serialize for embedding in the binary's metadata section.
+     */
     public byte[] toBytes() {
         return GSON.toJson(this).getBytes(StandardCharsets.UTF_8);
-    }
-
-    /** Deserialize from the binary's metadata section. */
-    public static BinaryMetadata fromBytes(byte[] bytes) {
-        return GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), BinaryMetadata.class);
     }
 }

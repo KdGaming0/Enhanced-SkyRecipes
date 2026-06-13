@@ -1,10 +1,9 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
-import com.github.kdgaming0.skyrecipes.core.util.PetStatResolver;
-
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.model.*;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;
+import com.github.kdgaming0.skyrecipes.core.util.PetStatResolver;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -42,7 +41,9 @@ public class BinaryDataCompiler {
     private static final int SCHEMA_VERSION = 8;
     private static final int HEADER_SIZE = 96;
     private static final int SECTION_COUNT = 3; // items, constants, metadata
-    /** Same all-or-nothing budget as generation/injection: >5% parse failures aborts the compile. */
+    /**
+     * Same all-or-nothing budget as generation/injection: >5% parse failures aborts the compile.
+     */
     private static final double MAX_PARSE_FAILURE_RATE = 0.05;
     private PetStatResolver petResolver;
 
@@ -71,6 +72,25 @@ public class BinaryDataCompiler {
         String normalized = sb.toString();
         if ("walk_speed".equals(normalized)) return "speed";
         return normalized;
+    }
+
+    private static DownloadResult cacheFallback(Path zipFile) {
+        return Files.exists(zipFile) ? DownloadResult.CACHE_HIT : DownloadResult.FAILED_NO_CACHE;
+    }
+
+    // ---- ETag helpers ----
+
+    /**
+     * Reads the ZIP central directory (which a truncated transfer corrupts)
+     * and requires at least one item entry, rejecting wrong or empty archives.
+     */
+    private static void verifyRepoZip(Path zip) throws IOException {
+        try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(zip.toFile())) {
+            boolean hasItems = zf.stream().anyMatch(e -> e.getName().contains("items/"));
+            if (!hasItems) {
+                throw new IOException("Downloaded ZIP contains no items/ entries");
+            }
+        }
     }
 
     public void compile(String outputDirPath, String cacheDirPath) throws Exception {
@@ -103,8 +123,6 @@ public class BinaryDataCompiler {
         Path metaPath = Path.of(outputDirPath, "skyrecipes_data_v" + SCHEMA_VERSION + ".meta.json");
         compileToPath(zipFile, outputPath, metaPath, actualEtag, null);
     }
-
-    // ---- ETag helpers ----
 
     /**
      * Compile the NEU repository ZIP into a binary .mpk and metadata sidecar.
@@ -234,30 +252,7 @@ public class BinaryDataCompiler {
         return new CompileResult(outputPath, metaPath, items.size(), etag, duration);
     }
 
-    /** Tracks bytes written so section offsets can be recorded during a single streaming pass. */
-    private static final class CountingOutputStream extends FilterOutputStream {
-        private long count;
-
-        CountingOutputStream(OutputStream out) {
-            super(out);
-        }
-
-        long count() {
-            return count;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            out.write(b);
-            count++;
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-            out.write(b, off, len);
-            count += len;
-        }
-    }
+    // ---- Download ----
 
     private String readEtag(Path etagFile) {
         try {
@@ -270,7 +265,7 @@ public class BinaryDataCompiler {
         return null;
     }
 
-    // ---- Download ----
+    // ---- Parsing (unchanged from original) ----
 
     private long hashEtag(String etag) {
         if (etag == null || etag.isEmpty()) return 0L;
@@ -286,11 +281,6 @@ public class BinaryDataCompiler {
             return etag.hashCode();
         }
     }
-
-    // ---- Parsing (unchanged from original) ----
-
-    /** Outcome of {@link #downloadNeuRepo}: distinguishes fresh data, usable cache, and hard failure. */
-    public enum DownloadResult { DOWNLOADED, CACHE_HIT, FAILED_NO_CACHE }
 
     public DownloadResult downloadNeuRepo(Path zipFile, Path etagFile, String existingEtag) {
         try {
@@ -316,7 +306,7 @@ public class BinaryDataCompiler {
 
             if (newEtag != null && Files.exists(zipFile)
                     && Objects.equals(RuntimeUpdateService.normalizeEtag(newEtag),
-                            RuntimeUpdateService.normalizeEtag(existingEtag))) {
+                    RuntimeUpdateService.normalizeEtag(existingEtag))) {
                 return DownloadResult.CACHE_HIT;
             }
 
@@ -340,10 +330,6 @@ public class BinaryDataCompiler {
             LOGGER.warn("Failed to check/download NEU repo, using cache if available", e);
             return cacheFallback(zipFile);
         }
-    }
-
-    private static DownloadResult cacheFallback(Path zipFile) {
-        return Files.exists(zipFile) ? DownloadResult.CACHE_HIT : DownloadResult.FAILED_NO_CACHE;
     }
 
     /**
@@ -395,30 +381,13 @@ public class BinaryDataCompiler {
         }
     }
 
-    /**
-     * Reads the ZIP central directory (which a truncated transfer corrupts)
-     * and requires at least one item entry, rejecting wrong or empty archives.
-     */
-    private static void verifyRepoZip(Path zip) throws IOException {
-        try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(zip.toFile())) {
-            boolean hasItems = zf.stream().anyMatch(e -> e.getName().contains("items/"));
-            if (!hasItems) {
-                throw new IOException("Downloaded ZIP contains no items/ entries");
-            }
-        }
-    }
-
-    /** Item-parse counters from a ZIP scan, used to detect systemic NEU format changes. */
-    record ParseStats(int itemAttempts, int itemFailures) {
-    }
-
     private ParseStats parseZip(Path zipFile, List<NeuItem> items, Map<String, List<String>> parents,
-                          Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
-                          Map<String, String> museumCategories,
-                          Map<String, ReforgeData> reforges,
-                          Map<String, ReforgeStoneData> reforgeStones,
-                          Map<String, MobRenderDefinition> mobDefinitions,
-                          Map<String, byte[]> mobSkins) throws IOException {
+                                Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
+                                Map<String, String> museumCategories,
+                                Map<String, ReforgeData> reforges,
+                                Map<String, ReforgeStoneData> reforgeStones,
+                                Map<String, MobRenderDefinition> mobDefinitions,
+                                Map<String, byte[]> mobSkins) throws IOException {
 
         String prefix = null;
 
@@ -819,10 +788,6 @@ public class BinaryDataCompiler {
         }
     }
 
-    // -----------------------------------------------------------------
-    // Compile-time generated metadata
-    // -----------------------------------------------------------------
-
     /**
      * Scans all parsed items and builds a whitelist of stat names that appear
      * in gear item lore (weapons, armor, tools, accessories, equipment, etc.).
@@ -903,6 +868,10 @@ public class BinaryDataCompiler {
         }
         return result;
     }
+
+    // -----------------------------------------------------------------
+    // Compile-time generated metadata
+    // -----------------------------------------------------------------
 
     /**
      * Parse itemTypes which can be either a string (e.g. "SWORD,HELMET")
@@ -1159,8 +1128,6 @@ public class BinaryDataCompiler {
         }
     }
 
-    // ---- MessagePack serialization (unchanged) ----
-
     private void packConstants(MessagePacker packer,
                                Map<String, List<String>> parents,
                                Map<String, EssenceUpgradeData> essenceCosts,
@@ -1403,10 +1370,50 @@ public class BinaryDataCompiler {
     }
 
     /**
+     * Outcome of {@link #downloadNeuRepo}: distinguishes fresh data, usable cache, and hard failure.
+     */
+    public enum DownloadResult {DOWNLOADED, CACHE_HIT, FAILED_NO_CACHE}
+
+    // ---- MessagePack serialization (unchanged) ----
+
+    /**
      * Progress callback for long-running compiles.
      */
     public interface ProgressCallback {
         void onProgress(String stage, int percent);
+    }
+
+    /**
+     * Tracks bytes written so section offsets can be recorded during a single streaming pass.
+     */
+    private static final class CountingOutputStream extends FilterOutputStream {
+        private long count;
+
+        CountingOutputStream(OutputStream out) {
+            super(out);
+        }
+
+        long count() {
+            return count;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            out.write(b);
+            count++;
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            out.write(b, off, len);
+            count += len;
+        }
+    }
+
+    /**
+     * Item-parse counters from a ZIP scan, used to detect systemic NEU format changes.
+     */
+    record ParseStats(int itemAttempts, int itemFailures) {
     }
 
     /**

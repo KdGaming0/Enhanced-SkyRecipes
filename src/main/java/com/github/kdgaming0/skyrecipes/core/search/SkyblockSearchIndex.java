@@ -314,6 +314,16 @@ public final class SkyblockSearchIndex {
         return null;
     }
 
+    private static SearchQuery.FilterClause.Operator toFilterOperator(SearchQuery.StatClause.Operator op) {
+        return switch (op) {
+            case GT -> SearchQuery.FilterClause.Operator.GT;
+            case LT -> SearchQuery.FilterClause.Operator.LT;
+            case GTE -> SearchQuery.FilterClause.Operator.GTE;
+            case LTE -> SearchQuery.FilterClause.Operator.LTE;
+            case EQ -> SearchQuery.FilterClause.Operator.EQ;
+        };
+    }
+
     /**
      * Filter the item list by the given query string.
      */
@@ -350,6 +360,10 @@ public final class SkyblockSearchIndex {
     public boolean itemMatchesInventoryQuery(String itemId, String query) {
         return itemMatchesInventoryQuery(itemId, SearchQueryParser.parse(query));
     }
+
+    // -----------------------------------------------------------------
+    // Ranking
+    // -----------------------------------------------------------------
 
     /**
      * Variant of {@link #itemMatchesInventoryQuery(String, String)} taking an
@@ -411,10 +425,6 @@ public final class SkyblockSearchIndex {
         // Stat clauses cannot be evaluated for inventory
         return parsed.stats().isEmpty();
     }
-
-    // -----------------------------------------------------------------
-    // Ranking
-    // -----------------------------------------------------------------
 
     /**
      * Returns the set of SkyBlock IDs that match the given query.
@@ -596,6 +606,10 @@ public final class SkyblockSearchIndex {
         return result;
     }
 
+    // -----------------------------------------------------------------
+    // Index building
+    // -----------------------------------------------------------------
+
     private BitSet fuzzyMatch(String token) {
         BitSet result = new BitSet(itemCount);
         for (String candidate : sortedTokens) {
@@ -607,26 +621,12 @@ public final class SkyblockSearchIndex {
         return result;
     }
 
-    // -----------------------------------------------------------------
-    // Index building
-    // -----------------------------------------------------------------
-
     private BitSet resolveStat(SearchQuery.StatClause stat) {
         TreeMap<Integer, BitSet> valueMap = statIndex.get(stat.statName());
         if (valueMap == null || valueMap.isEmpty()) {
             return new BitSet();
         }
         return resolveThreshold(valueMap, toFilterOperator(stat.op()), stat.value());
-    }
-
-    private static SearchQuery.FilterClause.Operator toFilterOperator(SearchQuery.StatClause.Operator op) {
-        return switch (op) {
-            case GT -> SearchQuery.FilterClause.Operator.GT;
-            case LT -> SearchQuery.FilterClause.Operator.LT;
-            case GTE -> SearchQuery.FilterClause.Operator.GTE;
-            case LTE -> SearchQuery.FilterClause.Operator.LTE;
-            case EQ -> SearchQuery.FilterClause.Operator.EQ;
-        };
     }
 
     private BitSet resolveFilter(SearchQuery.FilterClause filter) {

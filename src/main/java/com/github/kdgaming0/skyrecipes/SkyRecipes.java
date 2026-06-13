@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes;
 
+import com.github.kdgaming0.skyrecipes.client.command.SkyRecipesCommand;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.core.data.DataLoadResult;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
@@ -15,7 +16,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.github.kdgaming0.skyrecipes.client.command.SkyRecipesCommand;
 
 import java.nio.file.Path;
 import java.util.List;

@@ -1,9 +1,8 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.generators;
 
-import com.github.kdgaming0.skyrecipes.core.recipe.util.SlotRefParser;
-
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import com.github.kdgaming0.skyrecipes.core.model.EssenceUpgradeData;
+import com.github.kdgaming0.skyrecipes.core.recipe.util.SlotRefParser;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;

@@ -1,9 +1,5 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.client;
 
-import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
-
-import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockGardenMutationRecipeType;
-
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
@@ -14,6 +10,8 @@ import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutation;
 import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutationRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockGardenMutationRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -160,16 +158,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         };
     }
 
-    /** Pixel geometry of one dashed multi-block border plus its dimension-label inputs. */
-    private record DashedBorder(int x1, int y1, int x2, int y2, int color,
-                                int labelLastRow, int labelLastCol,
-                                int labelWidth, int labelHeight) {
-    }
-
-    /** Pixel geometry of the 1px solid border around the target crop. */
-    private record SolidBorder(int x1, int y1, int x2, int y2) {
-    }
-
     private static DashedBorder makeDashedBorder(int r1, int c1, int r2, int c2, boolean isTarget) {
         int color = isTarget ? DASH_TARGET_COLOR : DASH_INGREDIENT_COLOR;
         int x1 = GRID_ORIGIN_X + c1 * SLOT_SIZE;
@@ -178,8 +166,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         int y2 = GRID_ORIGIN_Y + (r2 + 1) * SLOT_SIZE;
         return new DashedBorder(x1, y1, x2, y2, color, r2, c2, c2 - c1 + 1, r2 - r1 + 1);
     }
-
-    // ── RRV contract ──────────────────────────────────────────────────────────
 
     private static void renderDimensionLabel(GuiGraphicsExtractor gfx, int lastRow, int lastCol,
                                              int width, int height) {
@@ -204,6 +190,8 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         }
     }
 
+    // ── RRV contract ──────────────────────────────────────────────────────────
+
     private static boolean isCovered(boolean[][] covered, int r, int c) {
         return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE && covered[r][c];
     }
@@ -214,8 +202,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         drawDashedLineV(gfx, x1, y1, y2, color);
         drawDashedLineV(gfx, x2 - DASH_STROKE + 1, y1, y2, color);
     }
-
-    // ── rendering ─────────────────────────────────────────────────────────────
 
     private static void drawDashedLineH(GuiGraphicsExtractor gfx, int x1, int x2, int y, int color) {
         int x = x1;
@@ -245,10 +231,92 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         }
     }
 
-    // ── base-item border (1px solid — always drawn) ───────────────────────────
+    // ── rendering ─────────────────────────────────────────────────────────────
 
     private static String rarityColorCode(String rarity) {
         return RecipeUiHelper.rarityColorCode(rarity);
+    }
+
+    @Nullable
+    private static SolidBorder computeBaseItemBorder(GardenMutation mutation) {
+        int offset = (GRID_SIZE - mutation.gridSize()) / 2;
+        int minR = GRID_SIZE, minC = GRID_SIZE;
+        int maxR = -1, maxC = -1;
+        boolean hasTarget = false;
+
+        for (int r = 0; r < mutation.gridSize(); r++) {
+            for (int c = 0; c < mutation.gridSize(); c++) {
+                if (mutation.isTarget(r, c)) {
+                    int vr = r + offset, vc = c + offset;
+                    minR = Math.min(minR, vr);
+                    minC = Math.min(minC, vc);
+                    maxR = Math.max(maxR, vr);
+                    maxC = Math.max(maxC, vc);
+                    hasTarget = true;
+                }
+            }
+        }
+
+        if (!hasTarget) {
+            return null;
+        }
+
+        int x1 = GRID_ORIGIN_X + minC * SLOT_SIZE + 1;
+        int y1 = GRID_ORIGIN_Y + minR * SLOT_SIZE + 1;
+        int x2 = GRID_ORIGIN_X + (maxC + 1) * SLOT_SIZE - 1;
+        int y2 = GRID_ORIGIN_Y + (maxR + 1) * SLOT_SIZE - 1;
+        return new SolidBorder(x1, y1, x2, y2);
+    }
+
+    // ── base-item border (1px solid — always drawn) ───────────────────────────
+
+    private static List<DashedBorder> computeMultiBlockBorders(GardenMutation mutation) {
+        List<DashedBorder> borders = new ArrayList<>();
+        boolean[][] covered = new boolean[GRID_SIZE][GRID_SIZE];
+        int offset = (GRID_SIZE - mutation.gridSize()) / 2;
+
+        // ── Target multi-block ────────────────────────────────────────────────────
+        GardenMutationRegistry.CropSize targetCs = GardenMutationRegistry.getCropSize(mutation.id());
+        if (targetCs != null && (targetCs.width() > 1 || targetCs.height() > 1)) {
+            int minR = GRID_SIZE, minC = GRID_SIZE, maxR = -1, maxC = -1;
+            for (int r = 0; r < mutation.gridSize(); r++) {
+                for (int c = 0; c < mutation.gridSize(); c++) {
+                    if (mutation.isTarget(r, c)) {
+                        int vr = r + offset, vc = c + offset;
+                        minR = Math.min(minR, vr);
+                        minC = Math.min(minC, vc);
+                        maxR = Math.max(maxR, vr);
+                        maxC = Math.max(maxC, vc);
+                    }
+                }
+            }
+            if (maxR >= 0) {
+                borders.add(makeDashedBorder(minR, minC, maxR, maxC, true));
+                markCovered(covered, minR, minC, maxR, maxC);
+            }
+        }
+
+        // ── Ingredient multi-blocks ───────────────────────────────────────────────
+        for (int r = 0; r < mutation.gridSize(); r++) {
+            for (int c = 0; c < mutation.gridSize(); c++) {
+                if (!mutation.isIngredient(r, c)) continue;
+
+                int top = r + offset, left = c + offset;
+                if (isCovered(covered, top, left)) continue;
+
+                String ingId = mutation.ingredientIdAt(r, c);
+                GardenMutationRegistry.CropSize cs = GardenMutationRegistry.getCropSize(ingId);
+                if (cs == null || (cs.width() <= 1 && cs.height() <= 1)) continue;
+
+                // This is the top-left of a new instance — extend by crop dimensions.
+                int bottom = Math.min(top + cs.height() - 1, GRID_SIZE - 1);
+                int right = Math.min(left + cs.width() - 1, GRID_SIZE - 1);
+
+                borders.add(makeDashedBorder(top, left, bottom, right, false));
+                markCovered(covered, top, left, bottom, right);
+            }
+        }
+        return borders;
     }
 
     // ── multi-block borders (2px dashed — cropSize-based) ─────────────────────
@@ -340,88 +408,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         }
     }
 
-    @Nullable
-    private static SolidBorder computeBaseItemBorder(GardenMutation mutation) {
-        int offset = (GRID_SIZE - mutation.gridSize()) / 2;
-        int minR = GRID_SIZE, minC = GRID_SIZE;
-        int maxR = -1, maxC = -1;
-        boolean hasTarget = false;
-
-        for (int r = 0; r < mutation.gridSize(); r++) {
-            for (int c = 0; c < mutation.gridSize(); c++) {
-                if (mutation.isTarget(r, c)) {
-                    int vr = r + offset, vc = c + offset;
-                    minR = Math.min(minR, vr);
-                    minC = Math.min(minC, vc);
-                    maxR = Math.max(maxR, vr);
-                    maxC = Math.max(maxC, vc);
-                    hasTarget = true;
-                }
-            }
-        }
-
-        if (!hasTarget) {
-            return null;
-        }
-
-        int x1 = GRID_ORIGIN_X + minC * SLOT_SIZE + 1;
-        int y1 = GRID_ORIGIN_Y + minR * SLOT_SIZE + 1;
-        int x2 = GRID_ORIGIN_X + (maxC + 1) * SLOT_SIZE - 1;
-        int y2 = GRID_ORIGIN_Y + (maxR + 1) * SLOT_SIZE - 1;
-        return new SolidBorder(x1, y1, x2, y2);
-    }
-
-    private static List<DashedBorder> computeMultiBlockBorders(GardenMutation mutation) {
-        List<DashedBorder> borders = new ArrayList<>();
-        boolean[][] covered = new boolean[GRID_SIZE][GRID_SIZE];
-        int offset = (GRID_SIZE - mutation.gridSize()) / 2;
-
-        // ── Target multi-block ────────────────────────────────────────────────────
-        GardenMutationRegistry.CropSize targetCs = GardenMutationRegistry.getCropSize(mutation.id());
-        if (targetCs != null && (targetCs.width() > 1 || targetCs.height() > 1)) {
-            int minR = GRID_SIZE, minC = GRID_SIZE, maxR = -1, maxC = -1;
-            for (int r = 0; r < mutation.gridSize(); r++) {
-                for (int c = 0; c < mutation.gridSize(); c++) {
-                    if (mutation.isTarget(r, c)) {
-                        int vr = r + offset, vc = c + offset;
-                        minR = Math.min(minR, vr);
-                        minC = Math.min(minC, vc);
-                        maxR = Math.max(maxR, vr);
-                        maxC = Math.max(maxC, vc);
-                    }
-                }
-            }
-            if (maxR >= 0) {
-                borders.add(makeDashedBorder(minR, minC, maxR, maxC, true));
-                markCovered(covered, minR, minC, maxR, maxC);
-            }
-        }
-
-        // ── Ingredient multi-blocks ───────────────────────────────────────────────
-        for (int r = 0; r < mutation.gridSize(); r++) {
-            for (int c = 0; c < mutation.gridSize(); c++) {
-                if (!mutation.isIngredient(r, c)) continue;
-
-                int top = r + offset, left = c + offset;
-                if (isCovered(covered, top, left)) continue;
-
-                String ingId = mutation.ingredientIdAt(r, c);
-                GardenMutationRegistry.CropSize cs = GardenMutationRegistry.getCropSize(ingId);
-                if (cs == null || (cs.width() <= 1 && cs.height() <= 1)) continue;
-
-                // This is the top-left of a new instance — extend by crop dimensions.
-                int bottom = Math.min(top + cs.height() - 1, GRID_SIZE - 1);
-                int right = Math.min(left + cs.width() - 1, GRID_SIZE - 1);
-
-                borders.add(makeDashedBorder(top, left, bottom, right, false));
-                markCovered(covered, top, left, bottom, right);
-            }
-        }
-        return borders;
-    }
-
-    // ── helpers ───────────────────────────────────────────────────────────────
-
     private Component getNameComponent() {
         if (cachedName != null) {
             return cachedName;
@@ -439,7 +425,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         return cachedTooltip;
     }
 
-    // ── tooltip ───────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
     private List<Component> buildTooltip() {
         List<Component> lines = new ArrayList<>();
@@ -497,6 +483,22 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         }
 
         return Collections.unmodifiableList(lines);
+    }
+
+    /**
+     * Pixel geometry of one dashed multi-block border plus its dimension-label inputs.
+     */
+    private record DashedBorder(int x1, int y1, int x2, int y2, int color,
+                                int labelLastRow, int labelLastCol,
+                                int labelWidth, int labelHeight) {
+    }
+
+    // ── tooltip ───────────────────────────────────────────────────────────────
+
+    /**
+     * Pixel geometry of the 1px solid border around the target crop.
+     */
+    private record SolidBorder(int x1, int y1, int x2, int y2) {
     }
 
     // ── buttons ───────────────────────────────────────────────────────────────

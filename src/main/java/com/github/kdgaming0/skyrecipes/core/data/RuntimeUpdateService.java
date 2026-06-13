@@ -29,7 +29,9 @@ public class RuntimeUpdateService {
 
     private static final long INITIAL_DELAY_SECONDS = 30;
 
-    /** Retry delays after pipeline failures: 1 min, 5 min, 15 min, then hourly forever. */
+    /**
+     * Retry delays after pipeline failures: 1 min, 5 min, 15 min, then hourly forever.
+     */
     private static final long[] BACKOFF_SECONDS = {60, 300, 900, 3600};
 
     private final Path dataDir;
@@ -65,6 +67,31 @@ public class RuntimeUpdateService {
     // ---- Public API ----
 
     /**
+     * Normalize an HTTP ETag for comparison: strips the weak-validator prefix
+     * ({@code W/}) and surrounding quotes, so weak and strong forms of the
+     * same tag compare equal regardless of which request produced them.
+     */
+    public static String normalizeEtag(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.trim();
+        if (s.startsWith("W/")) {
+            s = s.substring(2);
+        }
+        if (s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"")) {
+            s = s.substring(1, s.length() - 1);
+        }
+        return s;
+    }
+
+    private static boolean etagsMatch(String a, String b) {
+        String na = normalizeEtag(a);
+        String nb = normalizeEtag(b);
+        return na != null && na.equals(nb);
+    }
+
+    /**
      * Start scheduled update checks. The interval was fixed at construction time
      * from {@code SkyRecipesConfig.dataRefreshIntervalHours}.
      */
@@ -80,14 +107,18 @@ public class RuntimeUpdateService {
         LOGGER.info("Update service started. Checking every {} h.", checkIntervalSeconds / 3600L);
     }
 
-    /** Stop scheduled checks. */
+    /**
+     * Stop scheduled checks.
+     */
     public synchronized void shutdown() {
         running = false;
         scheduler.shutdownNow();
         LOGGER.info("Update service shut down.");
     }
 
-    /** Force an immediate update check on the scheduler thread. Cancels any pending backoff retry. */
+    /**
+     * Force an immediate update check on the scheduler thread. Cancels any pending backoff retry.
+     */
     public void checkNow() {
         cancelPendingRetry();
         scheduler.execute(this::performUpdateCheck);
@@ -141,7 +172,9 @@ public class RuntimeUpdateService {
         PipelineStatus.recordNextRetry(System.currentTimeMillis() + delay * 1000L);
     }
 
-    /** Cancel a pending backoff retry (used by manual refresh, which runs immediately instead). */
+    /**
+     * Cancel a pending backoff retry (used by manual refresh, which runs immediately instead).
+     */
     public synchronized void cancelPendingRetry() {
         if (pendingRetry != null) {
             pendingRetry.cancel(false);
@@ -150,43 +183,22 @@ public class RuntimeUpdateService {
         PipelineStatus.recordNextRetry(0L);
     }
 
-    /** Reset the backoff tier after a successful pipeline run. */
+    /**
+     * Reset the backoff tier after a successful pipeline run.
+     */
     public synchronized void onPipelineSuccess() {
         retryAttempt = 0;
         cancelPendingRetry();
     }
 
-    /** Epoch millis of the next scheduled retry, or 0 if none is pending. */
+    /**
+     * Epoch millis of the next scheduled retry, or 0 if none is pending.
+     */
     public synchronized long getNextRetryTime() {
         if (pendingRetry == null || pendingRetry.isDone()) {
             return 0L;
         }
         return System.currentTimeMillis() + pendingRetry.getDelay(TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Normalize an HTTP ETag for comparison: strips the weak-validator prefix
-     * ({@code W/}) and surrounding quotes, so weak and strong forms of the
-     * same tag compare equal regardless of which request produced them.
-     */
-    public static String normalizeEtag(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        String s = raw.trim();
-        if (s.startsWith("W/")) {
-            s = s.substring(2);
-        }
-        if (s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"")) {
-            s = s.substring(1, s.length() - 1);
-        }
-        return s;
-    }
-
-    private static boolean etagsMatch(String a, String b) {
-        String na = normalizeEtag(a);
-        String nb = normalizeEtag(b);
-        return na != null && na.equals(nb);
     }
 
     /**
@@ -234,7 +246,9 @@ public class RuntimeUpdateService {
         });
     }
 
-    /** Compile data immediately (for cold start). Runs on the scheduler thread. */
+    /**
+     * Compile data immediately (for cold start). Runs on the scheduler thread.
+     */
     public void compileNow(Consumer<BinaryDataCompiler.CompileResult> onComplete) {
         scheduler.execute(() -> {
             try {

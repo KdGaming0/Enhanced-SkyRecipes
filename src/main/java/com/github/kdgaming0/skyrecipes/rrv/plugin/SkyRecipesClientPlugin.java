@@ -8,12 +8,12 @@ import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
 import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
+import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsCache;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsFetcher;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsRegistry;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsSnapshot;
-import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
@@ -71,17 +71,29 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin {
 
-    /** Alias map exposed for {@link com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete}. */
+    /**
+     * Alias map exposed for {@link com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete}.
+     */
     public static final Map<String, String> ALIASES;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyRecipesClientPlugin.class);
 
-    /** RRV's private handleClientRecipe, bound via reflection. Null = provider-only fallback. */
+    /**
+     * RRV's private handleClientRecipe, bound via reflection. Null = provider-only fallback.
+     */
     private static final MethodHandle INJECT_RECIPE;
     private static final boolean DIRECT_INJECTION_AVAILABLE;
-
+    private static final int RECIPES_PER_TICK = 500;
+    private static final int STACKS_PER_TICK = 250;
+    /**
+     * Above this fraction of failures, a generation/build stage is treated as systemic and the cycle aborts.
+     */
+    private static final double MAX_FAILURE_RATE = 0.05;
+    /**
+     * How long generation waits for Hypixel stats before proceeding with fallback values.
+     */
+    private static final long HYPIXEL_WAIT_SECONDS = 5;
     private static volatile boolean recipesReady = false;
-
     /**
      * True from the injection commit point in {@link #beginBatchedInjection} until
      * {@link #finishStartup}. While set, RRV-initiated cache rebuilds are suppressed:
@@ -91,6 +103,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      */
     private static volatile boolean injectionInProgress = false;
 
+    // ---- Batched-injection constants ----------------------------------------
     /**
      * True only while SkyRecipes itself runs an intentional rebuild (provider-only
      * fallback). Lets that one call bypass the suppression in
@@ -98,7 +111,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      * {@code recipesReady} is already set at that point.
      */
     private static volatile boolean internalRebuildInProgress = false;
-
     private static volatile SkyblockSearchIndex searchIndex = null;
 
     static {
@@ -162,22 +174,23 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         ALIASES = Collections.unmodifiableMap(map);
     }
 
-    // ---- Batched-injection constants ----------------------------------------
-
-    private static final int RECIPES_PER_TICK = 500;
-    private static final int STACKS_PER_TICK = 250;
-
-    /** Above this fraction of failures, a generation/build stage is treated as systemic and the cycle aborts. */
-    private static final double MAX_FAILURE_RATE = 0.05;
-
-    /** How long generation waits for Hypixel stats before proceeding with fallback values. */
-    private static final long HYPIXEL_WAIT_SECONDS = 5;
-
     // ---- Per-instance volatile pipeline state -------------------------------
 
+    /**
+     * Guards {@link #maybeStartBackgroundPrep} so exactly one prep run launches
+     * per pipeline cycle, even when recipe-gen and stack-build complete concurrently.
+     */
+    private final AtomicBoolean backgroundPrepLaunched = new AtomicBoolean(false);
+    /**
+     * Guards {@link #beginBatchedInjection} so it runs at most once per pipeline
+     * cycle, even if {@code mc.execute} queues it twice.
+     */
+    private final AtomicBoolean injectionLaunched = new AtomicBoolean(false);
     private volatile boolean stacksReady = false;
     private volatile boolean startupFinalized = false;
-    /** True only for the very first injection; controls whether to clear the cache beforehand. */
+    /**
+     * True only for the very first injection; controls whether to clear the cache beforehand.
+     */
     private volatile boolean firstInjection = true;
     private volatile RecipeResult cachedResult = null;
     private volatile List<ItemStack> cachedStacks = null;
@@ -185,32 +198,19 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private volatile CompletableFuture<?> pendingStackBuild = null;
     private volatile boolean clientStarted = false;
     private volatile boolean startupRetryInProgress = false;
-
-    /** Set when direct injection fails systemically at runtime; all later cycles use the provider fallback. */
+    /**
+     * Set when direct injection fails systemically at runtime; all later cycles use the provider fallback.
+     */
     private volatile boolean directInjectionBroken = false;
 
-    /** True once any SkyRecipes entries may exist in RRV's cache (covers reloads that interrupt a running batcher). */
-    private volatile boolean cacheHasSkyRecipesEntries = false;
-
-    private volatile CompletableFuture<?> hypixelFetch = null;
-
     // ---- Coordinated background-completion state ----------------------------
-
+    /**
+     * True once any SkyRecipes entries may exist in RRV's cache (covers reloads that interrupt a running batcher).
+     */
+    private volatile boolean cacheHasSkyRecipesEntries = false;
+    private volatile CompletableFuture<?> hypixelFetch = null;
     private volatile RecipeResult pendingRecipeResult = null;
     private volatile StackBuildResult pendingStackResult = null;
-
-    /**
-     * Guards {@link #maybeStartBackgroundPrep} so exactly one prep run launches
-     * per pipeline cycle, even when recipe-gen and stack-build complete concurrently.
-     */
-    private final AtomicBoolean backgroundPrepLaunched = new AtomicBoolean(false);
-
-    /**
-     * Guards {@link #beginBatchedInjection} so it runs at most once per pipeline
-     * cycle, even if {@code mc.execute} queues it twice.
-     */
-    private final AtomicBoolean injectionLaunched = new AtomicBoolean(false);
-
     private StartupBatcher startupBatcher = null;
 
     // ---- Search-bar suggestion state ----------------------------------------
@@ -287,6 +287,14 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // Plugin entry point
     // =========================================================================
 
+    private static boolean exceedsFailureRate(int failures, int attempts) {
+        return attempts > 0 && (double) failures / attempts > MAX_FAILURE_RATE;
+    }
+
+    // =========================================================================
+    // Cache management
+    // =========================================================================
+
     @Override
     public void onIntegrationInitialize() {
         LOGGER.info("SkyRecipes RRV client plugin initializing...");
@@ -355,7 +363,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     }
 
     // =========================================================================
-    // Cache management
+    // Pipeline startup
     // =========================================================================
 
     /**
@@ -378,10 +386,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         injectionLaunched.set(false);
         startupBatcher = null;
     }
-
-    // =========================================================================
-    // Pipeline startup
-    // =========================================================================
 
     /**
      * Start background work when both data and the Minecraft client are ready.
@@ -425,6 +429,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
     }
 
+    // =========================================================================
+    // Background work: phase 1 (parallel) — recipes and stacks
+    // =========================================================================
+
     private void startHypixelFetch() {
         hypixelFetch = CompletableFuture.runAsync(() -> {
             try {
@@ -463,11 +471,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
     }
 
-    // =========================================================================
-    // Background work: phase 1 (parallel) — recipes and stacks
-    // =========================================================================
-
-    /** Start recipe generation if not already running this cycle. Must be called on the render thread. */
+    /**
+     * Start recipe generation if not already running this cycle. Must be called on the render thread.
+     */
     private void startBackgroundRecipes() {
         if (!SkyRecipes.isDataReady()) return;
         if (pendingRecipeResult != null) return; // already complete this cycle
@@ -492,7 +498,13 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         });
     }
 
-    /** Start stack and search-index building if not already running this cycle. Must be called on the render thread. */
+    // =========================================================================
+    // Background work: phase 2 — FamilyResolver + SkyblockRecipeCache
+    // =========================================================================
+
+    /**
+     * Start stack and search-index building if not already running this cycle. Must be called on the render thread.
+     */
     private void startBackgroundStacks() {
         if (!SkyRecipes.isDataReady()) return;
         if (pendingStackResult != null) return; // already complete this cycle
@@ -517,10 +529,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             return null;
         });
     }
-
-    // =========================================================================
-    // Background work: phase 2 — FamilyResolver + SkyblockRecipeCache
-    // =========================================================================
 
     /**
      * Called by both phase-1 futures on completion. The failure-threshold gate
@@ -591,10 +599,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 recipes.recipes().size(), recipes.parseFailures(),
                 stacks.stacks().size(), stacks.failedItems());
         return true;
-    }
-
-    private static boolean exceedsFailureRate(int failures, int attempts) {
-        return attempts > 0 && (double) failures / attempts > MAX_FAILURE_RATE;
     }
 
     // =========================================================================
@@ -886,7 +890,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // =========================================================================
 
     private record StackBuildResult(List<ItemStack> stacks, SkyblockSearchIndex index,
-                                    int attemptedItems, int failedItems) {}
+                                    int attemptedItems, int failedItems) {
+    }
 
     private record ItemSortKey(String familyBase, int tier, String cleanDisplayName, String internalName)
             implements Comparable<ItemSortKey> {
@@ -972,7 +977,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
          */
         private void rollbackToProviderMode() {
             LOGGER.error("Direct recipe injection failing systemically ({} failures in first {} recipes). "
-                    + "Rolling back partial injection and switching to provider-only mode.",
+                            + "Rolling back partial injection and switching to provider-only mode.",
                     failedRecipes, recipeIndex);
             directInjectionBroken = true;
             recipeIndex = recipes.size(); // skip remaining direct injection
@@ -983,7 +988,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             }
         }
 
-        /** @return true when all phases are complete */
+        /**
+         * @return true when all phases are complete
+         */
         boolean tick(Minecraft client) {
             ticksUsed++;
             long tickStart = System.nanoTime();

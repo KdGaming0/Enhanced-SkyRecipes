@@ -35,15 +35,6 @@ import java.util.List;
 @Mixin(value = AbstractContainerScreen.class, priority = 1100)
 public class QuickNavRecipeViewMixin {
 
-    @Inject(method = "init()V", at = @At("TAIL"))
-    private void skyrecipes$removeQuickNavFromRecipeView(CallbackInfo ci) {
-        if (!FabricLoader.getInstance().isModLoaded("rrv")) return;
-        if (!((Object) this instanceof RecipeViewScreen screen)) return;
-
-        removeQuickNavWidgets(screen);
-        nullQuickNavButtons(this);
-    }
-
     @Unique
     private static void removeQuickNavWidgets(RecipeViewScreen screen) {
         ScreenAccessor accessor = (ScreenAccessor) screen;
@@ -83,5 +74,14 @@ public class QuickNavRecipeViewMixin {
         } catch (IllegalAccessException e) {
             SkyRecipes.LOGGER.warn("Failed to clear Skyblocker QuickNav buttons", e);
         }
+    }
+
+    @Inject(method = "init()V", at = @At("TAIL"))
+    private void skyrecipes$removeQuickNavFromRecipeView(CallbackInfo ci) {
+        if (!FabricLoader.getInstance().isModLoaded("rrv")) return;
+        if (!((Object) this instanceof RecipeViewScreen screen)) return;
+
+        removeQuickNavWidgets(screen);
+        nullQuickNavButtons(this);
     }
 }

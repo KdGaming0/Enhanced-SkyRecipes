@@ -1,7 +1,5 @@
 package com.github.kdgaming0.skyrecipes.mixin.overlay;
 
-import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
-
 import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.config.options.OverlayDisplay;
 import cc.cassian.rrv.common.overlay.BlockingGuiComponent;
@@ -13,6 +11,7 @@ import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.client.gui.CategoryIconButton;
 import com.github.kdgaming0.skyrecipes.client.gui.CategoryState;
 import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
+import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
