@@ -94,13 +94,17 @@ public final class SearchAutocomplete {
         String q = query.toLowerCase();
         List<Suggestion> results = new ArrayList<>();
 
-        for (Entry entry : entries) {
-            if (entry.lower().startsWith(q)) {
-                results.add(new Suggestion(entry.text(), entry.tier()));
-                if (results.size() >= maxResults * 2) {
-                    // Soft cap before sorting to avoid huge sorts
-                    break;
-                }
+        // Entries are sorted by lowercase text, so all prefix matches form a contiguous
+        // range. Binary-search to its start instead of scanning every entry per keystroke.
+        for (int i = lowerBound(q); i < entries.size(); i++) {
+            Entry entry = entries.get(i);
+            if (!entry.lower().startsWith(q)) {
+                break;
+            }
+            results.add(new Suggestion(entry.text(), entry.tier()));
+            if (results.size() >= maxResults * 2) {
+                // Soft cap before sorting to avoid huge sorts
+                break;
             }
         }
 
@@ -118,6 +122,26 @@ public final class SearchAutocomplete {
     // -----------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------
+
+    /**
+     * Index of the first entry whose lowercase text is &ge; {@code key}.
+     *
+     * <p>{@code entries} is sorted by {@link Entry#lower()} using natural string ordering,
+     * so this is the start of the contiguous prefix-match range for {@code key}.</p>
+     */
+    private int lowerBound(String key) {
+        int lo = 0;
+        int hi = entries.size();
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (entries.get(mid).lower().compareTo(key) < 0) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
 
     /**
      * Return suggestions that match the query via fuzzy matching.

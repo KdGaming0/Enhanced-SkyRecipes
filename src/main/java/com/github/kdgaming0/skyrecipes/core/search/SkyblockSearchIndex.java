@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * High-performance inverted search index for all SkyBlock items.
@@ -507,10 +508,19 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolveKeywords(List<SearchQuery.KeywordClause> keywords) {
+        return resolveKeywords(keywords, this::resolveKeyword);
+    }
+
+    /**
+     * AND-combines the per-keyword matches produced by {@code resolver}. Returns an empty
+     * set as soon as any keyword matches nothing.
+     */
+    private BitSet resolveKeywords(List<SearchQuery.KeywordClause> keywords,
+                                   Function<String, BitSet> resolver) {
         BitSet result = new BitSet(itemCount);
         boolean first = true;
         for (SearchQuery.KeywordClause kw : keywords) {
-            BitSet matches = resolveKeyword(kw.token());
+            BitSet matches = resolver.apply(kw.token());
             if (matches.isEmpty()) {
                 return new BitSet();
             }
@@ -557,6 +567,14 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolvePrefixUnion(String prefix) {
+        return resolvePrefixUnion(prefix, anyTokenIndex);
+    }
+
+    /**
+     * Unions the item sets of every indexed token sharing {@code prefix}, looked up in the
+     * supplied token index. Short prefixes are capped to bound expansion on huge fan-outs.
+     */
+    private BitSet resolvePrefixUnion(String prefix, Map<String, BitSet> tokenIndex) {
         BitSet result = new BitSet(itemCount);
         if (prefix.isEmpty()) return result;
 
@@ -571,7 +589,7 @@ public final class SkyblockSearchIndex {
 
         int count = 0;
         for (int i = idx; i < sortedTokens.length && sortedTokens[i].startsWith(prefix); i++) {
-            BitSet bs = anyTokenIndex.get(sortedTokens[i]);
+            BitSet bs = tokenIndex.get(sortedTokens[i]);
             if (bs != null) result.or(bs);
             if (++count >= maxExpansion) break;
         }
@@ -598,19 +616,17 @@ public final class SkyblockSearchIndex {
         if (valueMap == null || valueMap.isEmpty()) {
             return new BitSet();
         }
+        return resolveThreshold(valueMap, toFilterOperator(stat.op()), stat.value());
+    }
 
-        BitSet result = new BitSet(itemCount);
-        switch (stat.op()) {
-            case GT -> unionRange(result, valueMap.tailMap(stat.value(), false));
-            case LT -> unionRange(result, valueMap.headMap(stat.value(), false));
-            case GTE -> unionRange(result, valueMap.tailMap(stat.value(), true));
-            case LTE -> unionRange(result, valueMap.headMap(stat.value(), true));
-            case EQ -> {
-                BitSet bs = valueMap.get(stat.value());
-                if (bs != null) result.or(bs);
-            }
-        }
-        return result;
+    private static SearchQuery.FilterClause.Operator toFilterOperator(SearchQuery.StatClause.Operator op) {
+        return switch (op) {
+            case GT -> SearchQuery.FilterClause.Operator.GT;
+            case LT -> SearchQuery.FilterClause.Operator.LT;
+            case GTE -> SearchQuery.FilterClause.Operator.GTE;
+            case LTE -> SearchQuery.FilterClause.Operator.LTE;
+            case EQ -> SearchQuery.FilterClause.Operator.EQ;
+        };
     }
 
     private BitSet resolveFilter(SearchQuery.FilterClause filter) {
@@ -647,52 +663,44 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolveSlayerFilter(SearchQuery.FilterClause filter) {
+        return resolveTypedLevelFilter(filter, slayerTypeIndex, slayerLevelIndex);
+    }
+
+    private BitSet resolveSkillFilter(SearchQuery.FilterClause filter) {
+        return resolveTypedLevelFilter(filter, skillTypeIndex, skillLevelIndex);
+    }
+
+    /**
+     * Resolves a requirement filter backed by a type index ({@code type -> items}) and a
+     * level index ({@code type -> level -> items}), e.g. slayer or skill requirements.
+     *
+     * <p>With an explicit type and a comparison operator, applies the threshold to that
+     * type's levels. With a type but no operator (or EQ), returns all items requiring that
+     * type. With no type, aggregates across every type.</p>
+     */
+    private BitSet resolveTypedLevelFilter(SearchQuery.FilterClause filter,
+                                           Map<String, BitSet> typeIndexMap,
+                                           Map<String, TreeMap<Integer, BitSet>> levelIndexMap) {
         String type = filter.stringValue();
         SearchQuery.FilterClause.Operator op = filter.op();
 
         if (type != null && !type.isEmpty()) {
             if (op == null || op == SearchQuery.FilterClause.Operator.EQ) {
-                BitSet exact = slayerTypeIndex.get(type);
+                BitSet exact = typeIndexMap.get(type);
                 return exact != null ? (BitSet) exact.clone() : new BitSet();
             }
-            TreeMap<Integer, BitSet> levelMap = slayerLevelIndex.get(type);
+            TreeMap<Integer, BitSet> levelMap = levelIndexMap.get(type);
             if (levelMap == null || levelMap.isEmpty()) return new BitSet();
             return resolveThreshold(levelMap, op, filter.intValue());
         }
 
         if (op == null || op == SearchQuery.FilterClause.Operator.EQ) {
             BitSet result = new BitSet();
-            for (BitSet bs : slayerTypeIndex.values()) result.or(bs);
+            for (BitSet bs : typeIndexMap.values()) result.or(bs);
             return result;
         }
         BitSet result = new BitSet();
-        for (TreeMap<Integer, BitSet> levelMap : slayerLevelIndex.values()) {
-            result.or(resolveThreshold(levelMap, op, filter.intValue()));
-        }
-        return result;
-    }
-
-    private BitSet resolveSkillFilter(SearchQuery.FilterClause filter) {
-        String skill = filter.stringValue();
-        SearchQuery.FilterClause.Operator op = filter.op();
-
-        if (skill != null && !skill.isEmpty()) {
-            if (op == null || op == SearchQuery.FilterClause.Operator.EQ) {
-                BitSet exact = skillTypeIndex.get(skill);
-                return exact != null ? (BitSet) exact.clone() : new BitSet();
-            }
-            TreeMap<Integer, BitSet> levelMap = skillLevelIndex.get(skill);
-            if (levelMap == null || levelMap.isEmpty()) return new BitSet();
-            return resolveThreshold(levelMap, op, filter.intValue());
-        }
-
-        if (op == null || op == SearchQuery.FilterClause.Operator.EQ) {
-            BitSet result = new BitSet();
-            for (BitSet bs : skillTypeIndex.values()) result.or(bs);
-            return result;
-        }
-        BitSet result = new BitSet();
-        for (TreeMap<Integer, BitSet> levelMap : skillLevelIndex.values()) {
+        for (TreeMap<Integer, BitSet> levelMap : levelIndexMap.values()) {
             result.or(resolveThreshold(levelMap, op, filter.intValue()));
         }
         return result;
@@ -755,19 +763,7 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolveKeywordsInName(List<SearchQuery.KeywordClause> keywords) {
-        BitSet result = new BitSet(itemCount);
-        boolean first = true;
-        for (SearchQuery.KeywordClause kw : keywords) {
-            BitSet matches = resolveKeywordInName(kw.token());
-            if (matches.isEmpty()) return new BitSet();
-            if (first) {
-                result.or(matches);
-                first = false;
-            } else {
-                result.and(matches);
-            }
-        }
-        return result;
+        return resolveKeywords(keywords, this::resolveKeywordInName);
     }
 
     private BitSet resolveKeywordInName(String token) {
@@ -787,25 +783,7 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolvePrefixUnionInName(String prefix) {
-        BitSet result = new BitSet(itemCount);
-        if (prefix.isEmpty()) return result;
-
-        int idx = Arrays.binarySearch(sortedTokens, prefix);
-        if (idx < 0) idx = -idx - 1;
-
-        int maxExpansion = switch (prefix.length()) {
-            case 1 -> 256;
-            case 2 -> 1024;
-            default -> Integer.MAX_VALUE;
-        };
-
-        int count = 0;
-        for (int i = idx; i < sortedTokens.length && sortedTokens[i].startsWith(prefix); i++) {
-            BitSet bs = nameTokenIndex.get(sortedTokens[i]);
-            if (bs != null) result.or(bs);
-            if (++count >= maxExpansion) break;
-        }
-        return result;
+        return resolvePrefixUnion(prefix, nameTokenIndex);
     }
 
     private void addSorted(BitSet bits, List<ItemStack> out) {

@@ -34,6 +34,14 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Renders a {@link MobPreview} into a centered preview box above the drop slot grid.
  * Adapted to fit RRV's entity_loot 32×32 preview area.
+ *
+ * <p>The {@code GuiGraphicsExtractor} passed through these methods is RRV's public
+ * client-recipe rendering surface — the same object RRV hands to
+ * {@code ReliableClientRecipe.renderRecipe}/{@code renderOverlay} (see RRV docs:
+ * {@code mods/client-recipes}). It exposes draw primitives ({@code text}, {@code fill},
+ * {@code item}, {@code entity}, {@code pose}) and tooltip queuing over Minecraft's
+ * draw context. Coupling here is to that documented RRV API, not to a private internal,
+ * so it is the intended integration point rather than a fragile hook.</p>
  */
 public final class MobPreviewRenderer {
 

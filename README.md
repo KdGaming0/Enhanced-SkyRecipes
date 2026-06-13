@@ -86,7 +86,7 @@ SkyRecipes supports structured queries beyond plain keywords:
 | **Slayer req** | `slayer:zombie>3` | Requires Zombie Slayer III+ |
 | **Skill req** | `skill:combat>20` | Requires Combat 20+ |
 | **Catacombs req** | `cata>=5` | Requires Catacombs 5+ |
-| **Boolean flags** | `dungeon`, `rift`, `soulbound`, `bazaar`, `craftable`, `forgeable`, `npc` | Filter by property |
+| **Boolean flags** | `dungeon`, `rift`, `soulbound`, `bazaar`, `craftable`, `forgeable`, `npc`, `vanilla`, `pet`, `accessory` | Filter by property |
 
 Combine filters freely: `rarity:legendary damage>200 dungeon sword` finds legendary dungeon swords with more than 200 damage.
 
@@ -105,11 +105,11 @@ Evaluate math directly in the RRV search bar. The result appears as gray ghost t
 - `t` → ×1,000,000,000,000
 - `s` → ×64 (stack, e.g. `27s` → **1,728**)
 - `e` → ×160 (enchanted item, e.g. `10e` → **1,600**)
-- `%` → ÷100 (e.g. `50 * 10%` → **5**)
+- `%` → ÷100, a postfix percentage modifier (e.g. `50 * 10%` → **5**)
 
 **Operators**
-- `+` `-` `*` `/` `^` (power) `%` (modulo)
-- `x` or `X` can be used in place of `*` for multiplication
+- `+` `-` `*` `/` `^` (power)
+- `x` can be used in place of `*` for multiplication
 - `**` is treated as `^`
 
 **Config:** `calculatorPrecision` controls decimal places (0–10, default 5).
