@@ -75,6 +75,11 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     private final Map<Integer, SlotContent> gridSlots;
     private final List<SlotContent> ingredientList;
     private final List<SlotContent> resultList;
+    // Border geometry is fixed by the immutable mutation layout, so it is computed once
+    // here rather than every frame. renderOverlay just draws these.
+    private final List<DashedBorder> multiBlockBorders;
+    @Nullable
+    private final SolidBorder baseItemBorder;
     @Nullable
     private List<Component> cachedTooltip;
     @Nullable
@@ -89,6 +94,8 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         this.gridSlots = data.slots;
         this.ingredientList = data.ingredients;
         this.resultList = data.results;
+        this.multiBlockBorders = computeMultiBlockBorders(mutation);
+        this.baseItemBorder = computeBaseItemBorder(mutation);
     }
 
     // ── grid construction ─────────────────────────────────────────────────────
@@ -153,16 +160,23 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         };
     }
 
-    private static void drawMultiBlockBorder(GuiGraphicsExtractor gfx, int r1, int c1, int r2, int c2,
-                                             boolean isTarget) {
+    /** Pixel geometry of one dashed multi-block border plus its dimension-label inputs. */
+    private record DashedBorder(int x1, int y1, int x2, int y2, int color,
+                                int labelLastRow, int labelLastCol,
+                                int labelWidth, int labelHeight) {
+    }
+
+    /** Pixel geometry of the 1px solid border around the target crop. */
+    private record SolidBorder(int x1, int y1, int x2, int y2) {
+    }
+
+    private static DashedBorder makeDashedBorder(int r1, int c1, int r2, int c2, boolean isTarget) {
         int color = isTarget ? DASH_TARGET_COLOR : DASH_INGREDIENT_COLOR;
         int x1 = GRID_ORIGIN_X + c1 * SLOT_SIZE;
         int y1 = GRID_ORIGIN_Y + r1 * SLOT_SIZE;
         int x2 = GRID_ORIGIN_X + (c2 + 1) * SLOT_SIZE;
         int y2 = GRID_ORIGIN_Y + (r2 + 1) * SLOT_SIZE;
-
-        drawDashedRect(gfx, x1, y1, x2, y2, color);
-        renderDimensionLabel(gfx, r2, c2, c2 - c1 + 1, r2 - r1 + 1);
+        return new DashedBorder(x1, y1, x2, y2, color, r2, c2, c2 - c1 + 1, r2 - r1 + 1);
     }
 
     // ── RRV contract ──────────────────────────────────────────────────────────
@@ -311,11 +325,23 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     @Override
     public void renderOverlay(RecipeViewScreen screen, RecipePosition pos,
                               GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        renderMultiBlockBorders(graphics);
-        renderBaseItemBorder(graphics);
+        // Dashed multi-block borders first, then the solid base-item border on top.
+        for (DashedBorder b : multiBlockBorders) {
+            drawDashedRect(graphics, b.x1(), b.y1(), b.x2(), b.y2(), b.color());
+            renderDimensionLabel(graphics, b.labelLastRow(), b.labelLastCol(), b.labelWidth(), b.labelHeight());
+        }
+
+        if (baseItemBorder != null) {
+            SolidBorder b = baseItemBorder;
+            graphics.fill(b.x1(), b.y1(), b.x2(), b.y1() + 1, TARGET_BORDER_COLOR);
+            graphics.fill(b.x1(), b.y2() - 1, b.x2(), b.y2(), TARGET_BORDER_COLOR);
+            graphics.fill(b.x1(), b.y1(), b.x1() + 1, b.y2(), TARGET_BORDER_COLOR);
+            graphics.fill(b.x2() - 1, b.y1(), b.x2(), b.y2(), TARGET_BORDER_COLOR);
+        }
     }
 
-    private void renderBaseItemBorder(GuiGraphicsExtractor gfx) {
+    @Nullable
+    private static SolidBorder computeBaseItemBorder(GardenMutation mutation) {
         int offset = (GRID_SIZE - mutation.gridSize()) / 2;
         int minR = GRID_SIZE, minC = GRID_SIZE;
         int maxR = -1, maxC = -1;
@@ -335,26 +361,22 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         }
 
         if (!hasTarget) {
-            return;
+            return null;
         }
 
         int x1 = GRID_ORIGIN_X + minC * SLOT_SIZE + 1;
         int y1 = GRID_ORIGIN_Y + minR * SLOT_SIZE + 1;
         int x2 = GRID_ORIGIN_X + (maxC + 1) * SLOT_SIZE - 1;
         int y2 = GRID_ORIGIN_Y + (maxR + 1) * SLOT_SIZE - 1;
-
-        // 1px solid border
-        gfx.fill(x1, y1, x2, y1 + 1, TARGET_BORDER_COLOR);
-        gfx.fill(x1, y2 - 1, x2, y2, TARGET_BORDER_COLOR);
-        gfx.fill(x1, y1, x1 + 1, y2, TARGET_BORDER_COLOR);
-        gfx.fill(x2 - 1, y1, x2, y2, TARGET_BORDER_COLOR);
+        return new SolidBorder(x1, y1, x2, y2);
     }
 
-    private void renderMultiBlockBorders(GuiGraphicsExtractor gfx) {
+    private static List<DashedBorder> computeMultiBlockBorders(GardenMutation mutation) {
+        List<DashedBorder> borders = new ArrayList<>();
         boolean[][] covered = new boolean[GRID_SIZE][GRID_SIZE];
         int offset = (GRID_SIZE - mutation.gridSize()) / 2;
 
-        // ── Target multi-block (unchanged) ────────────────────────────────────────
+        // ── Target multi-block ────────────────────────────────────────────────────
         GardenMutationRegistry.CropSize targetCs = GardenMutationRegistry.getCropSize(mutation.id());
         if (targetCs != null && (targetCs.width() > 1 || targetCs.height() > 1)) {
             int minR = GRID_SIZE, minC = GRID_SIZE, maxR = -1, maxC = -1;
@@ -370,7 +392,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
                 }
             }
             if (maxR >= 0) {
-                drawMultiBlockBorder(gfx, minR, minC, maxR, maxC, true);
+                borders.add(makeDashedBorder(minR, minC, maxR, maxC, true));
                 markCovered(covered, minR, minC, maxR, maxC);
             }
         }
@@ -391,10 +413,11 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
                 int bottom = Math.min(top + cs.height() - 1, GRID_SIZE - 1);
                 int right = Math.min(left + cs.width() - 1, GRID_SIZE - 1);
 
-                drawMultiBlockBorder(gfx, top, left, bottom, right, false);
+                borders.add(makeDashedBorder(top, left, bottom, right, false));
                 markCovered(covered, top, left, bottom, right);
             }
         }
+        return borders;
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

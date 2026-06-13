@@ -105,10 +105,10 @@ public final class MobPreviewRenderer {
                               int animTick, float partialTicks) {
         boolean rendered = switch (preview.kind()) {
             case VANILLA_ENTITY ->
-                    renderVanilla(topEntity(entityStack), gfx, recipeLeft, recipeTop, animTick, partialTicks);
+                    renderVanilla(topEntity(entityStack), gfx, recipeLeft, recipeTop, animTick, partialTicks, BOX_TOP, -1.0F);
             case PLAYER_WITH_SKIN ->
-                    renderPlayerSkin(preview.skinPath(), gfx, recipeLeft, recipeTop, animTick, partialTicks);
-            case SKULL_ITEM -> renderSkull(preview.helmetItemId(), gfx, recipeLeft, recipeTop);
+                    renderPlayerSkin(preview.skinPath(), gfx, recipeLeft, recipeTop, animTick, partialTicks, BOX_TOP);
+            case SKULL_ITEM -> renderSkull(preview.helmetItemId(), gfx, recipeLeft, recipeTop, BOX_TOP);
             case COMPOSITE -> renderComposite(preview, gfx, recipeLeft, recipeTop, entityStack, animTick, partialTicks);
         };
 
@@ -284,12 +284,6 @@ public final class MobPreviewRenderer {
 
     private static boolean renderVanilla(@Nullable LivingEntity entity, GuiGraphicsExtractor gfx,
                                          int recipeLeft, int recipeTop,
-                                         int animTick, float partialTicks) {
-        return renderVanilla(entity, gfx, recipeLeft, recipeTop, animTick, partialTicks, BOX_TOP, -1.0F);
-    }
-
-    private static boolean renderVanilla(@Nullable LivingEntity entity, GuiGraphicsExtractor gfx,
-                                         int recipeLeft, int recipeTop,
                                          int animTick, float partialTicks, int yBase,
                                          float overrideScale) {
         if (entity == null) return false;
@@ -323,12 +317,6 @@ public final class MobPreviewRenderer {
 
     private static boolean renderPlayerSkin(String skinPath, GuiGraphicsExtractor gfx,
                                             int recipeLeft, int recipeTop,
-                                            int animTick, float partialTicks) {
-        return renderPlayerSkin(skinPath, gfx, recipeLeft, recipeTop, animTick, partialTicks, BOX_TOP);
-    }
-
-    private static boolean renderPlayerSkin(String skinPath, GuiGraphicsExtractor gfx,
-                                            int recipeLeft, int recipeTop,
                                             int animTick, float partialTicks, int yBase) {
         Identifier texture = MobSkinRegistry.getOrLoad(skinPath);
         if (texture == null) {
@@ -346,11 +334,6 @@ public final class MobPreviewRenderer {
     }
 
     // ── Skull path ──────────────────────────────────────────────────────────────
-
-    private static boolean renderSkull(String helmetItemId, GuiGraphicsExtractor gfx,
-                                       int recipeLeft, int recipeTop) {
-        return renderSkull(helmetItemId, gfx, recipeLeft, recipeTop, BOX_TOP);
-    }
 
     private static boolean renderSkull(String helmetItemId, GuiGraphicsExtractor gfx,
                                        int recipeLeft, int recipeTop, int yBase) {
