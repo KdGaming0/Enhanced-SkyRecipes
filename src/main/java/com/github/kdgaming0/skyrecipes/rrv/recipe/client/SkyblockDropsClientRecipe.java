@@ -39,6 +39,14 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
     private final String mobName;
     private final String[] chances;
     private final List<SlotContent> drops;
+    /**
+     * Result list used for RRV's recipe index only: the drops plus the source mob's own
+     * stack. Including the source here makes clicking the mob in the item list resolve to
+     * this recipe (via {@link com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache}),
+     * while {@link #bindSlots} still renders only {@link #drops}, so the source is never drawn
+     * as a stray slot.
+     */
+    private final List<SlotContent> results;
     private final MobPreviewController previewController;
     @Nullable
     private final RecipeViewMenu.AdditionalStackModifier[] chanceModifiers;
@@ -46,12 +54,14 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
     private Component cachedMobName;
 
     public SkyblockDropsClientRecipe(Identifier id, String mobName, String renderRef,
+                                     @Nullable ItemStack sourceStack,
                                      List<DropEntry> drops, String[] chances,
                                      List<String> wikiUrls) {
         super(id, wikiUrls);
         this.mobName = mobName != null ? mobName : "";
         this.chances = chances != null ? chances : new String[0];
         this.drops = buildDropsList(drops);
+        this.results = buildResultsList(this.drops, sourceStack);
 
         ConstantsRegistry constants = SkyRecipes.getConstantsRegistry();
         MobPreview resolved = constants != null ? MobPreviewResolver.resolve(renderRef, constants) : null;
@@ -65,6 +75,21 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
         for (DropEntry drop : rawDrops) {
             out.add(SlotContent.of(drop.stack()));
         }
+        return out;
+    }
+
+    /**
+     * Appends the source mob's stack after the drops so its SkyBlock ID is indexed as a
+     * result. The source is added last so {@code getResultTier} scans the actual drops first.
+     * Falls back to the drops list when the source has no valid stack.
+     */
+    private static List<SlotContent> buildResultsList(List<SlotContent> drops, @Nullable ItemStack sourceStack) {
+        if (sourceStack == null || sourceStack.isEmpty()) {
+            return drops;
+        }
+        List<SlotContent> out = new ArrayList<>(drops.size() + 1);
+        out.addAll(drops);
+        out.add(SlotContent.of(sourceStack));
         return out;
     }
 
@@ -137,7 +162,7 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
 
     @Override
     public List<SlotContent> getResults() {
-        return drops;
+        return results;
     }
 
     @Override

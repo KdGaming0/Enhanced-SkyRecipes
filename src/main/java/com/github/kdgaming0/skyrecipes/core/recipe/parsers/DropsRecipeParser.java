@@ -48,7 +48,18 @@ public final class DropsRecipeParser {
             String name = recipe.name() != null ? recipe.name() : "";
             String render = recipe.render() != null ? recipe.render() : "";
 
-            return new SkyblockDropsClientRecipe(recipeId, name, render, drops, chances, item.info());
+            // The source item (the mob/boss itself) so RRV's result index resolves a click
+            // on the source to this recipe. Built in its own guard: build() can throw, and a
+            // throw here must not null the whole recipe (which would also break drop-clicks).
+            // On failure the source simply isn't clickable; the recipe is otherwise intact.
+            ItemStack sourceStack;
+            try {
+                sourceStack = ItemStackBuilder.build(item);
+            } catch (Exception e) {
+                sourceStack = ItemStack.EMPTY;
+            }
+
+            return new SkyblockDropsClientRecipe(recipeId, name, render, sourceStack, drops, chances, item.info());
         });
     }
 }
