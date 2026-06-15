@@ -87,8 +87,38 @@ SkyRecipes supports structured queries beyond plain keywords:
 | **Skill req** | `skill:combat>20` | Requires Combat 20+ |
 | **Catacombs req** | `cata>=5` | Requires Catacombs 5+ |
 | **Boolean flags** | `dungeon`, `rift`, `soulbound`, `bazaar`, `craftable`, `forgeable`, `npc`, `vanilla`, `pet`, `accessory` | Filter by property |
+| **Exact phrase** | `"mining speed"` | The words must appear **together on one line** of the name or lore |
+| **Regex** | `/mining.*fortune/` | Full regular expression, case-insensitive, matched one line at a time |
 
 Combine filters freely: `rarity:legendary damage>200 dungeon sword` finds legendary dungeon swords with more than 200 damage.
+
+#### Exact phrases & regex
+
+Plain keywords are matched independently and can land **anywhere** in an item's name or lore — even on different lines. So `reforge stone mining speed` also turns up items that merely happen to mention "mining" and "speed" on separate lines (the Sunstone, for example), not just true mining-speed reforges.
+
+Wrap words in **double quotes** to require them as a contiguous phrase on a single line:
+- `reforge stone "mining speed"` — reforge stones whose effect text actually reads "mining speed"
+- `"reforge stone" "mining speed"` — same result, with both parts required as phrases
+
+For full power, put a **regular expression** between slashes. It's case-insensitive and matched one line at a time (like `grep`), so it never bridges two lore lines:
+- `/mining (speed|fortune)/` — lines mentioning mining speed **or** mining fortune
+- `/\+\d+ mining speed/` — a numeric mining-speed bonus such as "+30 Mining Speed"
+
+> Type the alternation pipe `|` **directly** — `/(speed|fortune)/`. Don't write `\|`; in a regex that means a literal `|` character and the alternation won't work.
+
+**New to regex?** A regular expression is a tiny pattern language for describing text. You only need a handful of pieces:
+
+- `.` — any single character; `.*` — any run of characters ("anything in between")
+- `\d` — any digit `0–9`; `\d+` — one or more digits, i.e. a number like `30`
+- `+` — one or more of the item before it; `*` — zero or more; `?` — makes the item before it optional (`swords?` matches "sword" and "swords")
+- `a|b` — matches `a` **or** `b`; wrap the choices in parentheses to group them: `(speed|fortune)`
+- `[abc]` — any one of the listed characters (`[ivx]` matches a roman-numeral letter)
+- `^` — the start of the line; `$` — the end of the line (`^aspect` matches lines that *begin* with "aspect")
+- `\` — makes the next special character literal, so `\+` matches a real `+` and `\.` a real `.`
+
+Plain letters and spaces just match themselves, so you can mix them in. Putting it together, `/\+\d+ (speed|fortune)/` reads as: a literal `+`, then a number, a space, then "speed" or "fortune" — matching stat lines like "+30 Speed" or "+12 Fortune". Everything is case-insensitive and checked one line at a time, so you never have to worry about upper/lowercase or a pattern spilling across two lore lines.
+
+Phrases and regex combine with every other filter — e.g. `%WEAPON rarity:legendary "ability damage"`. A half-typed or invalid regex is simply ignored until it's complete, so your results never blank out while you type. Plain keyword searches are completely unaffected.
 
 ### Search Calculator
 Evaluate math directly in the RRV search bar. The result appears as gray ghost text next to your query — no need to press anything.

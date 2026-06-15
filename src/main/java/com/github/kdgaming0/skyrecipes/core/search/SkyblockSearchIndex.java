@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * High-performance inverted search index for all SkyBlock items.
@@ -55,6 +57,12 @@ public final class SkyblockSearchIndex {
 
     // Inventory fast-path
     private final Map<String, Set<String>> idToTokens;
+
+    // Phrase/regex authoritative text: per item, lowercased name + lore lines joined by
+    // '\n'. searchText is indexed by item position; idToSearchText mirrors it by SkyBlock
+    // id for the inventory-highlight path.
+    private final String[] searchText;
+    private final Map<String, String> idToSearchText;
 
     // Precomputed sort helpers
     private final String[] displayNames;
@@ -103,6 +111,8 @@ public final class SkyblockSearchIndex {
         this.catacombsTypeIndex = new HashMap<>(8);
         this.catacombsLevelIndex = new HashMap<>(8);
         this.idToTokens = new HashMap<>(items.size());
+        this.searchText = new String[itemCount];
+        this.idToSearchText = new HashMap<>(items.size());
 
         this.displayNames = new String[itemCount];
         this.hasCraftingRecipe = new boolean[itemCount];
@@ -427,6 +437,26 @@ public final class SkyblockSearchIndex {
             }
         }
 
+        // Phrases and regex: verify against the item's stored name+lore text. Without this
+        // a pure-phrase query (empty keywords/filters) would pass every check above and
+        // wrongly highlight every slot.
+        if (!parsed.phrases().isEmpty() || !parsed.regexes().isEmpty()) {
+            String text = idToSearchText.get(itemId);
+            if (text == null) {
+                return false;
+            }
+            for (SearchQuery.PhraseClause phrase : parsed.phrases()) {
+                if (text.indexOf(phrase.text()) < 0) {
+                    return false;
+                }
+            }
+            for (SearchQuery.RegexClause regex : parsed.regexes()) {
+                if (!regexFindWithinLine(text, regex.pattern())) {
+                    return false;
+                }
+            }
+        }
+
         // Stat clauses cannot be evaluated for inventory
         return parsed.stats().isEmpty();
     }
@@ -514,13 +544,78 @@ public final class SkyblockSearchIndex {
             if (candidates.isEmpty()) return candidates;
         }
 
-        // Keywords (most expensive — do last on smallest candidate set)
+        // Keywords (most expensive token op — do last on smallest candidate set)
         if (!query.keywords().isEmpty()) {
             BitSet keywordMatches = resolveKeywords(query.keywords());
             candidates.and(keywordMatches);
+            if (candidates.isEmpty()) return candidates;
+        }
+
+        // Phrases and regex are verified against the stored name+lore text. They scan only
+        // the surviving candidates, so the cheaper clauses above keep the scan small.
+        for (SearchQuery.PhraseClause phrase : query.phrases()) {
+            retainPhraseMatches(candidates, phrase.text());
+            if (candidates.isEmpty()) return candidates;
+        }
+        for (SearchQuery.RegexClause regex : query.regexes()) {
+            retainRegexMatches(candidates, regex.pattern());
+            if (candidates.isEmpty()) return candidates;
         }
 
         return candidates;
+    }
+
+    /**
+     * Clears every candidate whose stored search text does not contain {@code phrase} as a
+     * contiguous substring. {@code phrase} and {@code searchText} are both lowercased, and
+     * the '\n' line separators in the stored text stop a phrase from spanning two lines.
+     */
+    private void retainPhraseMatches(BitSet candidates, String phrase) {
+        for (int i = candidates.nextSetBit(0); i >= 0; i = candidates.nextSetBit(i + 1)) {
+            String text = searchText[i];
+            if (text == null || text.indexOf(phrase) < 0) {
+                candidates.clear(i);
+            }
+        }
+    }
+
+    /**
+     * Clears every candidate whose stored search text does not match {@code pattern} within
+     * a single line (see {@link #regexFindWithinLine}).
+     */
+    private void retainRegexMatches(BitSet candidates, Pattern pattern) {
+        for (int i = candidates.nextSetBit(0); i >= 0; i = candidates.nextSetBit(i + 1)) {
+            String text = searchText[i];
+            if (text == null || !regexFindWithinLine(text, pattern)) {
+                candidates.clear(i);
+            }
+        }
+    }
+
+    /**
+     * Returns whether {@code pattern} matches within any single line of {@code text} (lines
+     * split on '\n'). Each line is matched in isolation via {@link Matcher#region}, keeping
+     * regex line-scoped like {@code grep} so {@code \s} or {@code .} cannot bridge two lore
+     * lines — mirroring the within-line semantics of quoted phrases. Allocates nothing
+     * beyond the single reused matcher.
+     */
+    private static boolean regexFindWithinLine(String text, Pattern pattern) {
+        Matcher matcher = pattern.matcher(text);
+        int length = text.length();
+        int start = 0;
+        while (start <= length) {
+            int newline = text.indexOf('\n', start);
+            int end = newline < 0 ? length : newline;
+            matcher.region(start, end);
+            if (matcher.find()) {
+                return true;
+            }
+            if (newline < 0) {
+                break;
+            }
+            start = newline + 1;
+        }
+        return false;
     }
 
     private BitSet resolveKeywords(List<SearchQuery.KeywordClause> keywords) {
@@ -847,13 +942,26 @@ public final class SkyblockSearchIndex {
         // Display name
         String displayName = TextUtil.stripColorCodes(stack.getHoverName().getString());
         displayNames[itemIndex] = displayName;
+
+        // Phrase/regex search text: name + each lore line, lowercased and '\n'-separated so
+        // a phrase can never span a line boundary. Built from text already being
+        // color-stripped for tokenization, so it adds no extra passes.
+        StringBuilder searchBuf = new StringBuilder(128);
+        searchBuf.append(displayName.toLowerCase());
+
         tokenize(displayName, (token) -> {
             addNameToken(token, itemIndex);
             if (itemTokens != null) itemTokens.add(token);
         });
 
         if (neuItem != null) {
-            indexNeuItem(itemIndex, stack, neuItem, itemTokens, constantsRegistry);
+            indexNeuItem(itemIndex, stack, neuItem, itemTokens, constantsRegistry, searchBuf);
+        }
+
+        String text = searchBuf.toString();
+        searchText[itemIndex] = text;
+        if (itemId != null) {
+            idToSearchText.put(itemId, text);
         }
 
         //noinspection ConstantValue
@@ -863,9 +971,10 @@ public final class SkyblockSearchIndex {
     }
 
     private void indexNeuItem(int itemIndex, ItemStack stack, NeuItem neuItem,
-                              Set<String> itemTokens, ConstantsRegistry constantsRegistry) {
+                              Set<String> itemTokens, ConstantsRegistry constantsRegistry,
+                              StringBuilder searchBuf) {
         try {
-            indexNeuItemInternal(itemIndex, stack, neuItem, itemTokens, constantsRegistry);
+            indexNeuItemInternal(itemIndex, stack, neuItem, itemTokens, constantsRegistry, searchBuf);
         } catch (Exception e) {
             LOGGER.warn("Failed to index item {}", neuItem.internalName(), e);
         }
@@ -873,7 +982,8 @@ public final class SkyblockSearchIndex {
 
     @SuppressWarnings("unused")
     private void indexNeuItemInternal(int itemIndex, ItemStack stack, NeuItem neuItem,
-                                      Set<String> itemTokens, ConstantsRegistry constantsRegistry) {
+                                      Set<String> itemTokens, ConstantsRegistry constantsRegistry,
+                                      StringBuilder searchBuf) {
         // Internal name
         if (neuItem.internalName() != null) {
             String lower = neuItem.internalName().toLowerCase();
@@ -893,6 +1003,7 @@ public final class SkyblockSearchIndex {
         if (neuItem.lore() != null) {
             for (String line : neuItem.lore()) {
                 String clean = TextUtil.stripColorCodes(line);
+                searchBuf.append('\n').append(clean.toLowerCase());
                 tokenize(clean, (token) -> {
                     addAnyToken(token, itemIndex);
                     if (itemTokens != null) itemTokens.add(token);

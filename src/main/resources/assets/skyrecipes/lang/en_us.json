@@ -28,11 +28,11 @@
   "skyrecipes.midnightconfig.rrvSidePanelWidthPercent": "Side Panel Width",
   "skyrecipes.midnightconfig.rrvSidePanelWidthPercent.tooltip": "Shrinks the RRV side-panel overlay width as a percentage.",
 
-  "skyrecipes.midnightconfig.dataRefreshIntervalHours": "Data Refresh Interval",
-  "skyrecipes.midnightconfig.dataRefreshIntervalHours.tooltip": "How often to check for updated NEU repository data (in hours).",
+  "skyrecipes.midnightconfig.calculatorPrecision": "Calculator Precision",
+  "skyrecipes.midnightconfig.calculatorPrecision.tooltip": "Number of decimal places shown for search-bar calculator results.",
 
-  "skyrecipes.midnightconfig.hypixelCacheTtlHours": "Hypixel Cache TTL",
-  "skyrecipes.midnightconfig.hypixelCacheTtlHours.tooltip": "How long to cache Hypixel API item data (in hours).",
+  "skyrecipes.midnightconfig.dataRefreshIntervalMinutes": "Data Refresh Interval",
+  "skyrecipes.midnightconfig.dataRefreshIntervalMinutes.tooltip": "How often to check for updated NEU repository data (in minutes).",
 
   "skyrecipes.midnightconfig.category.ui": "UI",
   "skyrecipes.midnightconfig.category.rrv": "RRV",

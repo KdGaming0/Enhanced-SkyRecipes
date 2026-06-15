@@ -4,6 +4,8 @@ import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Zero-allocation direct-scan parser for the search query bar.
@@ -54,7 +56,8 @@ public final class SearchQueryParser {
             "sunflower_fortune", "moonflower_fortune", "wild_rose_fortune",
             "mangrove_fortune"
     );
-    private static final SearchQuery EMPTY = new SearchQuery(List.of(), List.of(), List.of(), null, Set.of());
+    private static final SearchQuery EMPTY =
+            new SearchQuery(List.of(), List.of(), List.of(), null, Set.of(), List.of(), List.of());
 
     private static final Map<String, String> FILTER_KEY_ALIASES = Map.ofEntries(
             Map.entry("r", "rarity"), Map.entry("rarity", "rarity"),
@@ -165,12 +168,56 @@ public final class SearchQueryParser {
         List<SearchQuery.FilterClause> filters = null;
         SearchQuery.CategoryPath categoryPath = null;
         Set<String> booleanFlags = null;
+        List<SearchQuery.PhraseClause> phrases = null;
+        List<SearchQuery.RegexClause> regexes = null;
+
+        // Original-case view is used only to extract regex bodies, where lowercasing
+        // would corrupt metacharacters (e.g. \D -> \d). Indices align with `lower` for
+        // ASCII input; if a non-ASCII char shifted the length, fall back to `lower`.
+        String caseSource = raw.length() == len ? raw : lower;
 
         while (i < len) {
             while (i < len && Character.isWhitespace(lower.charAt(i))) {
                 i++;
             }
             if (i >= len) break;
+
+            char delim = lower.charAt(i);
+
+            // Quoted phrase: literal, contiguous-within-a-line match. An unterminated
+            // quote consumes the rest of the input so live-typing keeps filtering.
+            if (delim == '"') {
+                int contentStart = i + 1;
+                int close = lower.indexOf('"', contentStart);
+                int contentEnd = close >= 0 ? close : len;
+                String phrase = lower.substring(contentStart, contentEnd);
+                i = close >= 0 ? close + 1 : len;
+                if (!phrase.isBlank()) {
+                    if (phrases == null) phrases = new ArrayList<>(2);
+                    phrases.add(new SearchQuery.PhraseClause(phrase));
+                }
+                continue;
+            }
+
+            // Regex: /pattern/. Compiled once, case-insensitive. An invalid or
+            // incomplete pattern is dropped so it never blanks the list while typing.
+            if (delim == '/') {
+                int contentStart = i + 1;
+                int close = lower.indexOf('/', contentStart);
+                int contentEnd = close >= 0 ? close : len;
+                String patternBody = caseSource.substring(contentStart, contentEnd);
+                i = close >= 0 ? close + 1 : len;
+                if (!patternBody.isBlank()) {
+                    try {
+                        Pattern compiled = Pattern.compile(patternBody, Pattern.CASE_INSENSITIVE);
+                        if (regexes == null) regexes = new ArrayList<>(2);
+                        regexes.add(new SearchQuery.RegexClause(compiled, patternBody));
+                    } catch (PatternSyntaxException ignored) {
+                        // Half-typed or malformed regex: ignore this clause.
+                    }
+                }
+                continue;
+            }
 
             int start = i;
             while (i < len && !Character.isWhitespace(lower.charAt(i))) {
@@ -224,7 +271,9 @@ public final class SearchQueryParser {
                 stats != null ? stats : List.of(),
                 filters != null ? filters : List.of(),
                 categoryPath,
-                booleanFlags != null ? booleanFlags : Set.of()
+                booleanFlags != null ? booleanFlags : Set.of(),
+                phrases != null ? phrases : List.of(),
+                regexes != null ? regexes : List.of()
         );
     }
 
