@@ -179,6 +179,7 @@ if (sc.current.version in compatibleVersions) {
                 accessToken.set(providers.environmentVariable("MODRINTH_TOKEN"))
                 minecraftVersions.addAll(compatibleVersions)
                 requires("fabric-api")
+                requires("rrv")
             }
         }
 
@@ -193,6 +194,7 @@ if (sc.current.version in compatibleVersions) {
                 server.set(true)
 
                 requires("fabric-api")
+                requires("rrv")
             }
         }
         */

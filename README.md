@@ -190,8 +190,12 @@ Want to support development? You can do so on **Ko-fi**. All donations are great
 
 [**Support on Ko-fi**](https://ko-fi.com/kdgaming1)
 
-<div align="center">
+## Third-Party Attribution
 
-**Made for the SkyBlock community.**
+This project includes derivative code from:
 
-</div>
+### NotEnoughUpdates (NEU)
+- Project: https://github.com/NotEnoughUpdates/NotEnoughUpdates
+- License: GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)
+- Affected file(s): `NeuCalculator.java` (adapted from NEU Calculator)
+- Notes: Original lexer, shunting-yard parsing, and RPN evaluation logic were adapted and extended.
