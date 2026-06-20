@@ -25,6 +25,7 @@
     "rrv.SidePanelOverlayMixin",
     "rrv.SidePanelOverlayWidthMixin",
     "rrv.fix.AbstractContainerMenuFixesMixin",
+    "rrv.fix.AbstractRrvItemListOverlaySlotThreadingMixin",
     "rrv.fix.QuickNavRecipeViewMixin",
     "rrv.fix.RecipeViewMenuFixesMixin",
     "rrv.fix.RrvScreenNullItemGuardMixin",
