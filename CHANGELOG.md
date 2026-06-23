@@ -1,3 +1,3 @@
-### 0.2.1
+### 0.2.2
 
-- Fixed a game crash that could happen while the recipe viewer's craftables panel updated in the background
+- Added command to open the config menu.

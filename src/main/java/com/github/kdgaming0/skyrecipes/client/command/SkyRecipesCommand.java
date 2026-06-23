@@ -5,6 +5,7 @@ import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.data.RuntimeDataManager;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.mojang.brigadier.context.CommandContext;
+import eu.midnightdust.lib.config.MidnightConfig;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -12,6 +13,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
+
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 
 public class SkyRecipesCommand {
     public static void register() {
@@ -26,6 +29,8 @@ public class SkyRecipesCommand {
                                             .executes(SkyRecipesCommand::executeRefresh)
                                     )
                             )
+                            .then(literal("config")
+                                    .executes(SkyRecipesCommand::executeOpenConfig))
             );
         });
     }
@@ -139,5 +144,26 @@ public class SkyRecipesCommand {
         long hours = minutes / 60;
         if (hours < 48) return hours + "h " + (minutes % 60) + "m";
         return (hours / 24) + "d " + (hours % 24) + "h";
+    }
+
+    private static int executeOpenConfig(CommandContext<FabricClientCommandSource> ctx) {
+        Minecraft client = Minecraft.getInstance();
+
+        if (client.player == null) {
+            ctx.getSource().sendError(
+                    Component.literal("§a[SkyRecipes] You must be in-game to open the config menu."));
+            return 0;
+        }
+
+        client.schedule(() -> {
+            try {
+                client.setScreen(MidnightConfig.getScreen(client.screen, SkyRecipes.MOD_ID));
+            } catch (Exception e) {
+                SkyRecipes.LOGGER.error("Failed to open config menu", e);
+            }
+        });
+
+        ctx.getSource().sendFeedback(Component.literal("§a[SkyRecipes] Opening configuration menu..."));
+        return 1;
     }
 }
