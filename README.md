@@ -199,3 +199,5 @@ This project includes derivative code from:
 - License: GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)
 - Affected file(s): `NeuCalculator.java` (adapted from NEU Calculator)
 - Notes: Original lexer, shunting-yard parsing, and RPN evaluation logic were adapted and extended.
+
+> AI tools were extensively used during the creation of this project.

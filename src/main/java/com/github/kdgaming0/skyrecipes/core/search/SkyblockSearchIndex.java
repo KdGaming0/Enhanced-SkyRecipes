@@ -47,6 +47,8 @@ public final class SkyblockSearchIndex {
     private final Map<String, BitSet> rarityIndex;
     private final Map<String, BitSet> typeIndex;
     private final Map<SkyblockItemCategory, BitSet> categoryIndex;
+    // Pet skill (mining/combat/...) -> pets, parsed from the "§8<Skill> Pet" subtitle.
+    private final Map<String, BitSet> petSkillIndex;
     private final Map<String, BitSet> flagIndex;
     private final Map<String, BitSet> slayerTypeIndex;
     private final Map<String, TreeMap<Integer, BitSet>> slayerLevelIndex;
@@ -103,6 +105,7 @@ public final class SkyblockSearchIndex {
         this.rarityIndex = new HashMap<>(16);
         this.typeIndex = new HashMap<>(64);
         this.categoryIndex = new EnumMap<>(SkyblockItemCategory.class);
+        this.petSkillIndex = new HashMap<>(8);
         this.flagIndex = new HashMap<>(8);
         this.slayerTypeIndex = new HashMap<>(8);
         this.slayerLevelIndex = new HashMap<>(8);
@@ -428,7 +431,13 @@ public final class SkyblockSearchIndex {
 
         // String-only EQ filters
         for (SearchQuery.FilterClause f : parsed.filters()) {
-            if (f.stringValue() != null && (f.op() == null || f.op() == SearchQuery.FilterClause.Operator.EQ)) {
+            if ("pet".equals(f.key())) {
+                // Pet-skill filter ("mining pet" / pet:mining): require the exact skill token,
+                // not a generic keyword, so highlighting agrees with the canonical item list.
+                if (f.stringValue() == null || !tokens.contains("petskill:" + f.stringValue())) {
+                    return false;
+                }
+            } else if (f.stringValue() != null && (f.op() == null || f.op() == SearchQuery.FilterClause.Operator.EQ)) {
                 if (!tokenSetContainsPrefix(tokens, f.stringValue())) {
                     return false;
                 }
@@ -734,11 +743,24 @@ public final class SkyblockSearchIndex {
         return switch (filter.key()) {
             case "rarity" -> resolveRarityFilter(filter);
             case "type" -> resolveTypeFilter(filter);
+            case "pet" -> resolvePetSkillFilter(filter);
             case "slayer" -> resolveSlayerFilter(filter);
             case "skill" -> resolveSkillFilter(filter);
             case "catacombs" -> resolveCatacombsFilter(filter);
             default -> new BitSet();
         };
+    }
+
+    /**
+     * Resolves a {@code pet:<skill>} filter to the pets of that skill. The bare phrase
+     * "mining pet" is rewritten to this filter by {@link SearchQueryParser}, so both forms
+     * return the same canonical set.
+     */
+    private BitSet resolvePetSkillFilter(SearchQuery.FilterClause filter) {
+        String skill = filter.stringValue();
+        if (skill == null || skill.isEmpty()) return new BitSet();
+        BitSet exact = petSkillIndex.get(skill);
+        return exact != null ? (BitSet) exact.clone() : new BitSet();
     }
 
     private BitSet resolveRarityFilter(SearchQuery.FilterClause filter) {
@@ -1052,6 +1074,22 @@ public final class SkyblockSearchIndex {
             addToken(categoryIndex, SkyblockItemCategory.MISC, itemIndex);
             addAnyToken("misc", itemIndex);
             if (itemTokens != null) itemTokens.add("misc");
+        }
+
+        // The "pet"/"accessory" boolean flags are declared in SearchQueryParser but were
+        // never added to flagIndex, so resolveQuery returned nothing for them. Populate them
+        // from the resolved category (the matching inventory tokens already exist via catName).
+        // For pets, also index the skill from the "§8<Skill> Pet" subtitle so "mining pet" and
+        // pet:mining resolve to exactly that skill's pets.
+        if (category == SkyblockItemCategory.PET) {
+            addToken(flagIndex, "pet", itemIndex);
+            String petSkill = PetSkillResolver.resolve(neuItem);
+            if (petSkill != null) {
+                addToken(petSkillIndex, petSkill, itemIndex);
+                if (itemTokens != null) itemTokens.add("petskill:" + petSkill);
+            }
+        } else if (category == SkyblockItemCategory.ACCESSORY) {
+            addToken(flagIndex, "accessory", itemIndex);
         }
 
         // Reforge stone — explicit constant data first, then lore fallback

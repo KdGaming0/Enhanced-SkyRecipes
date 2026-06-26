@@ -64,7 +64,8 @@ public final class SearchQueryParser {
             Map.entry("t", "type"), Map.entry("type", "type"),
             Map.entry("sl", "slayer"), Map.entry("slayer", "slayer"),
             Map.entry("sk", "skill"), Map.entry("skill", "skill"),
-            Map.entry("cata", "catacombs"), Map.entry("catacombs", "catacombs")
+            Map.entry("cata", "catacombs"), Map.entry("catacombs", "catacombs"),
+            Map.entry("pet", "pet")
     );
 
     private static final Set<String> BOOLEAN_FLAGS = Set.of(
@@ -234,10 +235,12 @@ public final class SearchQueryParser {
                 }
             }
 
-            // 2. Boolean flag (standalone keyword)
-            if (BOOLEAN_FLAGS.contains(token)) {
+            // 2. Boolean flag (standalone keyword). "pets"/"accessories" normalise to the
+            // singular flag so "mining pets" behaves the same as "mining pet".
+            String flag = normalizeFlagToken(token);
+            if (BOOLEAN_FLAGS.contains(flag)) {
                 if (booleanFlags == null) booleanFlags = new java.util.HashSet<>(4);
-                booleanFlags.add(token);
+                booleanFlags.add(flag);
                 continue;
             }
 
@@ -263,6 +266,26 @@ public final class SearchQueryParser {
                     if (keywords == null) keywords = new ArrayList<>(4);
                     keywords.add(new SearchQuery.KeywordClause(part));
                 }
+            }
+        }
+
+        // Natural-phrase pet skill: "mining pet" -> the pet:mining filter, so the bare phrase
+        // and the explicit pet:<skill> filter resolve to the same canonical set. Only fires
+        // when the "pet" flag is present; non-skill words (e.g. "rock pet") stay keyword + flag.
+        if (booleanFlags != null && booleanFlags.contains("pet") && keywords != null) {
+            boolean converted = false;
+            Iterator<SearchQuery.KeywordClause> it = keywords.iterator();
+            while (it.hasNext()) {
+                String token = it.next().token();
+                if (PetSkillResolver.PET_SKILLS.contains(token)) {
+                    if (filters == null) filters = new ArrayList<>(2);
+                    filters.add(SearchQuery.FilterClause.of("pet", token));
+                    it.remove();
+                    converted = true;
+                }
+            }
+            if (converted) {
+                booleanFlags.remove("pet");
             }
         }
 
@@ -479,6 +502,18 @@ public final class SearchQueryParser {
         // Canonicalize walk_speed → speed for consistency
         if ("walk_speed".equals(normalized)) return "speed";
         return normalized;
+    }
+
+    /**
+     * Maps the plural of the pet/accessory flags to their singular canonical form so
+     * "pets"/"accessories" are recognised as the same boolean flag as "pet"/"accessory".
+     */
+    private static String normalizeFlagToken(String token) {
+        return switch (token) {
+            case "pets" -> "pet";
+            case "accessories" -> "accessory";
+            default -> token;
+        };
     }
 
     private static List<String> splitOnNonAlphanumeric(String token) {
