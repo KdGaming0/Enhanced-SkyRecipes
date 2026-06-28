@@ -166,9 +166,6 @@ public class BinaryDataCompiler {
 
         ParseStats parseStats = parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, mobDefinitions, mobSkins);
 
-        // All-or-nothing gate: an empty or mostly-failed parse means the
-        // archive is corrupt or NEU changed format — refuse to write a binary
-        // that would silently replace good data with a near-empty one.
         if (items.isEmpty()) {
             throw new IOException("Parsed 0 items from NEU repo ZIP — archive corrupt or format changed");
         }
@@ -204,9 +201,6 @@ public class BinaryDataCompiler {
         );
         byte[] metadataBytes = metadata.toBytes();
 
-        // Stream all sections through one CRC32C-checked counter so the
-        // payload checksum and section offsets fall out of a single pass,
-        // with no intermediate in-memory copies of the sections.
         long itemsLength;
         long constantsLength;
         long payloadCrc;
@@ -328,7 +322,7 @@ public class BinaryDataCompiler {
             IOException lastFailure = null;
             for (int attempt = 1; attempt <= 2; attempt++) {
                 try {
-                    downloadZipToTemp(url, zipFile, newEtag);
+                    downloadZipToTemp(url, zipFile);
                     if (newEtag != null) {
                         Files.writeString(etagFile, newEtag, StandardCharsets.UTF_8);
                     }
@@ -348,11 +342,33 @@ public class BinaryDataCompiler {
     }
 
     /**
-     * Download the repo ZIP to a sibling temp file, verify its integrity,
-     * and atomically move it over the cached copy. A failed or truncated
-     * transfer never replaces an existing usable cache.
+     * Runtime download path: GET the repo ZIP into {@code zipFile}, verifying integrity.
+     * The caller compiles from it and then deletes it (stream-then-discard). The enclosing
+     * update check already decided a download is needed, so no HEAD/cache-hit check is done
+     * here. Returns the ETag from the GET response, or {@code ""} if the server omits one.
      */
-    private void downloadZipToTemp(URL url, Path zipFile, String headEtag) throws IOException {
+    public String downloadNeuRepoStreaming(Path zipFile) throws IOException {
+        zipFile = PathValidator.requireSafePath(zipFile, "zipFile");
+        URL url = URI.create(NEU_REPO_URL).toURL();
+        IOException lastFailure = null;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            try {
+                String etag = downloadZipToTemp(url, zipFile);
+                return etag != null ? etag : "";
+            } catch (IOException e) {
+                lastFailure = e;
+                LOGGER.warn("NEU repo download attempt {} failed: {}", attempt, e.getMessage());
+            }
+        }
+        throw new IOException("NEU repo download failed after retries", lastFailure);
+    }
+
+    /**
+     * GET the repo ZIP to a sibling temp file, verify its integrity, and atomically
+     * move it over {@code zipFile}. A failed or truncated transfer never replaces an
+     * existing usable copy. Returns the ETag from the GET response, or {@code null}.
+     */
+    private String downloadZipToTemp(URL url, Path zipFile) throws IOException {
         LOGGER.info("Downloading NEU repo...");
         Path tmp = zipFile.resolveSibling(zipFile.getFileName() + ".tmp");
 
@@ -364,7 +380,6 @@ public class BinaryDataCompiler {
         try {
             long expectedLength = conn.getContentLengthLong();
             String getEtag = conn.getHeaderField("ETag");
-            LOGGER.debug("NEU repo ETags — HEAD: {}, GET: {}", headEtag, getEtag);
 
             long transferred;
             try (InputStream in = conn.getInputStream();
@@ -384,6 +399,7 @@ public class BinaryDataCompiler {
             } catch (IOException atomicEx) {
                 Files.move(tmp, zipFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
+            return getEtag;
         } catch (IOException e) {
             try {
                 Files.deleteIfExists(tmp);
@@ -406,10 +422,6 @@ public class BinaryDataCompiler {
 
         String prefix = null;
 
-        // The ZIP is read sequentially (ZipInputStream cannot be parallelized),
-        // but item JSON parsing — the dominant compile cost — fans out to a
-        // worker pool. Futures are joined in entry order so the resulting item
-        // list, and therefore the binary, stays deterministic.
         int workers = Math.max(2, Runtime.getRuntime().availableProcessors() - 2);
         @SuppressWarnings("resource")
         java.util.concurrent.ExecutorService pool =

@@ -178,8 +178,10 @@ if (sc.current.version in compatibleVersions) {
                 projectId.set(modrinthId)
                 accessToken.set(providers.environmentVariable("MODRINTH_TOKEN"))
                 minecraftVersions.addAll(compatibleVersions)
-                requires("fabric-api")
-                requires("rrv")
+                requires { slug = "5VolwT6c" } // RVV
+                requires { slug = "P7dR8mSH" } // Fabric API
+                optional { slug = "mOgUt4GM" } // ModMenu
+                embeds   { slug = "codAaoxh" } // MidnightLib
             }
         }
 

@@ -2,12 +2,14 @@ package com.github.kdgaming0.skyrecipes;
 
 import com.github.kdgaming0.skyrecipes.client.command.SkyRecipesCommand;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.core.data.CacheLayout;
 import com.github.kdgaming0.skyrecipes.core.data.DataLoadResult;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.data.RuntimeDataManager;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
+import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
 import eu.midnightdust.lib.config.MidnightConfig;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -17,7 +19,6 @@ import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -27,13 +28,17 @@ public class SkyRecipes implements ClientModInitializer {
 
     public static final String MOD_ID = "skyrecipes";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-    public static final String VERSION = /*$ mod_version*/ "0.1.0";
-    public static final String MINECRAFT = /*$ minecraft*/ "26.1.1";
+    public static final String VERSION = /*$ mod_version*/ "0.2.4";
+    public static final String MINECRAFT = /*$ minecraft*/ "26.1.2";
 
     private static final List<Consumer<DataLoadResult>> dataReadyListeners = new CopyOnWriteArrayList<>();
     private static final Object listenerLock = new Object();
     private static RuntimeDataManager dataManager;
+    private static CacheLayout cacheLayout;
     private static SearchAutocomplete searchAutocomplete;
+    public static CacheLayout getCacheLayout() {
+        return cacheLayout;
+    }
 
     public static boolean isDataReady() {
         return dataManager != null && dataManager.getState() == RuntimeDataManager.State.READY;
@@ -115,12 +120,11 @@ public class SkyRecipes implements ClientModInitializer {
 
         MidnightConfig.init(MOD_ID, SkyRecipesConfig.class);
 
-        Path dataDir = FabricLoader.getInstance().getGameDir().resolve("skyblockdata");
-        Path cacheDir = FabricLoader.getInstance().getGameDir().resolve("skyrecipes/cache");
+        cacheLayout = new CacheLayout(FabricLoader.getInstance().getGameDir());
+        cacheLayout.migrateLegacyLayout();
 
-        // Convert config hours to seconds for the update service scheduler.
         long refreshIntervalSeconds = (long) SkyRecipesConfig.dataRefreshIntervalMinutes * 60L;
-        dataManager = new RuntimeDataManager(dataDir, cacheDir, refreshIntervalSeconds);
+        dataManager = new RuntimeDataManager(cacheLayout, refreshIntervalSeconds);
 
         // Notify listeners on render thread once data is ready.
         dataManager.whenReady(result -> {
@@ -180,6 +184,7 @@ public class SkyRecipes implements ClientModInitializer {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             if (dataManager != null) dataManager.shutdown();
+            SkyRecipesExecutors.shutdown();
         }, "SkyRecipes-Shutdown"));
 
         LOGGER.info("SkyRecipes initialization complete.");

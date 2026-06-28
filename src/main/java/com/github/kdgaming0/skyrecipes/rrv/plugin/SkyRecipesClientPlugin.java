@@ -21,6 +21,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
+import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.EditBoxAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.ItemViewOverlayAccessor;
@@ -28,7 +29,6 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -201,7 +201,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private volatile CompletableFuture<?> pendingRecipeGen = null;
     private volatile CompletableFuture<?> pendingStackBuild = null;
     private volatile boolean clientStarted = false;
-    private volatile boolean startupRetryInProgress = false;
+    private volatile boolean awaitingComponentBinding = false;
     /**
      * Set when direct injection fails systemically at runtime; all later cycles use the provider fallback.
      */
@@ -394,44 +394,30 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     /**
      * Start background work when both data and the Minecraft client are ready.
      *
-     * <p>If data components are not yet bound (can happen when data loads very early
-     * during startup), a single background retry loop polls every 50 ms until binding
-     * is confirmed, then marshals the final calls back to the render thread.</p>
+     * <p>If RRV's data components are not yet bound (data can load very early during
+     * startup), the launch is deferred to the per-tick poll in
+     * {@link #handleEndClientTick}
      */
     private void startWorkIfReady() {
         if (!clientStarted) return;
         if (!SkyRecipes.isDataReady()) return;
         if (areComponentsBound()) {
-            PipelineStatus.transition(PipelineStatus.State.GENERATING);
-            startBackgroundRecipes();
-            startBackgroundStacks();
-            return;
+            launchBackgroundGeneration();
+        } else {
+            awaitingComponentBinding = true;
         }
-        if (startupRetryInProgress) return;
-        startupRetryInProgress = true;
-        CompletableFuture.runAsync(() -> {
-            try {
-                while (!areComponentsBound()) {
-                    //noinspection BusyWait
-                    Thread.sleep(50);
-                }
-                // Marshal back to render thread — startBackground* methods check
-                // volatile fields; render-thread serialization keeps them race-free.
-                Minecraft mc = Minecraft.getInstance();
-                if (mc != null) {
-                    mc.execute(() -> {
-                        PipelineStatus.transition(PipelineStatus.State.GENERATING);
-                        startBackgroundRecipes();
-                        startBackgroundStacks();
-                    });
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                LOGGER.debug("Startup retry loop interrupted");
-            } finally {
-                startupRetryInProgress = false;
-            }
-        });
+    }
+
+    /**
+     * Launch phase-1 recipe generation and stack building. Render thread only: the
+     * {@code startBackground*} methods read volatile cycle state that render-thread
+     * serialization keeps race-free.
+     */
+    private void launchBackgroundGeneration() {
+        awaitingComponentBinding = false;
+        PipelineStatus.transition(PipelineStatus.State.GENERATING);
+        startBackgroundRecipes();
+        startBackgroundStacks();
     }
 
     // =========================================================================
@@ -441,8 +427,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private void startHypixelFetch() {
         hypixelFetch = CompletableFuture.runAsync(() -> {
             try {
-                Path cacheFile = FabricLoader.getInstance().getGameDir()
-                        .resolve("skyblockdata").resolve("hypixel_items.json");
+                Path cacheFile = SkyRecipes.getCacheLayout().hypixelItemsFile();
 
                 if (HypixelItemsCache.isFresh(cacheFile)) {
                     HypixelItemsSnapshot cached = HypixelItemsCache.tryLoad(cacheFile);
@@ -455,7 +440,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 }
 
                 HypixelItemsSnapshot fetched = HypixelItemsFetcher.fetch(
-                        java.net.http.HttpClient.newHttpClient());
+                        SkyRecipesExecutors.httpClient());
                 if (fetched != null) {
                     HypixelItemsRegistry.load(fetched);
                     HypixelItemsCache.save(cacheFile, fetched);
@@ -473,7 +458,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             } catch (Exception e) {
                 LOGGER.warn("Hypixel fetch failed", e);
             }
-        });
+        }, SkyRecipesExecutors.worker());
     }
 
     /**
@@ -484,7 +469,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (pendingRecipeResult != null) return; // already complete this cycle
         if (pendingRecipeGen != null && !pendingRecipeGen.isDone()) return;
 
-        CompletableFuture<RecipeResult> future = CompletableFuture.supplyAsync(this::generateRecipes);
+        CompletableFuture<RecipeResult> future =
+                CompletableFuture.supplyAsync(this::generateRecipes, SkyRecipesExecutors.worker());
         pendingRecipeGen = future;
         future.thenAccept(result -> {
             if (pendingRecipeGen != future) return; // invalidated while running
@@ -515,7 +501,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (pendingStackResult != null) return; // already complete this cycle
         if (pendingStackBuild != null && !pendingStackBuild.isDone()) return;
 
-        CompletableFuture<StackBuildResult> future = CompletableFuture.supplyAsync(this::buildAllStacksAndIndex);
+        CompletableFuture<StackBuildResult> future =
+                CompletableFuture.supplyAsync(this::buildAllStacksAndIndex, SkyRecipesExecutors.worker());
         pendingStackBuild = future;
         future.thenAccept(result -> {
             if (pendingStackBuild != future) return; // invalidated while running
@@ -562,7 +549,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             SkyblockRecipeCache.rebuild(recipeResult.recipes());
             PipelineStatus.recordStageDuration("prep", System.currentTimeMillis() - start);
             return resolver;
-        }).thenAccept(_ -> {
+        }, SkyRecipesExecutors.worker()).thenAccept(_ -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) mc.execute(this::beginBatchedInjection);
         }).exceptionally(throwable -> {
@@ -718,6 +705,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
     private void handleEndClientTick(Minecraft client) {
         handleSearchBarSuggestionCommit(client);
+
+        if (awaitingComponentBinding && SkyRecipes.isDataReady() && areComponentsBound()) {
+            launchBackgroundGeneration();
+        }
 
         if (startupBatcher != null) {
             StartupBatcher batcher = startupBatcher;

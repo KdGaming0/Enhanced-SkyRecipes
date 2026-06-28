@@ -35,16 +35,15 @@ public class RuntimeDataManager {
     private volatile Path currentLoadedPath;
 
     /**
-     * @param dataDir                directory containing the compiled .mpk and .meta.json
-     * @param cacheDir               directory for the downloaded NEU repo ZIP and ETag cache
+     * @param layout                 resolves every on-disk path under {@code gameDir/skyrecipes}
      * @param refreshIntervalSeconds how often background update checks run, in seconds
      */
-    public RuntimeDataManager(Path dataDir, Path cacheDir, long refreshIntervalSeconds) {
-        this.dataPath = dataDir.resolve("skyrecipes_data.mpk");
-        this.metaPath = dataDir.resolve("skyrecipes_data.meta.json");
+    public RuntimeDataManager(CacheLayout layout, long refreshIntervalSeconds) {
+        this.dataPath = layout.binaryFile();
+        this.metaPath = layout.binaryMetaFile();
         this.loader = new BinaryDataLoader();
         this.updateService = new RuntimeUpdateService(
-                dataDir, cacheDir, this::onDataReloaded, refreshIntervalSeconds);
+                layout, this::onDataReloaded, refreshIntervalSeconds);
     }
 
     /**

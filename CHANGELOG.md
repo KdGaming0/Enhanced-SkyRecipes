@@ -1,4 +1,5 @@
-### 0.2.3
+### 0.2.4
 
-- You can now search pets by their skill. Type `mining pet` to list every Mining pet — the same works for Combat, Farming, Fishing, Foraging, Alchemy, Enchanting, and Taming pets. The `pet:mining` form works too, and both show exactly the pets the game groups under that skill.
-- Fixed searching `pet` or `accessory` in the item list, which previously showed no results.
+- Recipe data now downloads and is stored in a single tidy folder instead of being spread across several locations, and the large temporary download file is removed automatically once it has been processed.
+- Smoother, more reliable startup: the mod no longer borrows Minecraft's shared background work queue. On slower (low-core) computers that sharing could contribute to the game hanging on the loading screen.
+- The first time you launch this version your existing data is moved to the new folder automatically — nothing is re-downloaded.

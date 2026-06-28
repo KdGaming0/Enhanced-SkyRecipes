@@ -35,8 +35,7 @@ public class RuntimeUpdateService {
      */
     private static final long[] BACKOFF_SECONDS = {60, 300, 900, 3600};
 
-    private final Path dataDir;
-    private final Path cacheDir;
+    private final CacheLayout layout;
     private final BiPredicate<Path, Path> onDataUpdated;
     private final ScheduledExecutorService scheduler;
     private final BinaryDataCompiler compiler;
@@ -50,11 +49,10 @@ public class RuntimeUpdateService {
     private int retryAttempt = 0;
     private ScheduledFuture<?> pendingRetry;
 
-    public RuntimeUpdateService(Path dataDir, Path cacheDir,
+    public RuntimeUpdateService(CacheLayout layout,
                                 BiPredicate<Path, Path> onDataUpdated,
                                 long checkIntervalSeconds) {
-        this.dataDir = dataDir;
-        this.cacheDir = cacheDir;
+        this.layout = layout;
         this.onDataUpdated = onDataUpdated;
         this.checkIntervalSeconds = checkIntervalSeconds;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -138,7 +136,7 @@ public class RuntimeUpdateService {
         this.progressCallback = onProgress;
         this.onNextFailure = onFailure;
         try {
-            Files.deleteIfExists(cacheDir.resolve("neu-repo.etag"));
+            Files.deleteIfExists(layout.neuEtagFile());
         } catch (IOException e) {
             LOGGER.warn("Could not clear ETag cache for forced refresh", e);
         }
@@ -339,8 +337,7 @@ public class RuntimeUpdateService {
                 }
 
                 notifyProgress("§7SkyRecipes: Loading compiled data...");
-                if (!onDataUpdated.test(dataDir.resolve("skyrecipes_data.mpk"),
-                        dataDir.resolve("skyrecipes_data.meta.json"))) {
+                if (!onDataUpdated.test(layout.binaryFile(), layout.binaryMetaFile())) {
                     LOGGER.error("New binary swapped in but reload failed. Retrying with backoff.");
                     PipelineStatus.recordError("load", "New data file could not be loaded", null);
                     fireNextFailure();
@@ -367,55 +364,50 @@ public class RuntimeUpdateService {
     }
 
     private BinaryDataCompiler.CompileResult downloadAndCompile(String expectedEtag) throws Exception {
-        Files.createDirectories(cacheDir);
-        Files.createDirectories(dataDir);
+        layout.createDirectories();
 
-        Path zipFile = cacheDir.resolve("neu-repo.zip");
-        Path etagFile = cacheDir.resolve("neu-repo.etag");
+        Path zipFile = layout.neuRepoZip();
+        Path etagFile = layout.neuEtagFile();
 
-        String existingEtag = null;
-        if (Files.exists(etagFile)) {
-            existingEtag = Files.readString(etagFile).trim();
-        }
-
+        // The enclosing check already compared ETags and decided a download is needed,
+        // so this streams a single GET (no redundant HEAD) into a transient ZIP.
         PipelineStatus.transition(PipelineStatus.State.DOWNLOADING);
         notifyProgress("§7SkyRecipes: Downloading latest SkyBlock data from GitHub...");
         long downloadStart = System.currentTimeMillis();
-        BinaryDataCompiler.DownloadResult download = compiler.downloadNeuRepo(zipFile, etagFile, existingEtag);
+        String downloadedEtag = compiler.downloadNeuRepoStreaming(zipFile);
         PipelineStatus.recordStageDuration("download", System.currentTimeMillis() - downloadStart);
-        boolean downloaded = switch (download) {
-            case DOWNLOADED -> {
-                LOGGER.info("Downloaded fresh NEU repo.");
-                yield true;
-            }
-            case CACHE_HIT -> {
-                LOGGER.info("Using cached NEU repo.");
-                yield false;
-            }
-            case FAILED_NO_CACHE -> throw new IOException(
-                    "NEU repo download failed and no cached copy exists");
-        };
+        LOGGER.info("Downloaded fresh NEU repo.");
 
-        String actualEtag = downloaded ? Files.readString(etagFile).trim() : existingEtag;
-        if (actualEtag == null) actualEtag = "";
+        String etagForMeta = expectedEtag != null ? expectedEtag : downloadedEtag;
+        if (etagForMeta == null) etagForMeta = "";
+        try {
+            Files.writeString(etagFile, etagForMeta);
+        } catch (IOException e) {
+            LOGGER.debug("Could not persist NEU ETag", e);
+        }
 
-        String etagForMeta = expectedEtag != null ? expectedEtag : actualEtag;
-
-        Path tempMpk = dataDir.resolve("skyrecipes_data_new.mpk");
-        Path tempMeta = dataDir.resolve("skyrecipes_data_new.meta.json");
+        Path tempMpk = layout.binaryTempFile();
+        Path tempMeta = layout.binaryTempMetaFile();
 
         PipelineStatus.transition(PipelineStatus.State.COMPILING);
         notifyProgress("§7SkyRecipes: Compiling item and recipe data...");
         long compileStart = System.currentTimeMillis();
-        BinaryDataCompiler.CompileResult result =
-                compiler.compileToPath(zipFile, tempMpk, tempMeta, etagForMeta, null);
-        PipelineStatus.recordStageDuration("compile", System.currentTimeMillis() - compileStart);
-        return result;
+        try {
+            BinaryDataCompiler.CompileResult result =
+                    compiler.compileToPath(zipFile, tempMpk, tempMeta, etagForMeta, null);
+            PipelineStatus.recordStageDuration("compile", System.currentTimeMillis() - compileStart);
+            return result;
+        } finally {
+            // Stream-then-discard: the multi-megabyte ZIP is never kept on disk.
+            try {
+                Files.deleteIfExists(zipFile);
+            } catch (IOException e) {
+                LOGGER.debug("Could not delete transient NEU repo ZIP", e);
+            }
+        }
     }
 
     private boolean validateCompiledFile(Path mpkPath) {
-        // A full load exercises every check the runtime performs: header,
-        // schema, CRC32C, embedded metadata, and complete deserialization.
         BinaryDataLoader validator = new BinaryDataLoader();
         boolean loaded = validator.load(mpkPath);
         validator.close();
@@ -430,8 +422,8 @@ public class RuntimeUpdateService {
     }
 
     private boolean atomicSwap(Path newMpk, Path newMeta) {
-        Path finalMpk = dataDir.resolve("skyrecipes_data.mpk");
-        Path finalMeta = dataDir.resolve("skyrecipes_data.meta.json");
+        Path finalMpk = layout.binaryFile();
+        Path finalMeta = layout.binaryMetaFile();
 
         try {
             try {
@@ -456,15 +448,15 @@ public class RuntimeUpdateService {
 
     private void cleanupTempFiles() {
         try {
-            Files.deleteIfExists(dataDir.resolve("skyrecipes_data_new.mpk"));
-            Files.deleteIfExists(dataDir.resolve("skyrecipes_data_new.meta.json"));
+            Files.deleteIfExists(layout.binaryTempFile());
+            Files.deleteIfExists(layout.binaryTempMetaFile());
         } catch (IOException e) {
             LOGGER.debug("Failed to clean up temp files", e);
         }
     }
 
     public String readCurrentEtag() {
-        Path mpkPath = dataDir.resolve("skyrecipes_data.mpk");
+        Path mpkPath = layout.binaryFile();
         try {
             if (Files.exists(mpkPath)) {
                 return BinaryDataLoader.readEmbeddedMetadata(mpkPath).etag();
