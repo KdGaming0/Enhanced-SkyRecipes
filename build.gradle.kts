@@ -167,7 +167,7 @@ if (sc.current.version in compatibleVersions) {
         displayName.set("${property("mod.name")} v${property("mod.version")} for mc${sc.current.version}")
         version.set("v${property("mod.version")}-mc${sc.current.version}")
         changelog.set(publishChangelog)
-        type.set(STABLE)
+        type.set(BETA)
         modLoaders.add("fabric")
 
         dryRun.set(providers.environmentVariable("MODRINTH_TOKEN").getOrNull() == null)

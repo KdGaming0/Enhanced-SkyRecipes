@@ -3,11 +3,16 @@ package com.github.kdgaming0.skyrecipes.core.data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLException;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
+import java.security.cert.CertificateException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.Executors;
@@ -46,6 +51,7 @@ public class RuntimeUpdateService {
     private volatile boolean forceNextCheck = false;
     private volatile Runnable onNextFailure;
     private volatile Consumer<String> progressCallback;
+    private volatile Throwable lastEtagFetchError;
     private int retryAttempt = 0;
     private ScheduledFuture<?> pendingRetry;
 
@@ -286,9 +292,10 @@ public class RuntimeUpdateService {
                     LOGGER.warn("Could not fetch remote ETag. Skipping update check.");
                     if (forced) fireNextFailure();
                 } else {
-                    LOGGER.warn("Could not fetch remote ETag and no local data exists. Retrying with backoff.");
-                    PipelineStatus.recordError("check",
-                            "Could not reach GitHub to download SkyBlock data", null);
+                    String reason = describeNetworkError(lastEtagFetchError);
+                    LOGGER.warn("Could not fetch remote ETag and no local data exists. "
+                            + "Retrying with backoff. ({})", reason);
+                    PipelineStatus.recordError("check", reason, lastEtagFetchError);
                     fireNextFailure();
                     scheduleRetry();
                 }
@@ -354,9 +361,15 @@ public class RuntimeUpdateService {
             }
 
         } catch (Exception e) {
-            LOGGER.error("Update check failed", e);
-            PipelineStatus.recordError("update",
-                    "Data update failed: " + e.getMessage(), e);
+            if (isNetworkError(e)) {
+                String reason = describeNetworkError(e);
+                LOGGER.warn("Update check failed: {}", reason);
+                LOGGER.debug("Update check failure detail", e);
+                PipelineStatus.recordError("update", reason, e);
+            } else {
+                LOGGER.error("Update check failed", e);
+                PipelineStatus.recordError("update", "Data update failed: " + e.getMessage(), e);
+            }
             compileInProgress = false;
             fireNextFailure();
             scheduleRetry();
@@ -501,7 +514,59 @@ public class RuntimeUpdateService {
                 }
             }
         }
-        LOGGER.warn("Failed to fetch remote ETag", lastFailure);
+        lastEtagFetchError = lastFailure;
+        LOGGER.warn("Failed to fetch remote ETag: {}", describeNetworkError(lastFailure));
+        LOGGER.debug("Remote ETag fetch failure detail", lastFailure);
         return null;
+    }
+
+    /**
+     * Classify a network failure into one concise, plain-English line for logs and
+     * {@code /skyrecipes status}. Falls back to a generic message for unrecognized causes.
+     */
+    private static String describeNetworkError(Throwable t) {
+        String specific = classifyNetworkError(t);
+        String base;
+        if (specific != null) {
+            base = specific;
+        } else {
+            String msg = t != null ? t.getMessage() : null;
+            base = msg != null ? "Couldn't reach GitHub: " + msg : "Couldn't reach GitHub.";
+        }
+        return base + " You can test this download link in a browser to confirm if the mod is the issue or you are the issue: " + NEU_REPO_URL;
+    }
+
+    /**
+     * Walk the cause chain for a recognized network failure type. TLS/cert failures
+     * arrive wrapped (an {@link SSLException} caused by a {@link CertificateException}),
+     * so the whole chain is inspected. Returns {@code null} if nothing matches.
+     */
+    private static String classifyNetworkError(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof SSLException || c instanceof CertificateException) {
+                return "GitHub's secure connection was blocked or altered (TLS) — usually a "
+                        + "firewall, VPN, antivirus HTTPS-scanning, or ISP/DNS interference, "
+                        + "not a SkyRecipes problem.";
+            }
+            if (c instanceof UnknownHostException) {
+                return "Couldn't resolve GitHub (DNS) — check your internet connection or DNS.";
+            }
+            if (c instanceof SocketTimeoutException) {
+                return "Connection to GitHub timed out — check your internet connection.";
+            }
+            if (c instanceof ConnectException) {
+                return "Couldn't connect to GitHub — check your internet connection.";
+            }
+        }
+        return null;
+    }
+
+    private static boolean isNetworkError(Throwable t) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            if (c instanceof IOException) {
+                return true;
+            }
+        }
+        return false;
     }
 }

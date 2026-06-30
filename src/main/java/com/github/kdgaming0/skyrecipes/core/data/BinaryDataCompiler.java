@@ -332,11 +332,14 @@ public class BinaryDataCompiler {
                     LOGGER.warn("NEU repo download attempt {} failed: {}", attempt, e.getMessage());
                 }
             }
-            LOGGER.warn("NEU repo download failed after retries", lastFailure);
+            LOGGER.warn("NEU repo download failed after retries: {}",
+                    lastFailure != null ? lastFailure.getMessage() : "unknown");
+            LOGGER.debug("NEU repo download failure detail", lastFailure);
             return cacheFallback(zipFile);
 
         } catch (IOException e) {
-            LOGGER.warn("Failed to check/download NEU repo, using cache if available", e);
+            LOGGER.warn("Failed to check/download NEU repo, using cache if available: {}", e.getMessage());
+            LOGGER.debug("NEU repo check/download failure detail", e);
             return cacheFallback(zipFile);
         }
     }
