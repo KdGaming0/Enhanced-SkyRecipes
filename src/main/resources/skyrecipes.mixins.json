@@ -29,7 +29,8 @@
     "rrv.fix.QuickNavRecipeViewMixin",
     "rrv.fix.RecipeViewMenuFixesMixin",
     "rrv.fix.RrvScreenNullItemGuardMixin",
-    "skyblocker.GardenPlotsWidgetMixin"
+    "skyblocker.GardenPlotsWidgetMixin",
+    "skyblocker.MuseumManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

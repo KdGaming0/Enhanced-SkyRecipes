@@ -69,6 +69,9 @@ public class RecipeViewMenuFixesMixin {
     private void skyrecipes$padSlotsBeforeUpdateReferences(CallbackInfo ci) {
         AbstractContainerMenu menu = (AbstractContainerMenu) (Object) this;
         int currentSize = menu.slots.size();
+        if (currentSize >= SKYRECIPES$MINIMUM_SLOT_COUNT) {
+            return;
+        }
 
         menu.slots.addAll(Arrays.asList(SKYRECIPES$DUMMY_SLOTS).subList(currentSize, SKYRECIPES$MINIMUM_SLOT_COUNT));
     }

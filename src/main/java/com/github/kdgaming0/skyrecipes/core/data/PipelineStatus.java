@@ -10,7 +10,9 @@ import java.util.Map;
  * ({@link RuntimeDataManager}, {@link RuntimeUpdateService}) and the RRV
  * plugin own their own logic state and report transitions, errors, counts,
  * and timings here. {@code /skyrecipes status} and the world-join chat
- * notice render {@link #snapshot()}.</p>
+ * notice render {@link #snapshot()}. The one state read that drives logic is
+ * {@link #isFailed()}, which makes the item panel explain the empty list when
+ * no data is coming.</p>
  *
  * <p>Headline-state rules: once the pipeline has reached {@code READY} (or
  * {@code DEGRADED}), background refresh work never regresses the headline —
@@ -120,6 +122,15 @@ public final class PipelineStatus {
         }
         errorNotificationPending = false;
         return true;
+    }
+
+    /**
+     * True when the pipeline has no live data and is not working toward it —
+     * e.g. the first download failed offline. Briefly false again while a
+     * scheduled retry attempt runs.
+     */
+    public static synchronized boolean isFailed() {
+        return state == State.FAILED;
     }
 
     public static synchronized Snapshot snapshot() {

@@ -180,14 +180,28 @@ public class BinaryDataLoader {
             lastFailure = LoadFailure.NONE;
             return true;
 
-        } catch (IOException e) {
+        } catch (Exception e) {
+            // msgpack throws RuntimeExceptions (MessagePackException) on data that
+            // passes the CRC but is semantically corrupt — same contract: return false.
             LOGGER.error("Failed to load binary data", e);
             return false;
+        } finally {
+            // Everything is copied to heap during load, so the mapping is never
+            // read again — release it immediately. A held mapping also locks the
+            // file on Windows, blocking moves and later compiles.
+            if (fileBuffer != null) {
+                MmapUtil.unmap(fileBuffer);
+                fileBuffer = null;
+            }
+            if (lastFailure != LoadFailure.NONE) {
+                close();
+            }
         }
     }
 
     /**
-     * Release resources. Unmaps the file if memory-mapped.
+     * Drop the loaded registries. The file mapping is already released at the
+     * end of {@link #load(Path)}; this only frees the heap data.
      */
     public void close() {
         if (fileBuffer != null) {

@@ -29,10 +29,21 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        if (mixinClassName.endsWith("GardenPlotsWidgetMixin")) {
-            return FabricLoader.getInstance().isModLoaded("skyblocker");
+        if (mixinClassName.contains(".mixin.skyblocker.")) {
+            return FabricLoader.getInstance().isModLoaded("skyblocker")
+                    && targetClassExists(targetClassName);
         }
         return true;
+    }
+
+    /**
+     * Resource-level existence check that never class-loads the target, so a
+     * renamed or removed Skyblocker class skips the mixin cleanly instead of
+     * failing the mixin apply.
+     */
+    private static boolean targetClassExists(String targetClassName) {
+        String resource = targetClassName.replace('.', '/') + ".class";
+        return SkyRecipesMixinPlugin.class.getClassLoader().getResource(resource) != null;
     }
 
     @Override

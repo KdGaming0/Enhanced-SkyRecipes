@@ -24,6 +24,8 @@ public final class PlayerSkinRenderer {
 
     @Nullable
     private static PlayerModel cachedPlayerModel;
+    @Nullable
+    private static EntityModelSet cachedModelSource;
     private static boolean playerModelLookupFailed;
     private static boolean modelFailureLogged;
 
@@ -55,11 +57,17 @@ public final class PlayerSkinRenderer {
 
     @Nullable
     public static PlayerModel getPlayerModel() {
+        EntityModelSet models = Minecraft.getInstance().getEntityModels();
+        // A resource reload replaces the EntityModelSet instance — rebake against the new one.
+        if (models != cachedModelSource) {
+            cachedModelSource = models;
+            cachedPlayerModel = null;
+            playerModelLookupFailed = false;
+        }
         if (cachedPlayerModel != null) return cachedPlayerModel;
         if (playerModelLookupFailed) return null;
 
         try {
-            EntityModelSet models = Minecraft.getInstance().getEntityModels();
             cachedPlayerModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
             return cachedPlayerModel;
         } catch (Exception e) {
@@ -70,11 +78,5 @@ public final class PlayerSkinRenderer {
             }
             return null;
         }
-    }
-
-    public static void invalidateCache() {
-        cachedPlayerModel = null;
-        playerModelLookupFailed = false;
-        modelFailureLogged = false;
     }
 }

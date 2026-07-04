@@ -20,11 +20,14 @@ import com.github.kdgaming0.skyrecipes.core.recipe.RecipeGenerator.RecipeResult;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.core.render.mob.MobSkinRegistry;
+import com.github.kdgaming0.skyrecipes.core.search.SearchAliases;
 import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
 import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.EditBoxAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.ItemViewOverlayAccessor;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -72,11 +75,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @SuppressWarnings("UnstableApiUsage")
 public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin {
 
-    /**
-     * Alias map exposed for {@link com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete}.
-     */
-    public static final Map<String, String> ALIASES;
-
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyRecipesClientPlugin.class);
 
     /**
@@ -113,6 +111,12 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      */
     private static volatile boolean internalRebuildInProgress = false;
     private static volatile SkyblockSearchIndex searchIndex = null;
+    /**
+     * Stacks published at the last injection commit. The batcher hands these same
+     * instances to RRV, so {@link SkyRecipesPlugin} may reuse them for the
+     * integrated-server registration instead of rebuilding ~8k stacks.
+     */
+    private static volatile List<ItemStack> cachedStacks = null;
 
     static {
         MethodHandle h = null;
@@ -136,45 +140,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         DIRECT_INJECTION_AVAILABLE = (h != null);
     }
 
-    static {
-        Map<String, String> map = new HashMap<>();
-        map.put("aote", "ASPECT_OF_THE_END");
-        map.put("aotv", "ASPECT_OF_THE_VOID");
-        map.put("juju", "JUJU_SHORTBOW");
-        map.put("livid", "LIVID_DAGGER");
-        map.put("fs", "FLOWER_OF_TRUTH");
-        map.put("yeti", "YETI_SWORD");
-        map.put("term", "TERMINATOR");
-        map.put("hype", "HYPERION");
-        map.put("aotd", "ASPECT_OF_THE_DRAGON");
-        map.put("bonemerang", "BONE_BOOMERANG");
-        map.put("daed", "DAEDALUS_AXE");
-        map.put("gdrag", "GOLDEN_DRAGON");
-        map.put("edrag", "ENDER_DRAGON_PET");
-        map.put("wither", "WITHER_SHIELD_SCROLL");
-        map.put("sf", "SHADOW_FURY");
-        map.put("valk", "VALKYRIE");
-        map.put("astrea", "ASTREA");
-        map.put("scs", "SCORPION_FOIL");
-        map.put("spirit", "SPIRIT_SCEPTRE");
-        map.put("giant", "GIANTS_SWORD");
-        map.put("midas", "MIDAS_SWORD");
-        map.put("pooch", "POOCH_SWORD");
-        map.put("reef", "REEF_SCALES");
-        map.put("rod", "SPEEDSTER_ROD");
-        map.put("inferno", "INFERNO_ROD");
-        map.put("hell", "HELLFIRE_ROD");
-        map.put("soul", "SOUL_WHIP");
-        map.put("wand", "WAND_OF_RESTORATION");
-        map.put("ice", "ICE_SPRAY_WAND");
-        map.put("plasma", "PLASMAFLUX_POWER_ORB");
-        map.put("overflux", "OVERFLUX_POWER_ORB");
-        map.put("manaflux", "MANAFLUX_POWER_ORB");
-        map.put("rory", "RORY");
-        map.put("boo", "BOO_STAFF");
-        ALIASES = Collections.unmodifiableMap(map);
-    }
-
     // ---- Per-instance volatile pipeline state -------------------------------
 
     /**
@@ -196,8 +161,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      */
     private volatile boolean firstInjection = true;
     private volatile RecipeResult cachedResult = null;
-    @SuppressWarnings("unused")
-    private volatile List<ItemStack> cachedStacks = null;
     private volatile CompletableFuture<?> pendingRecipeGen = null;
     private volatile CompletableFuture<?> pendingStackBuild = null;
     private volatile boolean clientStarted = false;
@@ -236,6 +199,24 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
     public static SkyblockSearchIndex getSearchIndex() {
         return searchIndex;
+    }
+
+    /**
+     * Fully-built client stacks from the last committed pipeline cycle, or null
+     * if no cycle has committed yet.
+     */
+    public static List<ItemStack> getCachedStacks() {
+        return cachedStacks;
+    }
+
+    /**
+     * True when the data pipeline failed before ever producing data (offline
+     * first launch, blocked download). The item panel then explains the empty
+     * list in place and points at {@code /skyrecipes status} and
+     * {@code /skyrecipes import}.
+     */
+    public static boolean isPipelineFailed() {
+        return PipelineStatus.isFailed();
     }
 
     /**
@@ -347,10 +328,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) {
-                mc.execute(() -> {
-                    SkyRecipes.buildSearchAutocomplete();
-                    registerAliases();
-                });
+                mc.execute(this::registerAliases);
             }
         });
 
@@ -416,6 +394,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private void launchBackgroundGeneration() {
         awaitingComponentBinding = false;
         PipelineStatus.transition(PipelineStatus.State.GENERATING);
+        // Recipe gen and stack build rebuild the same items many times over;
+        // the memo lives until the injection commit (or cycle abort).
+        ItemStackBuilder.beginCycleCache();
         startBackgroundRecipes();
         startBackgroundStacks();
     }
@@ -481,10 +462,12 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             } else {
                 LOGGER.error("Recipe generation produced no result — previous data (if any) keeps serving");
                 PipelineStatus.recordError("generate", "Recipe generation failed — see log for details", null);
+                ItemStackBuilder.endCycleCache(); // cycle is dead; don't pin the templates
             }
         }).exceptionally(t -> {
             LOGGER.error("Recipe generation crashed", t);
             PipelineStatus.recordError("generate", "Recipe generation crashed: " + t.getMessage(), t);
+            if (pendingRecipeGen == future) ItemStackBuilder.endCycleCache();
             return null;
         });
     }
@@ -514,10 +497,12 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             } else {
                 LOGGER.error("Stack building produced no result — previous data (if any) keeps serving");
                 PipelineStatus.recordError("stacks", "Item stack building failed — see log for details", null);
+                ItemStackBuilder.endCycleCache(); // cycle is dead; don't pin the templates
             }
         }).exceptionally(t -> {
             LOGGER.error("Stack building crashed", t);
             PipelineStatus.recordError("stacks", "Item stack building crashed: " + t.getMessage(), t);
+            if (pendingStackBuild == future) ItemStackBuilder.endCycleCache();
             return null;
         });
     }
@@ -533,7 +518,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         RecipeResult recipeResult = pendingRecipeResult;
         StackBuildResult stackResult = pendingStackResult;
         if (recipeResult == null || stackResult == null) return;
-        if (!meetsGenerationThresholds(recipeResult, stackResult)) return;
+        if (!meetsGenerationThresholds(recipeResult, stackResult)) {
+            ItemStackBuilder.endCycleCache(); // cycle aborted; don't pin the templates
+            return;
+        }
         if (!backgroundPrepLaunched.compareAndSet(false, true)) return;
 
         PipelineStatus.recordGenerationCounts(recipeResult.recipes().size(),
@@ -553,9 +541,11 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) mc.execute(this::beginBatchedInjection);
         }).exceptionally(throwable -> {
-            LOGGER.error("Background prep (FamilyResolver/SkyblockRecipeCache) failed", throwable);
-            Minecraft mc = Minecraft.getInstance();
-            if (mc != null) mc.execute(this::beginBatchedInjection);
+            // Injecting anyway would pair new recipes with a stale SkyblockRecipeCache
+            // (R/U lookups against the previous dataset) — abort like a threshold failure.
+            LOGGER.error("Background prep (FamilyResolver/SkyblockRecipeCache) failed — cycle aborted, previous data keeps serving", throwable);
+            ItemStackBuilder.endCycleCache();
+            PipelineStatus.recordError("prep", "SkyBlock recipe preparation failed — data reload aborted", throwable);
             return null;
         });
     }
@@ -625,6 +615,13 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         cachedResult = result;
         cachedStacks = stackResult.stacks();
         searchIndex = stackResult.index();
+        NpcInfoRegistry.publish();
+        // Render thread here, so releasing the GPU textures is safe; skins from the
+        // old ConstantsRegistry are stale and rebuild lazily on next render.
+        MobSkinRegistry.clear();
+
+        // All stacks the batcher injects are pre-built; the memo has done its job.
+        ItemStackBuilder.endCycleCache();
 
         // If the overlay is open, force it to re-filter with the new index immediately.
         refreshOverlayQuery();
@@ -682,13 +679,21 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         }
 
         int skipped = batcher != null ? batcher.failedRecipes() : 0;
-        int injected = recipes.size() - skipped;
+        int injected = batcher != null ? batcher.injectedRecipes() : recipes.size();
         boolean providerOnly = !DIRECT_INJECTION_AVAILABLE || directInjectionBroken;
         if (batcher != null) {
             PipelineStatus.recordStageDuration("inject", batcher.workMillis());
         }
         PipelineStatus.recordInjectionResult(injected, skipped, providerOnly);
         PipelineStatus.transition(PipelineStatus.State.READY);
+
+        // After READY so the transition can't erase it: a whole generator category
+        // failing (essence/reforge/garden) shows as DEGRADED instead of vanishing.
+        RecipeResult committed = cachedResult;
+        if (committed != null && !committed.generatorFailures().isEmpty()) {
+            PipelineStatus.recordError("generate", "Some recipe categories failed to generate: "
+                    + String.join(", ", committed.generatorFailures()), null);
+        }
 
         PipelineStatus.Snapshot snap = PipelineStatus.snapshot();
         long totalMs = snap.stageDurationsMs().values().stream().mapToLong(Long::longValue).sum();
@@ -727,6 +732,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                         ? cachedResult.recipes()
                         : List.of();
                 finishStartup(client, recipes, batcher);
+                PipelineStatus.recordError("inject",
+                        "Recipe injection crashed partway — some recipes may be missing until the next reload", e);
             }
         }
     }
@@ -825,7 +832,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             return null;
         }
         try {
-            return new SkyblockSearchIndex(stacks, registry, constants, ALIASES);
+            return new SkyblockSearchIndex(stacks, registry, constants, SearchAliases.MAP);
         } catch (Exception e) {
             LOGGER.error("Failed to build SkyblockSearchIndex", e);
             return null;
@@ -840,7 +847,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) return;
 
-        for (Map.Entry<String, String> entry : ALIASES.entrySet()) {
+        for (Map.Entry<String, String> entry : SearchAliases.MAP.entrySet()) {
             registry.getByInternalName(entry.getValue()).ifPresent(neuItem -> {
                 try {
                     Item item = resolveAliasItem(neuItem);
@@ -948,6 +955,18 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
         int failedRecipes() {
             return failedRecipes;
+        }
+
+        /**
+         * Recipes actually delivered to RRV so far: attempted minus failed for
+         * direct injection; all-or-nothing for the provider fallback. Stays
+         * correct when an exception ends the batch early.
+         */
+        int injectedRecipes() {
+            if (DIRECT_INJECTION_AVAILABLE && !directInjectionBroken) {
+                return recipeIndex - failedRecipes;
+            }
+            return fallbackDone ? recipes.size() : 0;
         }
 
         long workMillis() {

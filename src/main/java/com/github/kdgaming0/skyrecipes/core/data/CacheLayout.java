@@ -13,9 +13,8 @@ import java.util.stream.Stream;
  * Single source of truth for every path SkyRecipes reads or writes on disk.
  *
  * <p>All data lives under one root, {@code gameDir/skyrecipes}: durable outputs in
- * {@code data/} (compiled binary, metadata sidecar, Hypixel snapshot) and
- * regenerable artifacts in {@code cache/} (the NEU ETag plus transient download/compile
- * temporaries).
+ * {@code data/} (compiled binary, metadata sidecar, Hypixel snapshot), transient
+ * download artifacts in {@code cache/}, and user-supplied ZIPs in {@code import/}.
  */
 public final class CacheLayout {
 
@@ -33,12 +32,14 @@ public final class CacheLayout {
     private final Path root;
     private final Path dataDir;
     private final Path cacheDir;
+    private final Path importDir;
 
     public CacheLayout(Path gameDir) {
         this.gameDir = gameDir;
         this.root = gameDir.resolve("skyrecipes");
         this.dataDir = root.resolve("data");
         this.cacheDir = root.resolve("cache");
+        this.importDir = root.resolve("import");
     }
 
     public Path dataDir() {
@@ -69,10 +70,6 @@ public final class CacheLayout {
         return dataDir.resolve(HYPIXEL_NAME);
     }
 
-    public Path neuEtagFile() {
-        return cacheDir.resolve(NEU_ETAG_NAME);
-    }
-
     /**
      * Transient landing path for the NEU repo ZIP. Compiled from, then deleted.
      */
@@ -80,9 +77,37 @@ public final class CacheLayout {
         return cacheDir.resolve(NEU_ZIP_NAME);
     }
 
+    /**
+     * Drop folder for manually downloaded NEU repo ZIPs (offline backup path,
+     * consumed by {@code /skyrecipes import}).
+     */
+    public Path importDir() {
+        return importDir;
+    }
+
+    /**
+     * Newest {@code .zip} in {@link #importDir()}, or null if none. Creates the
+     * folder on demand so the user always has a place to drop the file.
+     */
+    public Path findNewestImportZip() {
+        try {
+            Files.createDirectories(importDir);
+            try (Stream<Path> entries = Files.list(importDir)) {
+                return entries
+                        .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".zip"))
+                        .max(java.util.Comparator.comparingLong(p -> p.toFile().lastModified()))
+                        .orElse(null);
+            }
+        } catch (IOException e) {
+            LOGGER.warn("Could not scan import folder {}", importDir, e);
+            return null;
+        }
+    }
+
     public void createDirectories() throws IOException {
         Files.createDirectories(dataDir);
         Files.createDirectories(cacheDir);
+        Files.createDirectories(importDir);
     }
 
     /**
@@ -97,8 +122,10 @@ public final class CacheLayout {
             moveIfAbsent(legacyData.resolve(BINARY_NAME), binaryFile());
             moveIfAbsent(legacyData.resolve(META_NAME), binaryMetaFile());
             moveIfAbsent(legacyData.resolve(HYPIXEL_NAME), hypixelItemsFile());
-            // Under stream-then-discard the raw repo ZIP is no longer retained.
+            // Under stream-then-discard the raw repo ZIP is no longer retained,
+            // and the ETag now lives only in the binary's embedded metadata.
             Files.deleteIfExists(neuRepoZip());
+            Files.deleteIfExists(cacheDir.resolve(NEU_ETAG_NAME));
             deleteIfEmpty(legacyData);
         } catch (IOException e) {
             LOGGER.warn("Cache layout migration failed (data will re-download if needed)", e);

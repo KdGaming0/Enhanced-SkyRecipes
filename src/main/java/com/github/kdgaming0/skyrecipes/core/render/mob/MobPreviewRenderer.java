@@ -63,6 +63,11 @@ public final class MobPreviewRenderer {
 
     private static final Set<String> LOGGED_SKIN_FAILURES = ConcurrentHashMap.newKeySet();
 
+    // Skull stacks are SNBT-parsed on build — far too costly per frame. Cached per
+    // item id; failures cache as EMPTY so a broken item isn't re-parsed every frame.
+    private static final java.util.Map<String, ItemStack> SKULL_STACK_CACHE = new ConcurrentHashMap<>();
+    private static volatile ItemRegistry skullCacheRegistry;
+
     private MobPreviewRenderer() {
     }
 
@@ -336,10 +341,21 @@ public final class MobPreviewRenderer {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) return false;
 
-        NeuItem item = registry.getByInternalName(helmetItemId).orElse(null);
-        if (item == null) return false;
+        // Registry instance is replaced on data reload; drop stacks built from old data.
+        if (skullCacheRegistry != registry) {
+            SKULL_STACK_CACHE.clear();
+            skullCacheRegistry = registry;
+        }
 
-        ItemStack stack = ItemStackBuilder.build(item);
+        ItemStack stack = SKULL_STACK_CACHE.computeIfAbsent(helmetItemId, id -> {
+            try {
+                NeuItem item = registry.getByInternalName(id).orElse(null);
+                return item != null ? ItemStackBuilder.build(item) : ItemStack.EMPTY;
+            } catch (Exception e) {
+                LOGGER.debug("Failed to build skull preview stack for '{}'", id, e);
+                return ItemStack.EMPTY;
+            }
+        });
         if (stack.isEmpty()) return false;
 
         int centerX = recipeLeft + BOX_LEFT + (BOX_SIZE - 16) / 2;

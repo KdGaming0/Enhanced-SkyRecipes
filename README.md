@@ -200,4 +200,8 @@ This project includes derivative code from:
 - Affected file(s): `NeuCalculator.java` (adapted from NEU Calculator)
 - Notes: Original lexer, shunting-yard parsing, and RPN evaluation logic were adapted and extended.
 
+## Credits
+
+Massive thanks to the people who maintain the NEU-REPO and have made this project possible. The SkyRecipes mod uses the NEU-REPO to provide the data for all SkyBlock items and recipes.
+
 > AI tools were extensively used during the creation of this project.

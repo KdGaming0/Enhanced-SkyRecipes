@@ -44,12 +44,13 @@ public final class RecipeGenerator {
      * @return The generation result containing recipes and indexes
      */
     public RecipeResult generate() {
-        NpcInfoRegistry.clear();
+        NpcInfoRegistry.beginCycle();
 
         List<ReliableClientRecipe> recipes = new ArrayList<>();
         RecipeIndex.Builder indexBuilder = new RecipeIndex.Builder();
         int parseAttempts = 0;
         int parseFailures = 0;
+        List<String> generatorFailures = new ArrayList<>();
 
         GardenMutationRegistry.load();
 
@@ -130,7 +131,7 @@ public final class RecipeGenerator {
                 }
             } catch (Exception e) {
                 LOGGER.error("Failed to generate essence upgrade recipes", e);
-                parseFailures++;
+                generatorFailures.add("essence upgrades");
             }
 
             // Reforge recipes (from constants)
@@ -154,7 +155,7 @@ public final class RecipeGenerator {
                 }
             } catch (Exception e) {
                 LOGGER.error("Failed to generate reforge recipes", e);
-                parseFailures++;
+                generatorFailures.add("reforges");
             }
 
             // Garden mutation recipes (from built-in resource)
@@ -183,7 +184,7 @@ public final class RecipeGenerator {
                 }
             } catch (Exception e) {
                 LOGGER.error("Failed to generate garden mutation recipes", e);
-                parseFailures++;
+                generatorFailures.add("garden mutations");
             }
         }
 
@@ -192,7 +193,7 @@ public final class RecipeGenerator {
                 recipes.size(), index.resultCount(), index.ingredientCount(),
                 parseAttempts - parseFailures, parseFailures);
 
-        return new RecipeResult(recipes, index, parseAttempts, parseFailures);
+        return new RecipeResult(recipes, index, parseAttempts, parseFailures, List.copyOf(generatorFailures));
     }
 
     private void indexRecipe(ReliableClientRecipe recipe, NeuItem item,
@@ -234,8 +235,11 @@ public final class RecipeGenerator {
      * item entry that carried recipe data; {@code parseFailures} counts those
      * whose parser produced nothing — the ratio gates injection so a systemic
      * NEU format change can never silently publish an empty recipe set.
+     * {@code generatorFailures} names whole categories (essence/reforge/garden)
+     * that threw — a single increment could never trip the 5% gate, so these are
+     * surfaced as a distinct DEGRADED error after injection instead.
      */
     public record RecipeResult(List<ReliableClientRecipe> recipes, RecipeIndex index,
-                               int parseAttempts, int parseFailures) {
+                               int parseAttempts, int parseFailures, List<String> generatorFailures) {
     }
 }

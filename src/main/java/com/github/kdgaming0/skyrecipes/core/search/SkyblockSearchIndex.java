@@ -123,22 +123,21 @@ public final class SkyblockSearchIndex {
         this.hasNpcShop = new boolean[itemCount];
         this.isBazaar = new boolean[itemCount];
 
+        Map<String, Integer> idToIndex = new HashMap<>(itemCount);
         for (int i = 0; i < itemCount; i++) {
-            indexItem(i, items.get(i), constantsRegistry);
+            String itemId = indexItem(i, items.get(i), constantsRegistry);
+            if (itemId != null) {
+                idToIndex.putIfAbsent(itemId.toLowerCase(), i);
+            }
         }
 
         // Index alias tokens so searching "aote" matches Aspect of the End
         for (Map.Entry<String, String> entry : aliases.entrySet()) {
-            String alias = entry.getKey().toLowerCase();
-            String targetId = entry.getValue();
-            // Find the item index for this target ID
-            for (int i = 0; i < itemCount; i++) {
-                String itemId = SkyblockIdExtractor.extract(items.get(i));
-                if (targetId.equalsIgnoreCase(itemId)) {
-                    addAnyToken(alias, i);
-                    addNameToken(alias, i);
-                    break;
-                }
+            Integer target = idToIndex.get(entry.getValue().toLowerCase());
+            if (target != null) {
+                String alias = entry.getKey().toLowerCase();
+                addAnyToken(alias, target);
+                addNameToken(alias, target);
             }
         }
 
@@ -606,9 +605,10 @@ public final class SkyblockSearchIndex {
      * split on '\n'). Each line is matched in isolation via {@link Matcher#region}, keeping
      * regex line-scoped like {@code grep} so {@code \s} or {@code .} cannot bridge two lore
      * lines — mirroring the within-line semantics of quoted phrases. Allocates nothing
-     * beyond the single reused matcher.
+     * beyond the single reused matcher. Public so the inventory-highlight path can
+     * evaluate regex clauses against live stack text with the same semantics.
      */
-    private static boolean regexFindWithinLine(String text, Pattern pattern) {
+    public static boolean regexFindWithinLine(String text, Pattern pattern) {
         Matcher matcher = pattern.matcher(text);
         int length = text.length();
         int start = 0;
@@ -722,8 +722,9 @@ public final class SkyblockSearchIndex {
 
     private BitSet fuzzyMatch(String token) {
         BitSet result = new BitSet(itemCount);
+        FuzzyTokenMatcher.Scratch scratch = new FuzzyTokenMatcher.Scratch();
         for (String candidate : sortedTokens) {
-            if (FuzzyTokenMatcher.matches(token, candidate, 2)) {
+            if (FuzzyTokenMatcher.matches(token, candidate, 2, scratch)) {
                 BitSet bs = anyTokenIndex.get(candidate);
                 if (bs != null) result.or(bs);
             }
@@ -956,7 +957,9 @@ public final class SkyblockSearchIndex {
         }
     }
 
-    private void indexItem(int itemIndex, ItemStack stack, ConstantsRegistry constantsRegistry) {
+    /** Returns the item's SkyBlock id (null if none) so the caller can build an id → index map. */
+    @Nullable
+    private String indexItem(int itemIndex, ItemStack stack, ConstantsRegistry constantsRegistry) {
         String itemId = SkyblockIdExtractor.extract(stack);
         NeuItem neuItem = itemId != null ? itemRegistry.getByInternalName(itemId).orElse(null) : null;
         Set<String> itemTokens = itemId != null ? new HashSet<>(32) : null;
@@ -990,6 +993,7 @@ public final class SkyblockSearchIndex {
         if (itemId != null && itemTokens != null && !itemTokens.isEmpty()) {
             idToTokens.put(itemId, Set.copyOf(itemTokens));
         }
+        return itemId;
     }
 
     private void indexNeuItem(int itemIndex, ItemStack stack, NeuItem neuItem,
@@ -1030,7 +1034,7 @@ public final class SkyblockSearchIndex {
                     addAnyToken(token, itemIndex);
                     if (itemTokens != null) itemTokens.add(token);
                 });
-                for (StatParser.ParsedStat stat : statParser.parseLoreLine(line)) {
+                for (StatParser.ParsedStat stat : statParser.parseLoreLineStripped(clean)) {
                     indexStat(itemIndex, stat.statName(), stat.value(), itemTokens);
                 }
             }

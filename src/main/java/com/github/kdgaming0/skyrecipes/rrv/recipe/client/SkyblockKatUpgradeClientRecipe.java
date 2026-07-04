@@ -83,6 +83,8 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
     private ItemStack input;
     private ItemStack output;
     private ItemStack coinStack;
+    /** Compact coin count, rebuilt only on slider change (BigDecimal math is too costly per frame). */
+    private Component coinLabel;
 
     private int petLevel = 0;
     @Nullable
@@ -108,6 +110,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         this.outputTier = extractTier(outputItem);
 
         this.coinStack = buildCoinStack(0);
+        this.coinLabel = buildCoinLabel(0);
     }
 
     private static int extractTier(NeuItem neuItem) {
@@ -191,13 +194,11 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
                               GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         var font = Minecraft.getInstance().font;
 
-        long discounted = computeDiscountedCoins(petLevel);
-        Component compact = Component.literal(RecipeUiHelper.formatCompactNumber(discounted));
-        int compactW = font.width(compact);
+        int compactW = font.width(coinLabel);
         int countX = COIN_SLOT_X + 17 - compactW;
         int countY = COIN_SLOT_Y + 9;
 
-        graphics.text(font, compact, countX, countY, RecipeUiHelper.TEXT_WHITE, true);
+        graphics.text(font, coinLabel, countX, countY, RecipeUiHelper.TEXT_WHITE, true);
     }
 
     @Override
@@ -235,6 +236,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
             output = rebuildStack(outputItem, outputLevel);
         }
         coinStack = buildCoinStack(petLevel);
+        coinLabel = buildCoinLabel(petLevel);
     }
 
     private ItemStack rebuildStack(NeuItem neuItem, int level) {
@@ -263,6 +265,10 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> existing.putInt("petLevel", level));
 
         return stack;
+    }
+
+    private Component buildCoinLabel(int level) {
+        return Component.literal(RecipeUiHelper.formatCompactNumber(computeDiscountedCoins(level)));
     }
 
     private ItemStack buildCoinStack(int level) {

@@ -27,8 +27,8 @@ public class GardenPlotsWidgetMixin {
     private static final Identifier SKYRECIPES$GARDEN_PLOTS_ID =
             Identifier.fromNamespaceAndPath("skyrecipes", "skyblocker_garden_plots");
 
-    @Inject(method = "<init>(II)V", at = @At("TAIL"))
-    private void skyrecipes$onInit(int x, int y, CallbackInfo ci) {
+    @Inject(method = "<init>", at = @At("TAIL"), require = 0)
+    private void skyrecipes$onInit(CallbackInfo ci) {
         GardenPlotsWidget self = (GardenPlotsWidget) (Object) this;
         skyrecipes$updateBlocking(self);
 
@@ -40,12 +40,12 @@ public class GardenPlotsWidgetMixin {
         }
     }
 
-    @Inject(method = "setX", at = @At("TAIL"))
+    @Inject(method = "setX", at = @At("TAIL"), require = 0)
     private void skyrecipes$onSetX(int x, CallbackInfo ci) {
         skyrecipes$updateBlocking((GardenPlotsWidget) (Object) this);
     }
 
-    @Inject(method = "setY", at = @At("TAIL"))
+    @Inject(method = "setY", at = @At("TAIL"), require = 0)
     private void skyrecipes$onSetY(int y, CallbackInfo ci) {
         skyrecipes$updateBlocking((GardenPlotsWidget) (Object) this);
     }

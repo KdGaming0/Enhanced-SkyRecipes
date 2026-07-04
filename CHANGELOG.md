@@ -1,3 +1,26 @@
-### 0.2.5
+### 0.3.0
 
-- Clearer messages when the recipe data can't be downloaded.
+- The RRV item list now moves out of the way of Skyblocker Museum donation widget.
+- You can now look up recipes straight from Skyblocker's Museum overlay: hover a donation and press R (recipe) or U (uses), or left-click (recipe) / right-click (uses) it. Skyblocker's own search, wiki, and price lookups keep working exactly as before.
+- Fixed a crash that happened when opening your inventory with the latest Skyblocker (6.6.0) installed. The Garden plots widget had changed on Skyblocker's side, which broke SkyRecipes' compatibility patch.
+- If the recipe data can't be downloaded (offline, or GitHub blocked by a firewall/VPN), the item panel now explains what went wrong instead of just sitting empty, and points you at the fix.
+- New `/skyrecipes import` command as a last-resort backup: download the SkyBlock data ZIP (NEU-REPO) yourself in a browser (or get a friend to do it), then drop it into the `skyrecipes/import/` folder, and run the command to use it. Automatic updates take over again once the mod can reach the internet/NEU-REPO.
+- Fixed an issue (mainly on Windows) where a corrupted data file could block every future data update until the game was restarted.
+- `/skyrecipes status` now reports honestly if recipe loading crashed partway through, instead of claiming everything loaded fine.
+- Fixed search suggestions disappearing for any word containing an "x" (like "axe", "pickaxe", or "onyx"). Typing "5x3" still works as a calculator.
+- Smoother frame rate while recipe views are open: mob-head previews and the coin/essence amounts on NPC Shop, Essence Upgrade, and Kat Upgrade cards no longer redo heavy work every frame.
+- Faster, stutter-free data loading: the search suggestion list is now built once in the background instead of twice while the game is rendering.
+- Fixed a surprise "Refresh complete" chat message appearing hours after a failed `/skyrecipes refresh`.
+- Clearer wording and coloring for a few error messages.
+- `/skyrecipes refresh repoData` is now a true clean rebuild: it always re-downloads and rebuilds everything from scratch (no shortcuts), but your current items and recipes keep working the whole time — if the refresh fails, nothing is lost and the old data stays.
+- Data refreshes are noticeably faster: the new data file is now read once instead of twice, and item building during a refresh reuses work instead of re-parsing the same items tens of thousands of times.
+- Searching with a typo (fuzzy matching) is faster and no longer creates thousands of tiny memory allocations per keystroke.
+- A typo in a stat filter (like `helth>50`) no longer silently empties the item list — the word is now just searched as plain text.
+- Closing a recipe view now shows the shop/menu behind it with its *current* contents. Before, anything that changed while the recipe view was open (rotating shop stock, timers, auction updates) looked frozen until your next click — risky in shops and the Auction House.
+- "NPC Info" buttons no longer briefly stop working while the mod refreshes its data in the background.
+- Mob skin previews now update after a data refresh instead of keeping the old texture.
+- Inventory highlighting now refreshes correctly after a background data update, even if your search text didn't change.
+- If a whole recipe category (essence upgrades, reforges, or garden mutations) fails to load, `/skyrecipes status` now says so instead of reporting everything as fine.
+- Storage chests no longer show up when filtering for chestplate armor.
+- Inventory search (double-click the RRV search bar) is much smarter: searching an enchant name (like "ultimate wise" or "sharpness") now highlights both enchanted books with that enchant *and* items that have it applied. It also matches against each item's actual name and lore — including reforges — so you can find anything in your inventory the same way you search the item list.
+- `/skyrecipes status` is now much easier to read and act on: each state explains what it means in plain words, problems come with a clickable "Fix:" suggestion, unimportant numbers are hidden unless something went wrong, and it shows when the next data check will happen.

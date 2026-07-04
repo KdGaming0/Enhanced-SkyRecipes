@@ -24,18 +24,55 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Converts {@link NeuItem} data into Minecraft {@link ItemStack} objects.
  *
  * <p>Parses the legacy SNBT string from NEU repo and maps it to modern
  * Minecraft data components.</p>
+ *
+ * <p>During a pipeline cycle (between {@link #beginCycleCache()} and
+ * {@link #endCycleCache()}) built templates are memoized per internal name, so
+ * the same item is SNBT-parsed once per cycle instead of once per recipe slot.
+ * Every {@link #build} call still returns a fresh stack.</p>
  */
 public final class ItemStackBuilder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ItemStackBuilder.class);
 
+    /**
+     * Non-null only while a pipeline cycle is running. Volatile so worker threads
+     * (parallel stack build, recipe-gen ForkJoin tasks) see enable/drop immediately;
+     * a null read simply falls back to the uncached path.
+     */
+    private static volatile ConcurrentHashMap<String, CycleEntry> cycleCache = null;
+
+    /**
+     * Keeps the source item alongside its template: a task invalidated by a data
+     * reload may still write into the new cycle's map, and the identity check on
+     * read prevents its stale template from being served to the new cycle.
+     */
+    private record CycleEntry(NeuItem source, ItemStack template) {
+    }
+
     private ItemStackBuilder() {
+    }
+
+    /**
+     * Enable the per-cycle template memo. Call when a pipeline cycle's background
+     * generation starts; replaces any map left over from an aborted cycle.
+     */
+    public static void beginCycleCache() {
+        cycleCache = new ConcurrentHashMap<>();
+    }
+
+    /**
+     * Drop the per-cycle template memo. Call once the cycle's results are committed
+     * (or the cycle aborts) so the ~8k templates don't outlive the cycle.
+     */
+    public static void endCycleCache() {
+        cycleCache = null;
     }
 
     /**
@@ -47,10 +84,26 @@ public final class ItemStackBuilder {
 
     /**
      * Build an {@link ItemStack} from a {@link NeuItem} with the specified count.
+     * Always returns a stack the caller may freely mutate.
      */
     public static ItemStack build(NeuItem item, int count) {
         if (count < 1) count = 1;
 
+        ConcurrentHashMap<String, CycleEntry> cache = cycleCache;
+        String key = item.internalName();
+        if (cache == null || key == null) {
+            return buildUncached(item, count);
+        }
+
+        CycleEntry entry = cache.computeIfAbsent(key, _ -> new CycleEntry(item, buildUncached(item, 1)));
+        if (entry.source() != item) {
+            entry = new CycleEntry(item, buildUncached(item, 1));
+            cache.put(key, entry);
+        }
+        return entry.template().copyWithCount(count);
+    }
+
+    private static ItemStack buildUncached(NeuItem item, int count) {
         String mappedId = LegacyItemIdMapper.map(item.itemId(), item.damage());
         Item itemType = resolveItem(mappedId);
         if (itemType == null) {

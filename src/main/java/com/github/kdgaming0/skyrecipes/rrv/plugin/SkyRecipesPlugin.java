@@ -11,6 +11,8 @@ import net.minecraft.world.item.Items;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 /**
  * RRV server-side plugin entrypoint.
  *
@@ -36,6 +38,18 @@ public class SkyRecipesPlugin implements ReliableRecipeViewerPlugin {
     }
 
     private void registerServerStackSensitives() {
+        // Client-only mod: the integrated server shares the JVM with the client, so
+        // reuse the stacks the client pipeline already built (and already hands to
+        // RRV) instead of re-parsing ~8k SNBT items on the reload thread.
+        List<ItemStack> clientStacks = SkyRecipesClientPlugin.getCachedStacks();
+        if (clientStacks != null) {
+            for (ItemStack stack : clientStacks) {
+                ItemView.addStackSensitive(stack);
+            }
+            LOGGER.info("Registered {} server stack-sensitives from client cache", clientStacks.size());
+            return;
+        }
+
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) {
             LOGGER.warn("ItemRegistry not available, skipping server stack-sensitive registration");

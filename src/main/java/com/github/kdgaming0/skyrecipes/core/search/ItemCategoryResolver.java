@@ -65,7 +65,8 @@ public final class ItemCategoryResolver {
         if (itemId.contains("shovel") || itemId.contains("spade")) return "shovel";
         if (itemId.contains("rod") || internalName.contains("rod")) return "rod";
         if (itemId.contains("helmet") || itemId.contains("head") || itemId.contains("hat")) return "helmet";
-        if (itemId.contains("chestplate") || itemId.contains("chest") || itemId.contains("jacket")) return "chestplate";
+        // "chestplate" only — a bare "chest" match would classify storage chests as armor
+        if (itemId.contains("chestplate") || itemId.contains("jacket")) return "chestplate";
         if (itemId.contains("leggings") || itemId.contains("pants")) return "leggings";
         if (itemId.contains("boots") || itemId.contains("shoes")) return "boots";
         if (internalName.contains("_pet")) return "pet";
@@ -98,7 +99,6 @@ public final class ItemCategoryResolver {
 
     private static SkyblockItemCategory inferCategoryFromItemId(NeuItem item) {
         String itemId = item.itemId();
-        String displayName = item.displayName();
         String internalName = item.internalName();
 
         if (itemId == null) return SkyblockItemCategory.UNKNOWN;

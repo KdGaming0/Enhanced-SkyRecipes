@@ -16,7 +16,7 @@ import java.nio.file.StandardCopyOption;
  * Reads and writes the Hypixel items snapshot to disk.
  *
  * <p>Cache TTL is 24 hours. The cache is stored as JSON at
- * {@code [gameDir]/skyblockdata/hypixel_items.json}.</p>
+ * {@code [gameDir]/skyrecipes/data/hypixel_items.json}.</p>
  */
 public final class HypixelItemsCache {
 

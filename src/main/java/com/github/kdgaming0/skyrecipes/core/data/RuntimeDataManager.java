@@ -17,7 +17,7 @@ import java.util.function.Consumer;
  *
  * <p>Manages warm starts, cold starts, and background updates.
  * The data-refresh interval is provided at construction time from
- * {@code SkyRecipesConfig.dataRefreshIntervalHours}.</p>
+ * {@code SkyRecipesConfig.dataRefreshIntervalMinutes}.</p>
  */
 public class RuntimeDataManager {
 
@@ -25,7 +25,7 @@ public class RuntimeDataManager {
 
     private final Path dataPath;
     private final Path metaPath;
-    private final BinaryDataLoader loader;
+    private BinaryDataLoader loader;
     private final RuntimeUpdateService updateService;
     private final List<Consumer<DataLoadResult>> dataReadyCallbacks = new CopyOnWriteArrayList<>();
     private volatile State state = State.UNINITIALIZED;
@@ -43,7 +43,7 @@ public class RuntimeDataManager {
         this.metaPath = layout.binaryMetaFile();
         this.loader = new BinaryDataLoader();
         this.updateService = new RuntimeUpdateService(
-                layout, this::onDataReloaded, refreshIntervalSeconds);
+                layout, this::adoptLoadedData, refreshIntervalSeconds);
     }
 
     /**
@@ -163,34 +163,30 @@ public class RuntimeDataManager {
     }
 
     /**
-     * Reload data from a new path (used by atomic swap during background updates).
+     * Publish registries the update service already loaded from a freshly swapped
+     * binary. The previous loader is closed only after the new data is live, so a
+     * failed update can never leave the mod without data.
      */
-    public synchronized boolean reloadData(Path newDataPath, Path newMetaPath) {
-        LOGGER.info("Reloading data from {}", newDataPath);
-        PipelineStatus.transition(PipelineStatus.State.LOADING);
+    private synchronized boolean adoptLoadedData(BinaryDataLoader newLoader, Path loadedPath) {
         try {
-            loader.close();
-            long loadStart = System.currentTimeMillis();
-            boolean loaded = loader.load(newDataPath);
-            PipelineStatus.recordStageDuration("load", System.currentTimeMillis() - loadStart);
-            if (!loaded) {
-                LOGGER.error("Failed to load new binary after swap");
-                return false;
-            }
-
-            this.itemRegistry = loader.getItemRegistry();
-            this.constantsRegistry = loader.getConstantsRegistry();
-            this.currentMetadata = loader.getMetadata();
-            this.currentLoadedPath = newDataPath;
+            BinaryDataLoader old = this.loader;
+            this.loader = newLoader;
+            this.itemRegistry = newLoader.getItemRegistry();
+            this.constantsRegistry = newLoader.getConstantsRegistry();
+            this.currentMetadata = newLoader.getMetadata();
+            this.currentLoadedPath = loadedPath;
             this.state = State.READY;
             recordDataInfo();
+            if (old != null && old != newLoader) {
+                old.close();
+            }
 
             LOGGER.info("Data reloaded successfully: {} items", itemRegistry.size());
             notifyCallbacks();
             return true;
 
         } catch (Exception e) {
-            LOGGER.error("Failed to reload data", e);
+            LOGGER.error("Failed to publish reloaded data", e);
             return false;
         }
     }
@@ -198,7 +194,7 @@ public class RuntimeDataManager {
     /**
      * Shutdown: release resources and stop background services.
      */
-    public void shutdown() {
+    public synchronized void shutdown() {
         updateService.shutdown();
         loader.close();
         state = State.UNINITIALIZED;
@@ -251,14 +247,35 @@ public class RuntimeDataManager {
             }
         };
         dataReadyCallbacks.add(callback);
-        updateService.forceRefreshNow(onProgress, onFailure);
+        // Remove the one-shot callback on failure too, or a later scheduled
+        // update would fire a phantom "Refresh complete" for this refresh.
+        updateService.forceRefreshNow(onProgress, () -> {
+            dataReadyCallbacks.remove(callback);
+            if (onFailure != null) onFailure.run();
+        });
+    }
+
+    /**
+     * Compile and load a manually supplied NEU repo ZIP (see
+     * {@link RuntimeUpdateService#importFromZip}). Same callback contract as
+     * {@link #forceRefreshNow}.
+     */
+    public void importFromZip(Path zipFile, Consumer<String> onProgress, Runnable onSuccess, Runnable onFailure) {
+        Consumer<DataLoadResult> callback = new Consumer<>() {
+            @Override
+            public void accept(DataLoadResult result) {
+                dataReadyCallbacks.remove(this);
+                if (onSuccess != null) onSuccess.run();
+            }
+        };
+        dataReadyCallbacks.add(callback);
+        updateService.importFromZip(zipFile, onProgress, () -> {
+            dataReadyCallbacks.remove(callback);
+            if (onFailure != null) onFailure.run();
+        });
     }
 
     // ---- Internal ----
-
-    private boolean onDataReloaded(Path newDataPath, Path newMetaPath) {
-        return reloadData(newDataPath, newMetaPath);
-    }
 
     private synchronized void loadCompiledData(Path tempPath, Path tempMeta) {
         PipelineStatus.transition(PipelineStatus.State.LOADING);

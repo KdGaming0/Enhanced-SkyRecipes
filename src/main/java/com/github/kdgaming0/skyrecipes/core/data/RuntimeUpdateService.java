@@ -30,7 +30,7 @@ public class RuntimeUpdateService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RuntimeUpdateService.class);
 
-    private static final String NEU_REPO_URL =
+    public static final String NEU_REPO_URL =
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final long INITIAL_DELAY_SECONDS = 30;
@@ -41,7 +41,7 @@ public class RuntimeUpdateService {
     private static final long[] BACKOFF_SECONDS = {60, 300, 900, 3600};
 
     private final CacheLayout layout;
-    private final BiPredicate<Path, Path> onDataUpdated;
+    private final BiPredicate<BinaryDataLoader, Path> onDataPublished;
     private final ScheduledExecutorService scheduler;
     private final BinaryDataCompiler compiler;
     private final long checkIntervalSeconds;
@@ -56,10 +56,10 @@ public class RuntimeUpdateService {
     private ScheduledFuture<?> pendingRetry;
 
     public RuntimeUpdateService(CacheLayout layout,
-                                BiPredicate<Path, Path> onDataUpdated,
+                                BiPredicate<BinaryDataLoader, Path> onDataPublished,
                                 long checkIntervalSeconds) {
         this.layout = layout;
-        this.onDataUpdated = onDataUpdated;
+        this.onDataPublished = onDataPublished;
         this.checkIntervalSeconds = checkIntervalSeconds;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "SkyRecipes-UpdateService");
@@ -98,7 +98,7 @@ public class RuntimeUpdateService {
 
     /**
      * Start scheduled update checks. The interval was fixed at construction time
-     * from {@code SkyRecipesConfig.dataRefreshIntervalHours}.
+     * from {@code SkyRecipesConfig.dataRefreshIntervalMinutes}.
      */
     public synchronized void start() {
         if (running) return;
@@ -131,8 +131,10 @@ public class RuntimeUpdateService {
     }
 
     /**
-     * Force a complete rebuild regardless of ETag: deletes the cached ETag file so
-     * the next check always re-downloads fresh data, then runs the pipeline immediately.
+     * Force a complete rebuild as if starting with an empty cache: skips the ETag
+     * check entirely and re-downloads, recompiles, and reloads everything. Live
+     * data is never touched until the new build has fully loaded, so a failed
+     * refresh keeps the current items serving.
      * Progress messages are delivered via {@code onProgress} (scheduler thread; callers
      * must dispatch to the render thread themselves).
      * {@code onFailure} fires once on the scheduler thread if any pipeline stage fails.
@@ -141,13 +143,68 @@ public class RuntimeUpdateService {
         cancelPendingRetry();
         this.progressCallback = onProgress;
         this.onNextFailure = onFailure;
-        try {
-            Files.deleteIfExists(layout.neuEtagFile());
-        } catch (IOException e) {
-            LOGGER.warn("Could not clear ETag cache for forced refresh", e);
-        }
         forceNextCheck = true;
         scheduler.execute(this::performUpdateCheck);
+    }
+
+    /**
+     * Compile and load a manually supplied NEU repo ZIP — the last-resort path when
+     * the mod cannot reach GitHub (user downloads the ZIP in a browser or gets it
+     * from a friend, drops it in {@code skyrecipes/import/}). Runs the same
+     * compile → validate → swap → load sequence as a download, minus the network.
+     *
+     * <p>The recorded ETag ({@code manual-import-<time>}) never matches the remote,
+     * so the next successful online check replaces imported data automatically.
+     * The ZIP itself is kept — it is the user's file and their only recovery source.</p>
+     */
+    public void importFromZip(Path zipFile, Consumer<String> onProgress, Runnable onFailure) {
+        cancelPendingRetry();
+        this.progressCallback = onProgress;
+        this.onNextFailure = onFailure;
+        scheduler.execute(() -> {
+            if (compileInProgress) {
+                LOGGER.warn("Import skipped: another compile is already in progress.");
+                fireNextFailure();
+                return;
+            }
+            compileInProgress = true;
+            try {
+                String importEtag = "manual-import-" + System.currentTimeMillis();
+                PipelineStatus.transition(PipelineStatus.State.COMPILING);
+                notifyProgress("§7SkyRecipes: Compiling imported data...");
+                long compileStart = System.currentTimeMillis();
+                BinaryDataCompiler.CompileResult result = compiler.compileToPath(
+                        zipFile, layout.binaryTempFile(), layout.binaryTempMetaFile(), importEtag, null);
+                PipelineStatus.recordStageDuration("compile", System.currentTimeMillis() - compileStart);
+
+                if (result == null) {
+                    LOGGER.error("Imported ZIP could not be compiled: {}", zipFile);
+                    PipelineStatus.recordError("import", "The imported ZIP did not contain usable SkyBlock data", null);
+                    cleanupTempFiles();
+                    fireNextFailure();
+                    scheduleRetry();
+                    return;
+                }
+                if (!loadSwapPublish(result)) {
+                    fireNextFailure();
+                    scheduleRetry();
+                    return;
+                }
+                LOGGER.info("Manual import complete: {} items from {}", result.itemCount(), zipFile.getFileName());
+                progressCallback = null;
+                onNextFailure = null;
+                onPipelineSuccess();
+
+            } catch (Exception e) {
+                LOGGER.error("Manual import failed for {}", zipFile, e);
+                PipelineStatus.recordError("import", "The imported ZIP could not be compiled: " + e.getMessage(), e);
+                cleanupTempFiles();
+                fireNextFailure();
+                scheduleRetry();
+            } finally {
+                compileInProgress = false;
+            }
+        });
     }
 
     private void notifyProgress(String message) {
@@ -262,7 +319,17 @@ public class RuntimeUpdateService {
                 BinaryDataCompiler.CompileResult result = downloadAndCompile(null);
                 onComplete.accept(result);
             } catch (Exception e) {
-                LOGGER.error("Immediate compile failed", e);
+                // Record before the callback so the pipeline is already FAILED when
+                // downstream fallbacks (e.g. the overlay mixins) check the state.
+                if (isNetworkError(e)) {
+                    String reason = describeNetworkError(e);
+                    LOGGER.warn("Cold-start compile failed: {}", reason);
+                    LOGGER.debug("Cold-start compile failure detail", e);
+                    PipelineStatus.recordError("download", reason, e);
+                } else {
+                    LOGGER.error("Cold-start compile failed", e);
+                    PipelineStatus.recordError("compile", "Data compile failed: " + e.getMessage(), e);
+                }
                 onComplete.accept(null);
             }
         });
@@ -280,37 +347,39 @@ public class RuntimeUpdateService {
         forceNextCheck = false;
 
         try {
-            long checkStart = System.currentTimeMillis();
-            String currentEtag = readCurrentEtag();
-            String remoteEtag = fetchRemoteEtag();
-            PipelineStatus.recordCheckTime(System.currentTimeMillis());
-            PipelineStatus.recordStageDuration("check", System.currentTimeMillis() - checkStart);
-
-            if (remoteEtag == null) {
-                if (currentEtag != null) {
-                    // Offline with usable local data: benign, wait for the next scheduled check.
-                    LOGGER.warn("Could not fetch remote ETag. Skipping update check.");
-                    if (forced) fireNextFailure();
-                } else {
-                    String reason = describeNetworkError(lastEtagFetchError);
-                    LOGGER.warn("Could not fetch remote ETag and no local data exists. "
-                            + "Retrying with backoff. ({})", reason);
-                    PipelineStatus.recordError("check", reason, lastEtagFetchError);
-                    fireNextFailure();
-                    scheduleRetry();
-                }
-                return;
-            }
-
-            if (!forced && etagsMatch(remoteEtag, currentEtag)) {
-                LOGGER.debug("Data is up to date (ETag match).");
-                onPipelineSuccess();
-                return;
-            }
-
+            String remoteEtag = null;
             if (forced) {
+                // A forced refresh behaves like a clean start: no ETag shortcut, no
+                // HEAD probe — straight to a fresh download (its GET carries the ETag).
                 LOGGER.info("Forced full refresh — re-downloading and recompiling NEU data.");
+                PipelineStatus.recordCheckTime(System.currentTimeMillis());
             } else {
+                long checkStart = System.currentTimeMillis();
+                String currentEtag = readCurrentEtag();
+                remoteEtag = fetchRemoteEtag();
+                PipelineStatus.recordCheckTime(System.currentTimeMillis());
+                PipelineStatus.recordStageDuration("check", System.currentTimeMillis() - checkStart);
+
+                if (remoteEtag == null) {
+                    if (currentEtag != null) {
+                        // Offline with usable local data: benign, wait for the next scheduled check.
+                        LOGGER.warn("Could not fetch remote ETag. Skipping update check.");
+                    } else {
+                        String reason = describeNetworkError(lastEtagFetchError);
+                        LOGGER.warn("Could not fetch remote ETag and no local data exists. "
+                                + "Retrying with backoff. ({})", reason);
+                        PipelineStatus.recordError("check", reason, lastEtagFetchError);
+                        fireNextFailure();
+                        scheduleRetry();
+                    }
+                    return;
+                }
+
+                if (etagsMatch(remoteEtag, currentEtag)) {
+                    LOGGER.debug("Data is up to date (ETag match).");
+                    onPipelineSuccess();
+                    return;
+                }
                 LOGGER.info("New NEU data detected (ETag changed). Starting update...");
             }
             compileInProgress = true;
@@ -325,28 +394,7 @@ public class RuntimeUpdateService {
                     return;
                 }
 
-                if (!validateCompiledFile(result.outputPath())) {
-                    LOGGER.error("Validation failed for new binary. Keeping old data.");
-                    PipelineStatus.recordError("validate", "Downloaded data failed validation", null);
-                    cleanupTempFiles();
-                    fireNextFailure();
-                    scheduleRetry();
-                    return;
-                }
-
-                if (!atomicSwap(result.outputPath(), result.metaPath())) {
-                    LOGGER.error("Atomic swap failed. Keeping old data.");
-                    PipelineStatus.recordError("swap", "Could not replace the data file on disk", null);
-                    cleanupTempFiles();
-                    fireNextFailure();
-                    scheduleRetry();
-                    return;
-                }
-
-                notifyProgress("§7SkyRecipes: Loading compiled data...");
-                if (!onDataUpdated.test(layout.binaryFile(), layout.binaryMetaFile())) {
-                    LOGGER.error("New binary swapped in but reload failed. Retrying with backoff.");
-                    PipelineStatus.recordError("load", "New data file could not be loaded", null);
+                if (!loadSwapPublish(result)) {
                     fireNextFailure();
                     scheduleRetry();
                     return;
@@ -380,7 +428,6 @@ public class RuntimeUpdateService {
         layout.createDirectories();
 
         Path zipFile = layout.neuRepoZip();
-        Path etagFile = layout.neuEtagFile();
 
         // The enclosing check already compared ETags and decided a download is needed,
         // so this streams a single GET (no redundant HEAD) into a transient ZIP.
@@ -391,13 +438,10 @@ public class RuntimeUpdateService {
         PipelineStatus.recordStageDuration("download", System.currentTimeMillis() - downloadStart);
         LOGGER.info("Downloaded fresh NEU repo.");
 
+        // The ETag is embedded in the compiled binary's metadata — the single
+        // source of truth read back by readCurrentEtag(); no sidecar file.
         String etagForMeta = expectedEtag != null ? expectedEtag : downloadedEtag;
         if (etagForMeta == null) etagForMeta = "";
-        try {
-            Files.writeString(etagFile, etagForMeta);
-        } catch (IOException e) {
-            LOGGER.debug("Could not persist NEU ETag", e);
-        }
 
         Path tempMpk = layout.binaryTempFile();
         Path tempMeta = layout.binaryTempMetaFile();
@@ -420,17 +464,42 @@ public class RuntimeUpdateService {
         }
     }
 
-    private boolean validateCompiledFile(Path mpkPath) {
-        BinaryDataLoader validator = new BinaryDataLoader();
-        boolean loaded = validator.load(mpkPath);
-        validator.close();
+    /**
+     * Load the freshly compiled temp binary (the load doubles as validation),
+     * swap it into the final location, then publish the loaded registries to
+     * the data manager in one step. The previously live data is not touched
+     * until publication, so a failure at any stage keeps the old data serving —
+     * and the binary is parsed exactly once instead of validate-then-reload.
+     */
+    private boolean loadSwapPublish(BinaryDataCompiler.CompileResult result) {
+        PipelineStatus.transition(PipelineStatus.State.LOADING);
+        notifyProgress("§7SkyRecipes: Loading compiled data...");
 
+        BinaryDataLoader newLoader = new BinaryDataLoader();
+        long loadStart = System.currentTimeMillis();
+        boolean loaded = newLoader.load(result.outputPath());
+        PipelineStatus.recordStageDuration("load", System.currentTimeMillis() - loadStart);
         if (!loaded) {
-            LOGGER.error("Validation failed: could not load binary.");
+            LOGGER.error("Freshly compiled binary failed to load. Keeping old data.");
+            PipelineStatus.recordError("validate", "Compiled data failed validation", null);
+            cleanupTempFiles();
             return false;
         }
 
-        LOGGER.debug("Validation passed for new binary.");
+        if (!atomicSwap(result.outputPath(), result.metaPath())) {
+            LOGGER.error("Atomic swap failed. Keeping old data.");
+            PipelineStatus.recordError("swap", "Could not replace the data file on disk", null);
+            newLoader.close();
+            cleanupTempFiles();
+            return false;
+        }
+
+        if (!onDataPublished.test(newLoader, layout.binaryFile())) {
+            LOGGER.error("New binary loaded but could not be published. Retrying with backoff.");
+            PipelineStatus.recordError("load", "New data could not be published", null);
+            newLoader.close();
+            return false;
+        }
         return true;
     }
 
@@ -533,7 +602,7 @@ public class RuntimeUpdateService {
             String msg = t != null ? t.getMessage() : null;
             base = msg != null ? "Couldn't reach GitHub: " + msg : "Couldn't reach GitHub.";
         }
-        return base + " You can test this download link in a browser to confirm if the mod is the issue or you are the issue: " + NEU_REPO_URL;
+        return base + " You can open this download link in a browser to check whether your connection can reach GitHub: " + NEU_REPO_URL;
     }
 
     /**

@@ -286,7 +286,8 @@ public final class FamilyResolver {
     }
 
     private void collectDescendants(String node, Map<String, List<String>> parentToChildren, Set<String> members) {
-        members.add(node);
+        // members doubles as the visited set — a cyclic parents.json must not recurse forever
+        if (!members.add(node)) return;
         List<String> children = parentToChildren.get(node);
         if (children == null) return;
         for (String child : children) {

@@ -159,8 +159,9 @@ public final class SearchAutocomplete {
         String q = query.toLowerCase();
         List<Suggestion> results = new ArrayList<>();
 
+        FuzzyTokenMatcher.Scratch scratch = new FuzzyTokenMatcher.Scratch();
         for (Entry entry : entries) {
-            if (FuzzyTokenMatcher.matches(q, entry.lower(), maxDistance)) {
+            if (FuzzyTokenMatcher.matches(q, entry.lower(), maxDistance, scratch)) {
                 results.add(new Suggestion(entry.text(), entry.tier()));
             }
         }

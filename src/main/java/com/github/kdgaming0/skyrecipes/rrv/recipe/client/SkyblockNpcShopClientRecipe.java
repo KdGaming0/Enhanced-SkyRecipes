@@ -48,6 +48,8 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
     private final List<ShopCost> costs;
     private final ItemStack result;
     private final ItemStack npcHead;
+    /** Compact count per cost slot, precomputed (BigDecimal math is too costly per frame); null = no label. */
+    private final Component[] costLabels;
 
     public SkyblockNpcShopClientRecipe(Identifier id, String npcDisplayName, String npcInternalName,
                                        List<ShopCost> costs, ItemStack result,
@@ -58,6 +60,13 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
         this.costs = costs;
         this.result = result;
         this.npcHead = npcHead != null ? npcHead : ItemStack.EMPTY;
+        this.costLabels = new Component[costs.size()];
+        for (int i = 0; i < costs.size(); i++) {
+            ShopCost cost = costs.get(i);
+            if (cost.isCoins() || cost.count() >= 1000) {
+                costLabels[i] = Component.literal(RecipeUiHelper.formatCompactNumber(cost.count()));
+            }
+        }
     }
 
     @Override
@@ -134,19 +143,10 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private void renderCompactCounts(GuiGraphicsExtractor graphics, net.minecraft.client.gui.Font font) {
-        for (int i = 0; i < costs.size() && i < 8; i++) {
-            ShopCost cost = costs.get(i);
+        for (int i = 0; i < costLabels.length && i < 8; i++) {
+            Component text = costLabels[i];
+            if (text == null) continue;
 
-            String compact;
-            if (cost.isCoins()) {
-                compact = RecipeUiHelper.formatCompactNumber(cost.count());
-            } else if (cost.count() >= 1000) {
-                compact = RecipeUiHelper.formatCompactNumber(cost.count());
-            } else {
-                continue;
-            }
-
-            Component text = Component.literal(compact);
             int textWidth = font.width(text);
 
             int slotX = COST_GRID_ORIGIN_X + (i % 4) * COST_SLOT_SPACING;

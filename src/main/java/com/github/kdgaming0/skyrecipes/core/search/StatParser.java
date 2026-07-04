@@ -28,11 +28,21 @@ public final class StatParser {
      */
     private final List<String> sortedStatNames;
 
+    /**
+     * Spaced-out forms of {@link #sortedStatNames} ("crit_damage" → "crit damage"),
+     * precomputed once — the no-colon scan runs per lore line over every known stat.
+     */
+    private final String[] spacedStatNames;
+
     public StatParser(Set<String> knownStats) {
         this.knownStats = knownStats != null ? knownStats : Set.of();
         List<String> list = new ArrayList<>(this.knownStats);
         list.sort((a, b) -> Integer.compare(b.length(), a.length()));
         this.sortedStatNames = List.copyOf(list);
+        this.spacedStatNames = new String[sortedStatNames.size()];
+        for (int i = 0; i < sortedStatNames.size(); i++) {
+            spacedStatNames[i] = sortedStatNames.get(i).replace('_', ' ');
+        }
     }
 
     /**
@@ -134,22 +144,32 @@ public final class StatParser {
         if (loreLine == null || loreLine.isEmpty()) {
             return List.of();
         }
+        return parseLoreLineStripped(TextUtil.stripColorCodes(loreLine));
+    }
+
+    /**
+     * Variant for callers that already stripped color codes, so each line is
+     * stripped exactly once across tokenization and stat parsing.
+     */
+    public List<ParsedStat> parseLoreLineStripped(String stripped) {
+        if (stripped == null || stripped.isEmpty()) {
+            return List.of();
+        }
 
         List<ParsedStat> result = new ArrayList<>(2);
 
-        ParsedStat colon = parseColonFormat(loreLine);
+        ParsedStat colon = parseColonFormat(stripped);
         if (colon != null) {
             result.add(colon);
         }
 
-        result.addAll(parseNoColonFormat(loreLine));
+        result.addAll(parseNoColonFormat(stripped));
 
         return result.isEmpty() ? List.of() : result;
     }
 
     @Nullable
-    private ParsedStat parseColonFormat(String loreLine) {
-        String clean = TextUtil.stripColorCodes(loreLine);
+    private ParsedStat parseColonFormat(String clean) {
         int colonIdx = clean.indexOf(':');
         if (colonIdx <= 0) return null;
 
@@ -167,8 +187,7 @@ public final class StatParser {
         return new ParsedStat(statName, value);
     }
 
-    private List<ParsedStat> parseNoColonFormat(String loreLine) {
-        String clean = TextUtil.stripColorCodes(loreLine);
+    private List<ParsedStat> parseNoColonFormat(String clean) {
         // Skip lines that already have a colon (handled by parseColonFormat)
         if (clean.indexOf(':') >= 0) return List.of();
         // Quick reject: no + or - sign means no stat value
@@ -177,13 +196,12 @@ public final class StatParser {
         String lower = clean.toLowerCase();
         List<ParsedStat> result = new ArrayList<>(2);
 
-        for (String statName : sortedStatNames) {
-            String spaced = statName.replace('_', ' ');
-            int pos = indexOfWord(lower, spaced);
+        for (int i = 0; i < spacedStatNames.length; i++) {
+            int pos = indexOfWord(lower, spacedStatNames[i]);
             if (pos >= 0) {
                 int value = extractIntBeforePosition(lower, pos);
                 if (value != Integer.MIN_VALUE) {
-                    result.add(new ParsedStat(statName, value));
+                    result.add(new ParsedStat(sortedStatNames.get(i), value));
                 }
             }
         }

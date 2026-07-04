@@ -81,7 +81,7 @@ dependencies {
     modCompileOnly("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
     modRuntimeOnly("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
 
-    modCompileOnly("maven.modrinth:skyblocker-liap:v6.4.1+26.1.2")
+    modCompileOnly("maven.modrinth:skyblocker-liap:v6.6.0+26.1.2")
 
     implementation("org.msgpack:msgpack-core:0.9.12")
     include("org.msgpack:msgpack-core:0.9.12")

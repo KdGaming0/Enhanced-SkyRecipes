@@ -51,6 +51,14 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
     private final String displayName;
     private final long coinAmount;
     private final long essenceAmount;
+    // Compact counts precomputed (BigDecimal math is too costly per frame); null = no label.
+    private final Component coinLabel;
+    private final Component essenceLabel;
+    private final Component[] extraLabels;
+    // Ellipsized header cached per card width (binary search over font.width per frame otherwise).
+    private Component cachedHeader;
+    private int cachedHeaderTextWidth;
+    private int cachedHeaderForWidth = -1;
 
     public SkyblockEssenceUpgradeClientRecipe(Identifier id,
                                               ItemStack inputItem, ItemStack outputItem,
@@ -69,11 +77,21 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         this.displayName = displayName != null ? displayName : "";
         this.coinAmount = coinAmount;
         this.essenceAmount = essenceAmount;
+        this.coinLabel = coinAmount > 0
+                ? Component.literal(RecipeUiHelper.formatCompactNumber(coinAmount)) : null;
+        this.essenceLabel = essenceAmount >= 1000
+                ? Component.literal(RecipeUiHelper.formatCompactNumber(essenceAmount)) : null;
+        this.extraLabels = new Component[this.extraAmounts.size()];
+        for (int i = 0; i < this.extraAmounts.size(); i++) {
+            long amount = this.extraAmounts.get(i);
+            if (amount >= 1000) {
+                extraLabels[i] = Component.literal(RecipeUiHelper.formatCompactNumber(amount));
+            }
+        }
     }
 
     private static void drawCompact(net.minecraft.client.gui.Font font, GuiGraphicsExtractor graphics,
-                                    String text, int slotX, int slotY) {
-        Component cmp = Component.literal(text);
+                                    Component cmp, int slotX, int slotY) {
         int textWidth = font.width(cmp);
         int x = slotX + 17 - textWidth;
         int y = slotY + 9;
@@ -134,28 +152,32 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
                              GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         var font = Minecraft.getInstance().font;
 
-        // Header — item name first, then stars
-        String headerText = displayName + " §6" + "✪".repeat(starLevel);
-        Component header = Component.literal(headerText);
-        int headerWidth = font.width(header);
-        if (headerWidth > pos.width() - 8) {
-            String ellipsis = "…";
-            int avail = pos.width() - 8 - font.width(Component.literal(" §6" + "✪".repeat(starLevel) + ellipsis));
-            String raw = displayName;
-            int lo = 0, hi = raw.length();
-            while (lo < hi) {
-                int mid = (lo + hi + 1) / 2;
-                if (font.width(Component.literal(raw.substring(0, mid))) <= avail) {
-                    lo = mid;
-                } else {
-                    hi = mid - 1;
+        // Header — item name first, then stars; ellipsized once per card width
+        if (cachedHeaderForWidth != pos.width()) {
+            String stars = " §6" + "✪".repeat(starLevel);
+            Component header = Component.literal(displayName + stars);
+            int headerWidth = font.width(header);
+            if (headerWidth > pos.width() - 8) {
+                int avail = pos.width() - 8 - font.width(Component.literal(stars + "…"));
+                String raw = displayName;
+                int lo = 0, hi = raw.length();
+                while (lo < hi) {
+                    int mid = (lo + hi + 1) / 2;
+                    if (font.width(Component.literal(raw.substring(0, mid))) <= avail) {
+                        lo = mid;
+                    } else {
+                        hi = mid - 1;
+                    }
                 }
+                header = Component.literal(raw.substring(0, lo) + "§r…" + stars);
+                headerWidth = font.width(header);
             }
-            header = Component.literal(raw.substring(0, lo) + "§r… §6" + "✪".repeat(starLevel));
-            headerWidth = font.width(header);
+            cachedHeader = header;
+            cachedHeaderTextWidth = headerWidth;
+            cachedHeaderForWidth = pos.width();
         }
-        int headerX = (pos.width() - headerWidth) / 2;
-        graphics.text(font, header, headerX, HEADER_Y, RecipeUiHelper.TEXT_WHITE, true);
+        int headerX = (pos.width() - cachedHeaderTextWidth) / 2;
+        graphics.text(font, cachedHeader, headerX, HEADER_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         // Overflow indicator
         int totalExtras = extraItems.size() + 1; // +1 for essence
@@ -183,26 +205,22 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         int gridIdx = 0;
 
         // Coin (slot 1 in grid, top-left)
-        if (coinAmount > 0 && gridIdx < GRID_X.length) {
-            drawCompact(font, graphics, RecipeUiHelper.formatCompactNumber(coinAmount),
-                    GRID_X[gridIdx], GRID_Y[gridIdx]);
+        if (coinLabel != null && gridIdx < GRID_X.length) {
+            drawCompact(font, graphics, coinLabel, GRID_X[gridIdx], GRID_Y[gridIdx]);
             gridIdx++;
         }
 
         // Essence (next slot in grid)
-        if (essenceAmount >= 1000 && gridIdx < GRID_X.length) {
-            drawCompact(font, graphics, RecipeUiHelper.formatCompactNumber(essenceAmount),
-                    GRID_X[gridIdx], GRID_Y[gridIdx]);
+        if (essenceLabel != null && gridIdx < GRID_X.length) {
+            drawCompact(font, graphics, essenceLabel, GRID_X[gridIdx], GRID_Y[gridIdx]);
         }
         gridIdx++;
 
         // Other extras
         int startIdx = coinAmount > 0 ? 1 : 0;
-        for (int i = startIdx; i < extraItems.size() && gridIdx < GRID_X.length; i++) {
-            long amount = extraAmounts.get(i);
-            if (amount >= 1000) {
-                drawCompact(font, graphics, RecipeUiHelper.formatCompactNumber(amount),
-                        GRID_X[gridIdx], GRID_Y[gridIdx]);
+        for (int i = startIdx; i < extraLabels.length && gridIdx < GRID_X.length; i++) {
+            if (extraLabels[i] != null) {
+                drawCompact(font, graphics, extraLabels[i], GRID_X[gridIdx], GRID_Y[gridIdx]);
             }
             gridIdx++;
         }

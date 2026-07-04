@@ -48,6 +48,19 @@ public final class NpcShopRecipeParser {
                 String itemName = cost.item();
                 int amount = cost.cost();
 
+                // The object format may embed a count in the item id ("GLACITE:1");
+                // strip it so registry lookup works, treating it as a unit size.
+                int colon = itemName.lastIndexOf(':');
+                if (colon > 0) {
+                    try {
+                        int unitCount = Integer.parseInt(itemName.substring(colon + 1));
+                        itemName = itemName.substring(0, colon);
+                        amount = Math.max(1, amount) * Math.max(1, unitCount);
+                    } catch (NumberFormatException ignored) {
+                        // suffix is not a count; keep the full id
+                    }
+                }
+
                 // Handle SKYBLOCK_COIN special case
                 if ("SKYBLOCK_COIN".equals(itemName)) {
                     ItemStack coinStack = new ItemStack(Items.GOLD_INGOT, 1);

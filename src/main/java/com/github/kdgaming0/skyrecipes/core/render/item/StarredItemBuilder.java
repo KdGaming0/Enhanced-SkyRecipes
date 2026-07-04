@@ -170,7 +170,7 @@ public final class StarredItemBuilder {
     private static ItemStack buildStack(NeuItem item, int star,
                                         @Nullable Map<String, Integer> after,
                                         @Nullable Map<String, Integer> before) {
-        ItemStack stack = ItemStackBuilder.build(item).copy();
+        ItemStack stack = ItemStackBuilder.build(item);
         applyStarName(stack, item, star);
 
         if (after == null || after.isEmpty()) {

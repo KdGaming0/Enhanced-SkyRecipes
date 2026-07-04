@@ -39,6 +39,10 @@ public class ItemFiltersMixin {
      * Plain vanilla items created via {@code new ItemStack(item)} have none of these
      * components. By filtering at RETURN we only affect the final list — stack-sensitives
      * remain untouched.</p>
+     *
+     * <p>Applies even when the pipeline failed: an empty list plus the failure notice
+     * (see {@code ItemViewOverlayMixin}) is deliberate — vanilla items are meaningless
+     * for SkyBlock and would only look like wrong data.</p>
      */
     @Inject(method = "fullStackList", at = @At("RETURN"), cancellable = true, remap = false)
     private static void skyrecipes$removeVanillaBaseItems(CallbackInfoReturnable<List<ItemStack>> cir) {

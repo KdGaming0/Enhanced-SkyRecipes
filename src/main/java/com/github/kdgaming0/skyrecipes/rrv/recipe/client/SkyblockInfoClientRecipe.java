@@ -114,8 +114,9 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
 
     /**
      * Lazily builds the display {@link SlotContent} on first access.
-     * <p>Must only be called from the render thread, since {@link ItemStackBuilder}
-     * may touch RenderSystem for skull textures.</p>
+     * <p>Safe to call from any thread ({@code SkyblockRecipeCache.rebuild} hits it
+     * from worker threads): the field is volatile and unsynchronized, so concurrent
+     * callers may at worst build the stack twice, which is harmless.</p>
      */
     private SlotContent getDisplayItem() {
         if (lazyDisplayItem == null) {

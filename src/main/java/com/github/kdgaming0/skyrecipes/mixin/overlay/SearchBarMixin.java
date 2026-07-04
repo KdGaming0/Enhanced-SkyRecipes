@@ -51,7 +51,13 @@ public class SearchBarMixin {
     private static boolean looksLikeMath(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (c == '+' || c == '*' || c == '/' || c == '^' || c == '%' || c == '=' || c == 'x' || c == 'X') {
+            if (c == '+' || c == '*' || c == '/' || c == '^' || c == '%' || c == '=') {
+                return true;
+            }
+            // 'x' is multiply only between digits ("5x3"), never inside a word ("axe").
+            if ((c == 'x' || c == 'X')
+                    && i > 0 && Character.isDigit(s.charAt(i - 1))
+                    && i + 1 < s.length() && Character.isDigit(s.charAt(i + 1))) {
                 return true;
             }
             if (c == '-' && i > 0 && Character.isDigit(s.charAt(i - 1))) {

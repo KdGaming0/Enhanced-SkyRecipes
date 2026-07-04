@@ -8,6 +8,7 @@ import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.data.RuntimeDataManager;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
+import com.github.kdgaming0.skyrecipes.core.search.SearchAliases;
 import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
 import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
 import eu.midnightdust.lib.config.MidnightConfig;
@@ -28,14 +29,14 @@ public class SkyRecipes implements ClientModInitializer {
 
     public static final String MOD_ID = "skyrecipes";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-    public static final String VERSION = /*$ mod_version*/ "0.2.4";
+    public static final String VERSION = /*$ mod_version*/ "0.3.0";
     public static final String MINECRAFT = /*$ minecraft*/ "26.1.2";
 
     private static final List<Consumer<DataLoadResult>> dataReadyListeners = new CopyOnWriteArrayList<>();
     private static final Object listenerLock = new Object();
     private static RuntimeDataManager dataManager;
     private static CacheLayout cacheLayout;
-    private static SearchAutocomplete searchAutocomplete;
+    private static volatile SearchAutocomplete searchAutocomplete;
     public static CacheLayout getCacheLayout() {
         return cacheLayout;
     }
@@ -93,17 +94,18 @@ public class SkyRecipes implements ClientModInitializer {
     }
 
     /**
-     * Build the search autocomplete index once data is loaded.
-     * Called internally and from the RRV client plugin after aliases are prepared.
+     * Build the search autocomplete index once data is loaded. Runs on a
+     * background thread; only the volatile reference is published to
+     * render-thread readers.
      */
-    public static void buildSearchAutocomplete() {
+    private static void buildSearchAutocomplete() {
         ItemRegistry registry = getItemRegistry();
         if (registry == null) {
             LOGGER.warn("Cannot build search autocomplete: ItemRegistry not loaded");
             return;
         }
 
-        Map<String, String> aliases = com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin.ALIASES;
+        Map<String, String> aliases = SearchAliases.MAP;
         List<String> pageNames = List.of(
                 "Crafting", "Forge", "Drops", "NPC Shop", "NPC Info",
                 "Kat Upgrade", "Trade", "Wiki Info", "Essence Upgrade",
@@ -132,11 +134,13 @@ public class SkyRecipes implements ClientModInitializer {
             if (!FabricLoader.getInstance().isModLoaded("rrv")) {
                 PipelineStatus.transition(PipelineStatus.State.READY);
             }
+            // Heavy build (~16k-entry sort) stays on this background thread;
+            // only the listener notification moves to the render thread.
+            buildSearchAutocomplete();
             Minecraft mc = Minecraft.getInstance();
             //noinspection ConstantValue
             if (mc != null) {
                 mc.execute(() -> {
-                    buildSearchAutocomplete();
                     notifyDataReady(result);
                     LOGGER.info("SkyRecipes data is now ready.");
                 });

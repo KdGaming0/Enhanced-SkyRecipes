@@ -4,17 +4,26 @@ import cc.cassian.rrv.common.overlay.OverlayManager;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
 import com.github.kdgaming0.skyrecipes.core.search.SearchQuery;
 import com.github.kdgaming0.skyrecipes.core.search.SearchQueryParser;
+import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.core.Holder;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -22,6 +31,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -33,8 +44,9 @@ import java.util.Set;
  *
  * <p>This mixin extracts {@code ExtraAttributes.id} from both the filtered result
  * stacks and the inventory slot stacks, enabling exact SkyBlock item matching.
- * Vanilla items without a SkyBlock ID fall back to display-name keyword matching.
- * Enchanted books are checked by enchantment name.</p>
+ * Slots the id/index paths miss are matched against the live stack's name, lore,
+ * and enchant NBT, so enchanted books and items with an enchant applied highlight
+ * when the enchant name is searched.</p>
  */
 @Mixin(value = ItemViewOverlay.class, remap = false)
 public class ItemViewOverlayMixin {
@@ -52,44 +64,129 @@ public class ItemViewOverlayMixin {
     private static Set<String> cachedFilteredVanillaNames = Set.of();
     @Unique
     private static SearchQuery cachedParsedQuery = null;
+    @Unique
+    private static Object cachedIndexIdentity = null;
+
+    // -- Live-stack matching ----------------------------------------------------
+    // The filtered-id and index paths only know the *repo* item, so they miss
+    // everything the server adds at runtime: applied enchants, reforges, and
+    // enchanted books (Hypixel books all share id ENCHANTED_BOOK — the specific
+    // enchant lives in ExtraAttributes/lore, never in the repo entry). This path
+    // evaluates keyword/phrase/regex clauses against the live stack's name, lore,
+    // and enchant NBT. Both caches are identity-keyed and render-thread-only:
+    // liveText survives query changes (NBT doesn't change under one instance),
+    // liveMatch is per query.
+    @Unique
+    private static final Map<ItemStack, String> liveTextCache = new IdentityHashMap<>();
+    @Unique
+    private static final Map<ItemStack, Boolean> liveMatchCache = new IdentityHashMap<>();
+    @Unique
+    private static final int LIVE_TEXT_CACHE_LIMIT = 4096;
 
     @Unique
-    private static boolean enchantedBookMatches(ItemStack stack, String query) {
-        if (!stack.has(DataComponents.CUSTOM_DATA)) return false;
-        // Read-only view; copyTag() would deep-copy per slot per frame.
-        CompoundTag tag = ((CustomDataAccessor) (Object) stack.get(DataComponents.CUSTOM_DATA))
-                .skyrecipes$getTag();
-        if (!tag.contains("StoredEnchantments")) return false;
-
-        String lowerQuery = query.toLowerCase();
-        var enchantments = tag.getListOrEmpty("StoredEnchantments");
-        for (int i = 0; i < enchantments.size(); i++) {
-            var entry = enchantments.getCompoundOrEmpty(i);
-            String id = entry.getStringOr("id", "").toLowerCase();
-            if (id.contains(lowerQuery)) return true;
-            // Also check just the enchantment name part
-            int colon = id.lastIndexOf(':');
-            String name = colon >= 0 ? id.substring(colon + 1) : id;
-            if (name.contains(lowerQuery)) return true;
+    private static boolean liveStackMatches(ItemStack stack, SearchQuery parsed) {
+        if (parsed == null) return false;
+        // Structured clauses (stats, filters, category, flags) need index data the
+        // live stack can't verify; those queries stay on the index path.
+        if (!parsed.stats().isEmpty() || !parsed.filters().isEmpty()
+                || parsed.categoryPath() != null || !parsed.booleanFlags().isEmpty()) {
+            return false;
         }
-        return false;
-    }
+        Boolean cached = liveMatchCache.get(stack);
+        if (cached != null) return cached;
 
-    @Unique
-    private static boolean vanillaNameMatchesQuery(ItemStack stack, String query) {
-        String name = stack.getHoverName().getString().toLowerCase();
-        if (name.isBlank()) return false;
-
-        // Simple keyword containment check
-        for (String word : query.toLowerCase().split("\\s+")) {
-            if (word.length() > 1 && !word.startsWith("%") && !word.contains(":")
-                    && !word.contains(">") && !word.contains("<") && !word.contains("=")) {
-                if (name.contains(word)) {
-                    return true;
+        String text = liveSearchText(stack);
+        boolean matched = true;
+        for (SearchQuery.KeywordClause kw : parsed.keywords()) {
+            if (!text.contains(kw.token())) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched) {
+            for (SearchQuery.PhraseClause phrase : parsed.phrases()) {
+                if (!text.contains(phrase.text())) {
+                    matched = false;
+                    break;
                 }
             }
         }
-        return false;
+        if (matched) {
+            for (SearchQuery.RegexClause regex : parsed.regexes()) {
+                if (!SkyblockSearchIndex.regexFindWithinLine(text, regex.pattern())) {
+                    matched = false;
+                    break;
+                }
+            }
+        }
+        liveMatchCache.put(stack, matched);
+        return matched;
+    }
+
+    /**
+     * Lowercased, color-stripped, '\n'-joined searchable text of a live stack:
+     * display name, lore lines, enchant names (Hypixel {@code ExtraAttributes.enchantments}
+     * keys, legacy {@code StoredEnchantments} entries, and vanilla enchantment components),
+     * and the SkyBlock id with separators spaced out.
+     */
+    @Unique
+    private static String liveSearchText(ItemStack stack) {
+        String cached = liveTextCache.get(stack);
+        if (cached != null) return cached;
+
+        StringBuilder sb = new StringBuilder(128);
+        sb.append(TextUtil.stripColorCodes(stack.getHoverName().getString())).append('\n');
+
+        ItemLore lore = stack.get(DataComponents.LORE);
+        if (lore != null) {
+            for (Component line : lore.lines()) {
+                sb.append(TextUtil.stripColorCodes(line.getString())).append('\n');
+            }
+        }
+
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (data != null) {
+            // Read-only view; copyTag() would deep-copy the tree per stack.
+            CompoundTag tag = ((CustomDataAccessor) (Object) data).skyrecipes$getTag();
+            CompoundTag extra = tag.getCompound("ExtraAttributes").orElse(null);
+            if (extra != null) {
+                CompoundTag enchants = extra.getCompound("enchantments").orElse(null);
+                if (enchants != null) {
+                    for (String key : enchants.keySet()) {
+                        sb.append(key.replace('_', ' ')).append('\n');
+                    }
+                }
+                String id = extra.getStringOr("id", "");
+                if (!id.isEmpty()) {
+                    sb.append(id.replace('_', ' ').replace(';', ' ')).append('\n');
+                }
+            }
+            var stored = tag.getListOrEmpty("StoredEnchantments");
+            for (int i = 0; i < stored.size(); i++) {
+                String id = stored.getCompoundOrEmpty(i).getStringOr("id", "");
+                int colon = id.lastIndexOf(':');
+                sb.append((colon >= 0 ? id.substring(colon + 1) : id).replace('_', ' ')).append('\n');
+            }
+        }
+
+        appendEnchantmentIds(stack.get(DataComponents.ENCHANTMENTS), sb);
+        appendEnchantmentIds(stack.get(DataComponents.STORED_ENCHANTMENTS), sb);
+
+        String text = sb.toString().toLowerCase();
+        if (liveTextCache.size() >= LIVE_TEXT_CACHE_LIMIT) {
+            liveTextCache.clear();
+        }
+        liveTextCache.put(stack, text);
+        return text;
+    }
+
+    @Unique
+    private static void appendEnchantmentIds(ItemEnchantments enchantments, StringBuilder sb) {
+        if (enchantments == null || enchantments.isEmpty()) return;
+        for (Holder<Enchantment> holder : enchantments.keySet()) {
+            holder.unwrapKey().ifPresent(key ->
+                    sb.append(key.identifier().getPath().replace('_', ' ')).append('\n'));
+        }
     }
 
     @Unique
@@ -117,6 +214,39 @@ public class ItemViewOverlayMixin {
         }
     }
 
+    /**
+     * Draws a notice in the item panel when the pipeline failed with no data,
+     * so the empty list is explained in place and points at the fixes.
+     */
+    @Inject(method = "extractRenderState", at = @At("TAIL"), remap = false)
+    private void skyrecipes$renderPipelineFailureNotice(GuiGraphicsExtractor guiGraphics,
+                                                        int mouseX, int mouseY, float partialTicks,
+                                                        CallbackInfo ci) {
+        if (SkyRecipesClientPlugin.getSearchIndex() != null || !SkyRecipesClientPlugin.isPipelineFailed()) {
+            return;
+        }
+        ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+        Font font = Minecraft.getInstance().font;
+        int centerX = self.checkedX() + self.checkedWidth() / 2;
+        int y = self.checkedY() + self.checkedHeight() / 2 - 18;
+        int maxWidth = self.checkedWidth();
+        drawScaledCenteredLine(guiGraphics, font, Component.literal("SkyBlock data failed to download"),
+                centerX, y, 0xFFFF5555, maxWidth);
+        drawScaledCenteredLine(guiGraphics, font, Component.literal("See /skyrecipes status for details"),
+                centerX, y + 14, 0xFFAAAAAA, maxWidth);
+    }
+
+    @Unique
+    private static void drawScaledCenteredLine(GuiGraphicsExtractor guiGraphics, Font font,
+                                               Component line, int centerX, int y, int color, int maxWidth) {
+        float scale = Math.min(1.0F, (maxWidth - 8.0F) / font.width(line));
+        guiGraphics.pose().pushMatrix();
+        guiGraphics.pose().translate(centerX, y);
+        guiGraphics.pose().scale(scale, scale);
+        guiGraphics.centeredText(font, line, 0, 0, color);
+        guiGraphics.pose().popMatrix();
+    }
+
     @Inject(
             method = "renderItemHighlighting",
             at = @At("HEAD"),
@@ -140,10 +270,12 @@ public class ItemViewOverlayMixin {
             return;
         }
 
-        // Rebuild cached sets only when the query changes
+        // Rebuild cached sets when the query changes or a reload republished the index
+        // (same query string against a new index must not serve the stale sets).
+        var index = SkyRecipesClientPlugin.getSearchIndex();
         Set<String> filteredIds;
         Set<String> filteredVanillaNames;
-        if (query.equals(cachedQuery)) {
+        if (query.equals(cachedQuery) && index == cachedIndexIdentity) {
             filteredIds = cachedFilteredIds;
             filteredVanillaNames = cachedFilteredVanillaNames;
         } else {
@@ -164,6 +296,8 @@ public class ItemViewOverlayMixin {
             cachedFilteredIds = filteredIds;
             cachedFilteredVanillaNames = filteredVanillaNames;
             cachedParsedQuery = SearchQueryParser.parse(query);
+            cachedIndexIdentity = index;
+            liveMatchCache.clear();
         }
 
         int left = OverlayManager.INSTANCE.currentInfo().leftPos() - 1;
@@ -187,29 +321,21 @@ public class ItemViewOverlayMixin {
             String slotId = SkyblockIdExtractor.extract(slotStack);
 
             if (slotId != null) {
-                // Fast path: exact SkyBlock ID match
+                // Fast path: exact SkyBlock ID in the filtered item list
                 matched = filteredIds.contains(slotId);
 
-                // Fallback: evaluate query directly against the item's tokens
-                if (!matched) {
-                    var index = SkyRecipesClientPlugin.getSearchIndex();
-                    if (index != null) {
-                        matched = index.itemMatchesInventoryQuery(slotId, cachedParsedQuery);
-                    }
+                // Repo-token fallback: covers structured filters/category queries
+                if (!matched && index != null) {
+                    matched = index.itemMatchesInventoryQuery(slotId, cachedParsedQuery);
                 }
             } else {
-                // Vanilla item fallback
                 matched = filteredVanillaNames.contains(slotStack.getHoverName().getString().toLowerCase());
+            }
 
-                // Enchanted book: check enchantment name against query keywords
-                if (!matched && slotStack.getItem() == Items.ENCHANTED_BOOK) {
-                    matched = enchantedBookMatches(slotStack, query);
-                }
-
-                // Generic display name contains any query keyword
-                if (!matched) {
-                    matched = vanillaNameMatchesQuery(slotStack, query);
-                }
+            // Live-stack fallback: applied enchants, enchanted books, reforged names —
+            // anything the repo entry doesn't know about this specific stack.
+            if (!matched) {
+                matched = liveStackMatches(slotStack, cachedParsedQuery);
             }
 
             if (!matched) {

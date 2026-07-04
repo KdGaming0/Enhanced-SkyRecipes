@@ -70,8 +70,8 @@ public final class SkyblockRecipeCache {
         ConcurrentMap<String, Set<ReliableClientRecipe>> byIngredient = new ConcurrentHashMap<>();
         ConcurrentMap<String, Set<ReliableClientRecipe>> byResult = new ConcurrentHashMap<>();
 
-        // Shared per-rebuild cache: ItemStack equality is component-aware, so equal stacks
-        // (same item, same components, same count) share an extraction result.
+        // Per-rebuild cache. ItemStack has no equals/hashCode override (MC 26.1.2),
+        // so this only dedups repeated *instances* of the same stack, not equal copies.
         ConcurrentMap<ItemStack, String> idCache = new ConcurrentHashMap<>();
 
         recipes.parallelStream().forEach(recipe -> indexRecipe(recipe, byIngredient, byResult, idCache));

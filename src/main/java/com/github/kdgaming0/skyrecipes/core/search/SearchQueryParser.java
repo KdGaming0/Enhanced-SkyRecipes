@@ -433,6 +433,12 @@ public final class SearchQueryParser {
             return null;
         }
 
+        // Unknown stat (typo like "helth>50"): degrade to plain keywords instead of
+        // producing a clause that matches nothing. Checked after alias resolution.
+        if (!getKnownStats().contains(statName)) {
+            return null;
+        }
+
         String valueStr;
         SearchQuery.StatClause.Operator op;
 

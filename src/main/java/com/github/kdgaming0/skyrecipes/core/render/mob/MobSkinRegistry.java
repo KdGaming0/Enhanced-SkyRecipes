@@ -81,7 +81,8 @@ public final class MobSkinRegistry {
     }
 
     /**
-     * Clear all cached textures and failure flags. Called on data reload.
+     * Release all cached textures and failure flags. Called on the render thread at the
+     * injection commit point of each data reload, so skins re-decode from the new binary.
      */
     public static void clear() {
         for (Identifier id : CACHE.values()) {

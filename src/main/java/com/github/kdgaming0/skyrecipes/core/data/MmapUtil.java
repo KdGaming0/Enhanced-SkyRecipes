@@ -26,16 +26,14 @@ public final class MmapUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger(MmapUtil.class);
 
     private static final MethodHandle INVOKE_CLEANER;
-    private static final Object UNSAFE;
 
     static {
         MethodHandle cleaner = null;
-        Object unsafe = null;
         try {
             Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
             Field field = unsafeClass.getDeclaredField("theUnsafe");
             field.setAccessible(true);
-            unsafe = field.get(null);
+            Object unsafe = field.get(null);
 
             Method method = unsafeClass.getMethod("invokeCleaner", ByteBuffer.class);
             cleaner = MethodHandles.lookup()
@@ -45,7 +43,6 @@ public final class MmapUtil {
             LOGGER.debug("Unable to bind Unsafe.invokeCleaner: {}", e.getMessage());
         }
         INVOKE_CLEANER = cleaner;
-        UNSAFE = unsafe;
     }
 
     private MmapUtil() {
