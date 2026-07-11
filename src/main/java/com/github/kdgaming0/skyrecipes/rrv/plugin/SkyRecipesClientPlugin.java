@@ -29,6 +29,7 @@ import com.github.kdgaming0.skyrecipes.mixin.accessor.EditBoxAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.ItemViewOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -642,6 +643,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         }
         ItemView.getStackSensitive().clear();
         ClientRecipeCache.INSTANCE.clearStackSensitives();
+        StackGroupItemsCache.invalidate();
         cacheHasSkyRecipesEntries = true;
 
         LOGGER.info("Beginning batched RRV injection: {} recipes, {} stacks",
@@ -670,6 +672,11 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         injectionInProgress = false;
         startupFinalized = true;
         firstInjection = false;
+
+        // Group-content memo entries built mid-batch missed later-registered stacks;
+        // prewarm so the first search keystroke never pays the group sweep.
+        StackGroupItemsCache.invalidate();
+        StackGroupItemsCache.prewarm();
 
         try {
             ((com.github.kdgaming0.skyrecipes.mixin.recipe.ClientRecipeCacheAccessor)

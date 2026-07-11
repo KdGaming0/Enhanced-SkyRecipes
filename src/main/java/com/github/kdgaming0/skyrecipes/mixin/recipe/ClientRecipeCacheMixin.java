@@ -163,6 +163,16 @@ public class ClientRecipeCacheMixin {
     }
 
     /**
+     * A completed rebuild (TAIL is unreachable when the inject above cancels) may have
+     * changed the stack sensitives that group contents are built from.
+     */
+    @Inject(method = "buildRecipeCache", at = @At("TAIL"))
+    private void skyrecipes$refreshGroupMemoAfterRebuild(boolean rebuildFromSynchronizedRecipes, CallbackInfo ci) {
+        com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache.invalidate();
+        com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache.prewarm();
+    }
+
+    /**
      * Short-circuit ingredient lookups for SkyBlock items.
      *
      * <p>If the clicked stack carries a SkyBlock ID, return the pre-filtered list from
