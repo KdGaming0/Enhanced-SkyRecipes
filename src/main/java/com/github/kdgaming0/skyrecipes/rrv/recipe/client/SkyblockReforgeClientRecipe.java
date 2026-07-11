@@ -4,20 +4,20 @@ import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
 import cc.cassian.rrv.common.recipe.inventory.SlotContent;
-import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.core.model.SkyblockRarity;
-import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
-import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.render.mob.MobPreviewRenderer;
 import com.github.kdgaming0.skyrecipes.core.render.mob.PlayerSkinRenderer;
 import com.github.kdgaming0.skyrecipes.core.util.RarityExtractor;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockIdMatchingRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockReforgeRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.widget.ReforgeRarityTableWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.component.DataComponents;
@@ -30,16 +30,27 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 
 /**
- * Client-side reforge recipe card for one specific rarity.
+ * Client-side reforge recipe card — one card per reforge (blacksmith or stone),
+ * holding every rarity's stats/ability/cost.
  *
- * <p>Displays the stat boosts and ability this reforge gives to an item of the
- * recipe's fixed rarity. Uses {@code reforge_item.png} for stone reforges and
- * {@code reforge_npc.png} for blacksmith reforges.</p>
+ * <p>Redirects match on item <em>type</em> only ({@link #resultInternalNames} or the
+ * stone id), never on rarity, so a reforgable item is never wrongly filtered out of
+ * its reforge tab. The rarity is resolved at <em>render</em> time from the clicked
+ * stack ({@link RecipeViewMenu#getOrigin()}): the card shows the stats for that item's
+ * rarity, falling back to the highest tier the data covers when the item out-ranks it
+ * (e.g. a DIVINE item on data that stops at MYTHIC). When the origin is the stone
+ * itself, or absent (browsing the reforge category), all rarities are shown as a
+ * compact table.</p>
  *
- * <p>{@link #redirectsAsResult} filters by rarity + item type, so clicking a
- * reforgable item shows only matching reforge recipes for that item's rarity.</p>
+ * <p>{@code seedStacks} exist only so RRV's item-keyed recipe cache surfaces this
+ * recipe as a candidate for every applicable vanilla item — the redirect checks then
+ * do the exact SkyBlock-id matching. They are never rendered. SkyBlock-ID lookups
+ * ({@code SkyblockRecipeCache}) bypass the seeds entirely and resolve this card via
+ * {@link SkyblockIdMatchingRecipe}, since one seed per vanilla item cannot represent
+ * every applicable SkyBlock item.</p>
  */
-public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
+public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
+        implements SkyblockIdMatchingRecipe {
 
     private static final Identifier TEXTURE_ITEM =
             Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/reforge_item.png");
@@ -57,200 +68,96 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
     private static final int NAME_Y = 6;
     private static final int LINE_HEIGHT = 10;
 
+    // Generic ability key used by NEU when a reforge shares one ability across rarities.
+    private static final String GENERIC_ABILITY_KEY = "ability";
+
     private final ItemStack stoneStack;
+    private final String stoneInternalName;
     private final ItemStack npcSkinStack;
     private final boolean isBlacksmith;
     private final String reforgeName;
-    private final String rarity;
-    private final List<String> resultInternalNames;
-    private final Map<String, Number> stats;
-    private final String ability;
-    private final int cost;
+    private final Set<String> resultInternalNames;
+    private final List<ItemStack> seedStacks;
 
-    @Nullable
-    private SlotContent cachedResults;
+    /** Available tiers in ascending order; drives clamping and the all-rarities table. */
+    private final List<SkyblockRarity> orderedRarities;
+    private final Map<String, Map<String, Number>> statsByRarity;
+    private final Map<String, String> abilityByRarity;
+    private final Map<String, Integer> costByRarity;
 
-    // Cached raw text strings
+    // SlotContent is mutated by RRV's menu, so each recipe needs its own instances.
     @Nullable
-    private String cachedName;
+    private List<SlotContent> cachedResults;
     @Nullable
-    private String cachedSubtitle;
-    @Nullable
-    private List<String> cachedStatStrings;
+    private List<SlotContent> cachedIngredients;
 
+    // Lazy per-rarity text caches (rendered content depends on the clicked stack's rarity).
+    private final Map<String, List<String>> statStringsByRarity = new HashMap<>();
+    @Nullable
+    private List<String> cachedTableLines;
+
+    // Scrollable table for the all-rarities view; recreated per placement.
+    @Nullable
+    private ReforgeRarityTableWidget tableWidget;
+
+    /**
+     * @param resultInternalNames all SkyBlock ids this reforge applies to
+     * @param seedStacks          one stack per distinct vanilla item among the results
+     * @param requiredRarities    the rarities the data defines for this reforge
+     * @param statsByRarity       rarity name → stat name → value
+     * @param abilityByRarity     rarity name → ability text (may hold a generic {@code "ability"} key)
+     * @param costByRarity        rarity name → coin cost
+     */
     public SkyblockReforgeClientRecipe(
             Identifier id,
             ItemStack stoneStack,
             ItemStack npcSkinStack,
             boolean isBlacksmith,
             String reforgeName,
-            String rarity,
-            List<String> resultInternalNames,
-            Map<String, Number> stats,
-            String ability,
-            int cost,
+            Set<String> resultInternalNames,
+            List<ItemStack> seedStacks,
+            List<String> requiredRarities,
+            Map<String, Map<String, Number>> statsByRarity,
+            Map<String, String> abilityByRarity,
+            Map<String, Integer> costByRarity,
             List<String> wikiUrls) {
         super(id, wikiUrls);
         this.stoneStack = stoneStack != null ? stoneStack : ItemStack.EMPTY;
+        String stoneId = isBlacksmith ? null : SkyblockIdExtractor.extract(this.stoneStack);
+        this.stoneInternalName = stoneId != null ? stoneId : "";
         this.npcSkinStack = npcSkinStack != null ? npcSkinStack : ItemStack.EMPTY;
         this.isBlacksmith = isBlacksmith;
         this.reforgeName = reforgeName != null ? reforgeName : "";
-        this.rarity = rarity != null ? rarity : "COMMON";
-        this.resultInternalNames = resultInternalNames != null ? List.copyOf(resultInternalNames) : List.of();
-        this.stats = stats != null ? stats : Map.of();
-        this.ability = ability != null ? ability : "";
-        this.cost = cost;
+        this.resultInternalNames = resultInternalNames != null ? resultInternalNames : Set.of();
+        this.seedStacks = seedStacks != null ? seedStacks : List.of();
+        this.statsByRarity = statsByRarity != null ? statsByRarity : Map.of();
+        this.abilityByRarity = abilityByRarity != null ? abilityByRarity : Map.of();
+        this.costByRarity = costByRarity != null ? costByRarity : Map.of();
+        this.orderedRarities = toOrderedRarities(requiredRarities);
+    }
+
+    private static List<SkyblockRarity> toOrderedRarities(@Nullable List<String> rarities) {
+        if (rarities == null || rarities.isEmpty()) {
+            return List.of();
+        }
+        List<SkyblockRarity> parsed = new ArrayList<>(rarities.size());
+        for (String r : rarities) {
+            try {
+                parsed.add(SkyblockRarity.valueOf(r));
+            } catch (IllegalArgumentException ignored) {
+                // Unknown rarity string in the data — skip it rather than fail the recipe.
+            }
+        }
+        parsed.sort(Comparator.comparingInt(Enum::ordinal));
+        return List.copyOf(parsed);
     }
 
     // ── ReliableClientRecipe core ──────────────────────────────────────────────
-
-    /**
-     * Splits {@code text} into lines that each fit within {@code maxWidth} pixels.
-     * Prefers word boundaries; falls back to mid-word splits. Preserves leading
-     * § colour/formatting codes across line breaks.
-     */
-    private static List<String> wrapText(Font font, String text, int maxWidth) {
-        List<String> lines = new ArrayList<>();
-        if (text == null || text.isEmpty()) {
-            return lines;
-        }
-
-        String remaining = text;
-        String activeCodes = "";
-
-        while (!remaining.isEmpty()) {
-            // Absorb leading codes on this segment
-            String leading = extractLeadingCodes(remaining);
-            if (!leading.isEmpty()) {
-                activeCodes = updateActiveCodes(activeCodes, leading);
-            }
-            String content = remaining.substring(leading.length());
-
-            String prefix = activeCodes;
-            int fit = fitLength(font, prefix + content, maxWidth);
-            int contentFit = Math.max(1, fit - prefix.length());
-
-            int splitAt = contentFit;
-            if (contentFit < content.length()) {
-                while (splitAt > 0 && content.charAt(splitAt - 1) != ' ') {
-                    splitAt--;
-                }
-                if (splitAt == 0) {
-                    splitAt = contentFit; // force mid-word
-                }
-            }
-
-            String line = (prefix + content.substring(0, splitAt)).stripTrailing();
-            if (!line.isEmpty()) {
-                lines.add(line);
-            }
-
-            activeCodes = updateActiveCodes(activeCodes, content.substring(0, splitAt));
-            remaining = content.substring(splitAt).stripLeading();
-        }
-
-        return lines;
-    }
-
-    /**
-     * Returns the §-code prefix at the start of {@code text}, if any.
-     */
-    private static String extractLeadingCodes(String text) {
-        StringBuilder sb = new StringBuilder();
-        int i = 0;
-        while (i + 1 < text.length() && text.charAt(i) == '§') {
-            sb.append(text.charAt(i));
-            sb.append(text.charAt(i + 1));
-            i += 2;
-        }
-        return sb.toString();
-    }
-
-    /**
-     * Recomputes the active colour/formatting codes after consuming {@code text}.
-     */
-    private static String updateActiveCodes(String current, String text) {
-        String combined = current + text;
-        String color = null;
-        boolean bold = false, italic = false, under = false, strike = false, obf = false;
-
-        for (int i = 0; i + 1 < combined.length(); i++) {
-            if (combined.charAt(i) == '§') {
-                char c = combined.charAt(i + 1);
-                switch (c) {
-                    case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-                         'a', 'b', 'c', 'd', 'e', 'f',
-                         'A', 'B', 'C', 'D', 'E', 'F' -> color = String.valueOf(c);
-                    case 'k', 'K' -> obf = true;
-                    case 'l', 'L' -> bold = true;
-                    case 'm', 'M' -> strike = true;
-                    case 'n', 'N' -> under = true;
-                    case 'o', 'O' -> italic = true;
-                    case 'r', 'R' -> {
-                        color = null;
-                        bold = italic = under = strike = obf = false;
-                    }
-                }
-            }
-        }
-
-        StringBuilder sb = new StringBuilder();
-        if (color != null) sb.append('§').append(color);
-        if (obf) sb.append("§k");
-        if (bold) sb.append("§l");
-        if (strike) sb.append("§m");
-        if (under) sb.append("§n");
-        if (italic) sb.append("§o");
-        return sb.toString();
-    }
-
-    /**
-     * Binary-search the number of leading characters of {@code text} that fit.
-     */
-    private static int fitLength(Font font, String text, int maxWidth) {
-        if (font.width(text) <= maxWidth) {
-            return text.length();
-        }
-        int lo = 0, hi = text.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            if (font.width(text.substring(0, mid)) <= maxWidth) {
-                lo = mid;
-            } else {
-                hi = mid - 1;
-            }
-        }
-        return lo;
-    }
-
-    private static String formatStatName(String key) {
-        String[] parts = key.split("_");
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < parts.length; i++) {
-            if (i > 0) sb.append(' ');
-            String part = parts[i];
-            if (part.isEmpty()) continue;
-            sb.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) sb.append(part.substring(1).toLowerCase());
-        }
-        return sb.toString();
-    }
-
-    private static String formatStatValue(double value) {
-        if (value == (int) value) {
-            return String.valueOf((int) value);
-        }
-        return String.valueOf(value);
-    }
-
-    // ── Rendering ──────────────────────────────────────────────────────────────
 
     @Override
     public ReliableClientRecipeType getType() {
         return SkyblockReforgeRecipeType.INSTANCE;
     }
-
-    // ── Cached text builders ───────────────────────────────────────────────────
 
     @Override
     public void bindSlots(RecipeViewMenu.SlotFillContext ctx) {
@@ -259,48 +166,69 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
         }
     }
 
+    /**
+     * Stone (when present) plus the seed stacks, so RRV also surfaces this recipe
+     * when pressing "uses" on a reforgable item.
+     */
     @Override
     public List<SlotContent> getIngredients() {
-        if (!isBlacksmith && !stoneStack.isEmpty()) {
-            return List.of(SlotContent.of(stoneStack));
+        if (cachedIngredients == null) {
+            List<SlotContent> contents = new ArrayList<>(2);
+            if (!isBlacksmith && !stoneStack.isEmpty()) {
+                contents.add(SlotContent.of(stoneStack));
+            }
+            if (!seedStacks.isEmpty()) {
+                contents.add(SlotContent.of(seedStacks));
+            }
+            cachedIngredients = List.copyOf(contents);
         }
-        return List.of();
+        return cachedIngredients;
     }
 
+    /**
+     * Seed stacks plus the stone itself, so clicking a stone surfaces its reforge.
+     * Never rendered — this card draws its own content.
+     */
     @Override
     public List<SlotContent> getResults() {
         if (cachedResults == null) {
-            cachedResults = buildResults();
+            List<ItemStack> stacks = new ArrayList<>(seedStacks);
+            if (!isBlacksmith && !stoneStack.isEmpty()) {
+                stacks.add(stoneStack);
+            }
+            cachedResults = stacks.isEmpty() ? List.of() : List.of(SlotContent.of(stacks));
         }
-        return cachedResults.isEmpty() ? List.of() : List.of(cachedResults);
+        return cachedResults;
     }
-
-    // ── Text wrapping ──────────────────────────────────────────────────────────
 
     @Override
     public boolean redirectsAsResult(ItemStack stack) {
-        String itemId = SkyblockIdExtractor.extract(stack);
-        if (itemId == null || !resultInternalNames.contains(itemId)) {
-            return false;
-        }
-        SkyblockRarity stackRarity = RarityExtractor.extract(stack);
-        return this.rarity.equals(stackRarity.name());
+        return matchesItem(stack);
     }
 
     @Override
     public boolean redirectsAsIngredient(ItemStack stack) {
-        String itemId = SkyblockIdExtractor.extract(stack);
-        if (itemId == null) return false;
+        return matchesItem(stack);
+    }
 
-        if (!isBlacksmith && itemId.equals(getStoneInternalName())) {
+    /**
+     * Type-only match: the reforge applies to the stack, or the stack is the stone
+     * itself. Rarity is never checked here — it only decides what the card renders.
+     */
+    private boolean matchesItem(ItemStack stack) {
+        String itemId = SkyblockIdExtractor.extract(stack);
+        return itemId != null && matchesSkyblockId(itemId);
+    }
+
+    @Override
+    public boolean matchesSkyblockId(String skyblockId) {
+        if (!isBlacksmith && skyblockId.equals(stoneInternalName)) {
             return true;
         }
-        if (resultInternalNames.contains(itemId)) {
-            SkyblockRarity stackRarity = RarityExtractor.extract(stack);
-            return this.rarity.equals(stackRarity.name());
-        }
-        return false;
+        return resultInternalNames.contains(skyblockId);
     }
+
+    // ── Rendering ──────────────────────────────────────────────────────────────
 
     @Override
     public void renderRecipe(RecipeViewScreen screen, RecipePosition pos,
@@ -332,126 +260,228 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe {
             }
         }
 
+        SkyblockRarity display = resolveDisplayRarity(screen.getMenu().getOrigin());
         Font font = Minecraft.getInstance().font;
+
+        if (display != null) {
+            renderSingleRarity(graphics, font, pos, display);
+        } else {
+            renderAllRarities(graphics, font, pos);
+        }
+
+        maintainButtons(screen, pos);
+    }
+
+    /**
+     * Resolves which rarity to display for the clicked stack, or {@code null} to show
+     * every rarity (stone clicked, empty origin, or an unexpected non-matching origin).
+     */
+    @Nullable
+    private SkyblockRarity resolveDisplayRarity(@Nullable ItemStack origin) {
+        if (orderedRarities.isEmpty() || origin == null || origin.isEmpty()) {
+            return null;
+        }
+        String id = SkyblockIdExtractor.extract(origin);
+        if (id == null || (!isBlacksmith && id.equals(stoneInternalName)) || !resultInternalNames.contains(id)) {
+            return null;
+        }
+        SkyblockRarity itemRarity = RarityExtractor.extract(origin);
+        return SkyblockRarity.highestAtMost(orderedRarities, itemRarity);
+    }
+
+    private void renderSingleRarity(GuiGraphicsExtractor graphics, Font font, RecipePosition pos,
+                                    SkyblockRarity rarity) {
+        String rarityName = rarity.name();
         int y = NAME_Y;
 
-        // Name (wrapped) — right side, does not overlap with NPC/slot area
-        String nameStr = getNameString();
+        // Name + rarity — right of the slot/NPC area
+        String nameStr = "§e" + reforgeName + " §7- " + RecipeUiHelper.rarityColorCode(rarityName) + rarityName;
         int nameMaxWidth = pos.width() - TEXT_LEFT - 5;
-        for (String line : wrapText(font, nameStr, nameMaxWidth)) {
+        for (String line : RecipeUiHelper.wrapText(font, nameStr, nameMaxWidth)) {
             graphics.text(font, Component.literal(line), TEXT_LEFT, y, RecipeUiHelper.TEXT_WHITE, true);
             y += LINE_HEIGHT;
         }
 
-        // Subtitle (wrapped)
-        String subStr = getSubtitleString();
+        // Subtitle
+        String subStr = subtitleFor(rarityName);
         if (!subStr.isEmpty()) {
-            for (String line : wrapText(font, subStr, nameMaxWidth)) {
+            for (String line : RecipeUiHelper.wrapText(font, subStr, nameMaxWidth)) {
                 graphics.text(font, Component.literal(line), TEXT_LEFT, y, 0xFFAAAAAA, true);
                 y += LINE_HEIGHT;
             }
         }
 
         y += 10; // gap before body
-
-        // Ensure body text doesn't overlap with blacksmith/slot render area
-        int bodyMinY = isBlacksmith ? (NPC_Y + NPC_H + 3) : 35;
-        if (y < bodyMinY) {
-            y = bodyMinY;
-        }
-
+        y = Math.max(y, bodyMinY());
         int bodyMaxWidth = pos.width() - 10;
 
-        // Ability (wrapped)
+        // Ability
+        String ability = abilityFor(rarityName);
         if (!ability.isEmpty()) {
-            for (String line : wrapText(font, ability, bodyMaxWidth)) {
+            for (String line : RecipeUiHelper.wrapText(font, ability, bodyMaxWidth)) {
                 graphics.text(font, Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE, true);
                 y += LINE_HEIGHT;
             }
         }
 
-        // Stats (wrapped)
-        for (String statStr : getStatStrings()) {
-            for (String line : wrapText(font, statStr, bodyMaxWidth)) {
+        // Stats
+        for (String statStr : statStringsFor(rarityName)) {
+            for (String line : RecipeUiHelper.wrapText(font, statStr, bodyMaxWidth)) {
                 graphics.text(font, Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE, true);
                 y += LINE_HEIGHT;
             }
         }
-
-        maintainButtons(screen, pos);
     }
 
-    private String getNameString() {
-        if (cachedName == null) {
-            cachedName = "§e" + reforgeName + " §7- " + RecipeUiHelper.rarityColorCode(rarity) + rarity;
+    /**
+     * Header only — the per-rarity table below it is drawn by
+     * {@link ReforgeRarityTableWidget}, placed in {@link #placeButtons}.
+     */
+    private void renderAllRarities(GuiGraphicsExtractor graphics, Font font, RecipePosition pos) {
+        int y = NAME_Y;
+
+        // Name — right of the slot/NPC area
+        int nameMaxWidth = pos.width() - TEXT_LEFT - 5;
+        for (String line : RecipeUiHelper.wrapText(font, "§e" + reforgeName, nameMaxWidth)) {
+            graphics.text(font, Component.literal(line), TEXT_LEFT, y, RecipeUiHelper.TEXT_WHITE, true);
+            y += LINE_HEIGHT;
         }
-        return cachedName;
+        String subStr = isBlacksmith ? "§7Blacksmith" : "§7Reforge Stone";
+        graphics.text(font, Component.literal(subStr), TEXT_LEFT, y, 0xFFAAAAAA, true);
     }
 
-    // ── Result building ────────────────────────────────────────────────────────
+    /** Y (card-relative) where the all-rarities table starts, below the wrapped header. */
+    private int allRaritiesBodyTop(Font font, RecipePosition pos) {
+        int nameMaxWidth = pos.width() - TEXT_LEFT - 5;
+        int nameLines = Math.max(1, RecipeUiHelper.wrapText(font, "§e" + reforgeName, nameMaxWidth).size());
+        int y = NAME_Y + (nameLines + 1) * LINE_HEIGHT + 6; // +1 for the subtitle line
+        return Math.max(y, bodyMinY());
+    }
 
-    private String getSubtitleString() {
-        if (cachedSubtitle == null) {
-            if (isBlacksmith) {
-                cachedSubtitle = "§7Blacksmith";
-            } else if (cost > 0) {
-                cachedSubtitle = "§7Cost: §6" + RecipeUiHelper.formatCompactNumber(cost) + " coins";
-            } else {
-                cachedSubtitle = "";
-            }
+    /**
+     * In the all-rarities view, adds the scrollable table widget (plus the inherited
+     * wiki button, when present). Recreated on each placement so geometry follows the
+     * current card position; scroll offset carries over when RRV drops and re-adds it.
+     */
+    @Override
+    @Nullable
+    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
+        AbstractWidget inherited = super.placeButtons(screen, pos);
+        if (resolveDisplayRarity(screen.getMenu().getOrigin()) != null) {
+            return inherited; // single-rarity view: no table widget
         }
-        return cachedSubtitle;
+        Font font = Minecraft.getInstance().font;
+        int bodyTop = allRaritiesBodyTop(font, pos);
+        double previousScroll = tableWidget != null ? tableWidget.scrollAmount() : 0.0;
+        // x/y offsets cancel the widget's 4px inner padding so text lands at the
+        // same coordinates the direct-drawn body used (5 from the card edge).
+        tableWidget = new ReforgeRarityTableWidget(
+                pos.left() + 1, pos.top() + bodyTop - 4,
+                pos.width() - 12, pos.height() - bodyTop - 1,
+                font, tableLines());
+        tableWidget.setScrollAmount(previousScroll);
+        screen.addRecipeWidget(tableWidget);
+        return tableWidget;
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────────
+    @Override
+    public void fadeRecipe() {
+        super.fadeRecipe();
+        tableWidget = null;
+    }
 
-    private List<String> getStatStrings() {
-        if (cachedStatStrings == null) {
+    private int bodyMinY() {
+        return isBlacksmith ? (NPC_Y + NPC_H + 3) : 35;
+    }
+
+    // ── Cached text builders ───────────────────────────────────────────────────
+
+    private String subtitleFor(String rarityName) {
+        if (isBlacksmith) {
+            return "§7Blacksmith";
+        }
+        int cost = costByRarity.getOrDefault(rarityName, 0);
+        return cost > 0 ? "§7Cost: §6" + RecipeUiHelper.formatCompactNumber(cost) + " coins" : "";
+    }
+
+    private String abilityFor(String rarityName) {
+        if (abilityByRarity.isEmpty()) {
+            return "";
+        }
+        String perRarity = abilityByRarity.get(rarityName);
+        if (perRarity != null && !perRarity.isEmpty()) {
+            return perRarity;
+        }
+        String generic = abilityByRarity.get(GENERIC_ABILITY_KEY);
+        return generic != null ? generic : "";
+    }
+
+    private List<String> statStringsFor(String rarityName) {
+        return statStringsByRarity.computeIfAbsent(rarityName, r -> {
+            Map<String, Number> stats = statsByRarity.getOrDefault(r, Map.of());
             List<String> lines = new ArrayList<>(stats.size());
             for (Map.Entry<String, Number> entry : stats.entrySet()) {
-                double value = entry.getValue().doubleValue();
-                String prefix = value >= 0 ? "§a+" : "§c";
-                lines.add("§7" + formatStatName(entry.getKey()) + ": " + prefix + formatStatValue(value));
+                lines.add("§7" + formatStatName(entry.getKey()) + ": " + formatStatValue(entry.getValue().doubleValue()));
             }
-            cachedStatStrings = List.copyOf(lines);
-        }
-        return cachedStatStrings;
+            return List.copyOf(lines);
+        });
     }
 
-    private SlotContent buildResults() {
-        if (resultInternalNames.isEmpty()) {
-            return SlotContent.of();
-        }
-
-        ItemRegistry registry = SkyRecipes.getItemRegistry();
-        if (registry == null) {
-            return SlotContent.of();
-        }
-
-        List<ItemStack> stacks = new ArrayList<>();
-        Set<net.minecraft.world.item.Item> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        int limit = 0;
-        for (String name : resultInternalNames) {
-            if (limit++ > 32) break;
-            var opt = registry.getByInternalName(name);
-            if (opt.isEmpty()) continue;
-            ItemStack stack = ItemStackBuilder.build(opt.get());
-            if (!stack.isEmpty() && seen.add(stack.getItem())) {
-                stacks.add(stack);
+    /**
+     * One condensed line per available rarity: the coloured tier label followed by
+     * its stats inline. Built once; the origin cannot change which rarities exist.
+     */
+    private List<String> tableLines() {
+        if (cachedTableLines == null) {
+            List<String> lines = new ArrayList<>(orderedRarities.size());
+            for (SkyblockRarity rarity : orderedRarities) {
+                String rarityName = rarity.name();
+                Map<String, Number> stats = statsByRarity.getOrDefault(rarityName, Map.of());
+                StringBuilder sb = new StringBuilder(RecipeUiHelper.rarityColorCode(rarityName));
+                sb.append(rarityName).append("§7:");
+                for (Map.Entry<String, Number> entry : stats.entrySet()) {
+                    sb.append(' ').append(formatStatValue(entry.getValue().doubleValue()))
+                            .append(' ').append(formatStatName(entry.getKey()));
+                }
+                if (stats.isEmpty() && !isBlacksmith) {
+                    int cost = costByRarity.getOrDefault(rarityName, 0);
+                    if (cost > 0) {
+                        sb.append(" §6").append(RecipeUiHelper.formatCompactNumber(cost)).append(" coins");
+                    }
+                }
+                lines.add(sb.toString());
             }
+            cachedTableLines = List.copyOf(lines);
         }
-        return stacks.isEmpty() ? SlotContent.of() : SlotContent.of(stacks);
+        return cachedTableLines;
+    }
+
+    private static String formatStatName(String key) {
+        String[] parts = key.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) sb.append(' ');
+            String part = parts[i];
+            if (part.isEmpty()) continue;
+            sb.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) sb.append(part.substring(1).toLowerCase());
+        }
+        return sb.toString();
+    }
+
+    private static String formatStatValue(double value) {
+        String prefix = value >= 0 ? "§a+" : "§c";
+        String number = value == (int) value ? String.valueOf((int) value) : String.valueOf(value);
+        return prefix + number;
     }
 
     // ── Getters ────────────────────────────────────────────────────────────────
 
-    public List<String> getResultInternalNames() {
+    public Set<String> getResultInternalNames() {
         return resultInternalNames;
     }
 
     public String getStoneInternalName() {
-        if (isBlacksmith) return "";
-        String id = SkyblockIdExtractor.extract(stoneStack);
-        return id != null ? id : "";
+        return stoneInternalName;
     }
 }

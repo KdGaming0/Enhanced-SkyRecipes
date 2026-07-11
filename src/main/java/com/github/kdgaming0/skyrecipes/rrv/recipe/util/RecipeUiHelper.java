@@ -1,9 +1,12 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.util;
 
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
+import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Shared UI helpers for SkyRecipes recipe rendering.
@@ -160,5 +163,119 @@ public final class RecipeUiHelper {
         String type = raw.substring(0, underscore);
         String level = raw.substring(underscore + 1);
         return TextUtil.capitalize(type) + " Slayer " + level;
+    }
+
+    // ── Text wrapping ──────────────────────────────────────────────────────────
+
+    /**
+     * Splits {@code text} into lines that each fit within {@code maxWidth} pixels.
+     * Prefers word boundaries; falls back to mid-word splits. Preserves leading
+     * § colour/formatting codes across line breaks.
+     */
+    public static List<String> wrapText(Font font, String text, int maxWidth) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isEmpty()) {
+            return lines;
+        }
+
+        String remaining = text;
+        String activeCodes = "";
+
+        while (!remaining.isEmpty()) {
+            String leading = extractLeadingCodes(remaining);
+            if (!leading.isEmpty()) {
+                activeCodes = updateActiveCodes(activeCodes, leading);
+            }
+            String content = remaining.substring(leading.length());
+
+            String prefix = activeCodes;
+            int fit = fitLength(font, prefix + content, maxWidth);
+            int contentFit = Math.max(1, fit - prefix.length());
+
+            int splitAt = contentFit;
+            if (contentFit < content.length()) {
+                while (splitAt > 0 && content.charAt(splitAt - 1) != ' ') {
+                    splitAt--;
+                }
+                if (splitAt == 0) {
+                    splitAt = contentFit; // force mid-word
+                }
+            }
+
+            String line = (prefix + content.substring(0, splitAt)).stripTrailing();
+            if (!line.isEmpty()) {
+                lines.add(line);
+            }
+
+            activeCodes = updateActiveCodes(activeCodes, content.substring(0, splitAt));
+            remaining = content.substring(splitAt).stripLeading();
+        }
+
+        return lines;
+    }
+
+    private static String extractLeadingCodes(String text) {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        while (i + 1 < text.length() && text.charAt(i) == '§') {
+            sb.append(text.charAt(i));
+            sb.append(text.charAt(i + 1));
+            i += 2;
+        }
+        return sb.toString();
+    }
+
+    private static String updateActiveCodes(String current, String text) {
+        String combined = current + text;
+        String color = null;
+        boolean bold = false, italic = false, under = false, strike = false, obf = false;
+
+        for (int i = 0; i + 1 < combined.length(); i++) {
+            if (combined.charAt(i) == '§') {
+                char c = combined.charAt(i + 1);
+                switch (c) {
+                    case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+                         'a', 'b', 'c', 'd', 'e', 'f',
+                         'A', 'B', 'C', 'D', 'E', 'F' -> color = String.valueOf(c);
+                    case 'k', 'K' -> obf = true;
+                    case 'l', 'L' -> bold = true;
+                    case 'm', 'M' -> strike = true;
+                    case 'n', 'N' -> under = true;
+                    case 'o', 'O' -> italic = true;
+                    case 'r', 'R' -> {
+                        color = null;
+                        bold = italic = under = strike = obf = false;
+                    }
+                }
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (color != null) sb.append('§').append(color);
+        if (obf) sb.append("§k");
+        if (bold) sb.append("§l");
+        if (strike) sb.append("§m");
+        if (under) sb.append("§n");
+        if (italic) sb.append("§o");
+        return sb.toString();
+    }
+
+    /**
+     * Binary-search the number of leading characters of {@code text} that fit.
+     */
+    private static int fitLength(Font font, String text, int maxWidth) {
+        if (font.width(text) <= maxWidth) {
+            return text.length();
+        }
+        int lo = 0, hi = text.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            if (font.width(text.substring(0, mid)) <= maxWidth) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return lo;
     }
 }

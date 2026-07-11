@@ -5,11 +5,14 @@ import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractScrollArea;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Hides RRV's "Share Recipe" button on every recipe.
@@ -21,6 +24,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(RecipeViewScreen.class)
 public class RecipeViewScreenMixin {
+
+    /**
+     * RRV consumes mouse-wheel events anywhere over the recipe GUI to flip recipe
+     * pages, so scrollable recipe widgets (e.g. the reforge rarity table) never
+     * receive them through vanilla routing. Give a hovered, actually-scrollable
+     * widget first refusal; when its content fits, fall through to page flipping.
+     */
+    @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
+    private void skyrecipes$scrollHoveredWidget(double mouseX, double mouseY, double scrollX, double scrollY,
+                                                CallbackInfoReturnable<Boolean> cir) {
+        RecipeViewScreen screen = (RecipeViewScreen) (Object) this;
+        for (GuiEventListener child : screen.children()) {
+            if (child instanceof AbstractScrollArea area && area.isMouseOver(mouseX, mouseY)) {
+                if (area.maxScrollAmount() > 0 && area.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
+                    cir.setReturnValue(true);
+                }
+                return;
+            }
+        }
+    }
 
     @Inject(method = "checkGui", at = @At("RETURN"))
     private void hideShareButtons(CallbackInfo ci) {

@@ -11,9 +11,9 @@ import net.minecraft.world.item.component.ItemLore;
 /**
  * Extracts {@link SkyblockRarity} from {@link ItemStack}s and {@link NeuItem}s.
  *
- * <p>For stacks, prefers looking up the canonical {@link NeuItem} via
- * {@link SkyblockIdExtractor} so the rarity matches NEU data exactly.
- * Falls back to parsing the stack's current lore.</p>
+ * <p>For stacks, prefers the stack's own lore so runtime upgrades
+ * (recombobulated items) report their live rarity. Falls back to the
+ * canonical {@link NeuItem} looked up via {@link SkyblockIdExtractor}.</p>
  */
 public final class RarityExtractor {
 
@@ -31,7 +31,25 @@ public final class RarityExtractor {
             return SkyblockRarity.COMMON;
         }
 
-        // Fast path: look up canonical NeuItem
+        // Live lore first: reflects recombobulator and other runtime upgrades.
+        // Scan bottom-up — the rarity line is normally last, but menu screens
+        // (auction house, bazaar) append extra lines below it.
+        ItemLore lore = stack.get(DataComponents.LORE);
+        if (lore != null) {
+            var lines = lore.lines();
+            for (int i = lines.size() - 1; i >= 0; i--) {
+                String text = lines.get(i).getString();
+                if (text == null || text.isEmpty()) {
+                    continue;
+                }
+                SkyblockRarity rarity = SkyblockRarity.fromLoreOrNull(text);
+                if (rarity != null) {
+                    return rarity;
+                }
+            }
+        }
+
+        // Fallback: canonical NeuItem rarity
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry != null) {
             String id = SkyblockIdExtractor.extract(stack);
@@ -40,15 +58,6 @@ public final class RarityExtractor {
                 if (item != null) {
                     return extract(item);
                 }
-            }
-        }
-
-        // Fallback: parse lore from the stack itself
-        ItemLore lore = stack.get(DataComponents.LORE);
-        if (lore != null && !lore.lines().isEmpty()) {
-            String text = lore.lines().getLast().getString();
-            if (text != null && !text.isEmpty()) {
-                return SkyblockRarity.fromLore(text);
             }
         }
 

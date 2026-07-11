@@ -35,6 +35,11 @@ public final class SkyblockRecipeCache {
     };
     private static volatile Map<String, List<ReliableClientRecipe>> byIngredientId = Map.of();
     private static volatile Map<String, List<ReliableClientRecipe>> byResultId = Map.of();
+    /**
+     * Recipes matched by ID predicate at lookup time ({@link SkyblockIdMatchingRecipe}),
+     * e.g. reforges, whose applicability spans far more items than their exposed stacks.
+     */
+    private static volatile List<ReliableClientRecipe> idMatchingRecipes = List.of();
     private static volatile FamilyResolver familyResolver;
 
     private SkyblockRecipeCache() {
@@ -64,6 +69,7 @@ public final class SkyblockRecipeCache {
         if (recipes == null || recipes.isEmpty()) {
             byIngredientId = Map.of();
             byResultId = Map.of();
+            idMatchingRecipes = List.of();
             return;
         }
 
@@ -86,6 +92,9 @@ public final class SkyblockRecipeCache {
                         Map.Entry::getKey,
                         e -> sortRecipes(List.copyOf(e.getValue()))
                 ));
+        idMatchingRecipes = recipes.stream()
+                .filter(r -> r instanceof SkyblockIdMatchingRecipe)
+                .toList();
     }
 
     private static void indexRecipe(ReliableClientRecipe recipe,
@@ -168,7 +177,9 @@ public final class SkyblockRecipeCache {
             return null;
         }
         List<ReliableClientRecipe> list = byIngredientId.get(id);
-        return list == null ? new ArrayList<>() : new ArrayList<>(list);
+        List<ReliableClientRecipe> result = list == null ? new ArrayList<>() : new ArrayList<>(list);
+        appendIdMatches(id, result);
+        return result;
     }
 
     /**
@@ -189,7 +200,9 @@ public final class SkyblockRecipeCache {
 
         if (!SkyRecipesConfig.familyExpansionEnabled || familyResolver == null) {
             List<ReliableClientRecipe> list = byResultId.get(id);
-            return list == null ? new ArrayList<>() : new ArrayList<>(list);
+            List<ReliableClientRecipe> result = list == null ? new ArrayList<>() : new ArrayList<>(list);
+            appendIdMatches(id, result);
+            return result;
         }
 
         Set<String> familyIds = familyResolver.getFamilyMembers(id);
@@ -216,7 +229,21 @@ public final class SkyblockRecipeCache {
             result.add(0, target);
         }
 
+        // After move-to-front so the clicked item's own recipe stays the default tab.
+        appendIdMatches(id, result);
         return result;
+    }
+
+    /**
+     * Appends every {@link SkyblockIdMatchingRecipe} that applies to {@code id} and is
+     * not already present. ~1 set lookup per reforge card — cheap enough per keypress.
+     */
+    private static void appendIdMatches(String id, List<ReliableClientRecipe> out) {
+        for (ReliableClientRecipe recipe : idMatchingRecipes) {
+            if (((SkyblockIdMatchingRecipe) recipe).matchesSkyblockId(id) && !out.contains(recipe)) {
+                out.add(recipe);
+            }
+        }
     }
 
     private static boolean recipeContainsResultId(ReliableClientRecipe recipe, String targetId) {
