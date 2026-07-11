@@ -130,6 +130,7 @@ public final class ItemStackBuilder {
         try {
             String normalizedNbt = preprocessNeuSnbt(nbtString);
             CompoundTag tag = TagParser.parseCompoundFully(normalizedNbt);
+            applyItemModel(stack, tag, item);
             applyComponents(stack, tag, item);
         } catch (Exception e) {
             LOGGER.warn("Failed to parse NBT for {}", item.internalName(), e);
@@ -246,6 +247,7 @@ public final class ItemStackBuilder {
         try {
             String normalizedNbt = preprocessNeuSnbt(nbtString);
             CompoundTag tag = TagParser.parseCompoundFully(normalizedNbt);
+            applyItemModel(stack, tag, item);
             Optional<CompoundTag> extraOpt = tag.getCompound("ExtraAttributes");
             if (extraOpt.isPresent()) {
                 CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
@@ -256,6 +258,26 @@ public final class ItemStackBuilder {
             LOGGER.debug("Failed to parse minimal NBT for vanilla item {}: {}",
                     item.internalName(), e.getMessage());
         }
+    }
+
+    /**
+     * Apply the {@code ItemModel} tag as the {@code minecraft:item_model} component.
+     *
+     * <p>Hypixel's custom-item system sets this component on live stacks; it points at
+     * the model resource packs override to retexture SkyBlock items. Without it the
+     * stack renders as its base item (often paper) and packs have no hook.</p>
+     */
+    private static void applyItemModel(ItemStack stack, CompoundTag tag, NeuItem item) {
+        String itemModel = tag.getStringOr("ItemModel", "");
+        if (itemModel.isEmpty()) {
+            return;
+        }
+        Identifier modelId = Identifier.tryParse(itemModel);
+        if (modelId == null) {
+            LOGGER.warn("Invalid ItemModel '{}' for {}", itemModel, item.internalName());
+            return;
+        }
+        stack.set(DataComponents.ITEM_MODEL, modelId);
     }
 
     private static void applyComponents(ItemStack stack, CompoundTag tag, NeuItem item) {
@@ -351,7 +373,8 @@ public final class ItemStackBuilder {
         // This ensures SkyBlock mods can still read the original NBT
         CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
             for (String key : tag.keySet()) {
-                if (!key.equals("display") && !key.equals("SkullOwner") && !key.equals("ExtraAttributes")) {
+                if (!key.equals("display") && !key.equals("SkullOwner") && !key.equals("ExtraAttributes")
+                        && !key.equals("ItemModel")) {
                     net.minecraft.nbt.Tag val = tag.get(key);
                     if (val != null) {
                         existing.put(key, val);
