@@ -185,20 +185,17 @@ if (sc.current.version in compatibleVersions) {
             }
         }
 
-        /*
         val curseforgeId = providers.gradleProperty("publish.curseforge").orNull
         if (!curseforgeId.isNullOrEmpty()) {
             curseforge {
                 projectId.set(curseforgeId)
                 accessToken.set(providers.environmentVariable("CURSEFORGE_TOKEN"))
                 minecraftVersions.addAll(compatibleVersions)
-                client.set(true)
-                server.set(true)
-
-                requires("fabric-api")
-                requires("rrv")
+                requires { slug = "306612" } // Fabric API
+                requires { slug = "1422317" } // RRV
+                optional { slug = "308702" } // ModMenu
+                embeds   { slug = "488090" } // MidnightLib
             }
         }
-        */
     }
 }

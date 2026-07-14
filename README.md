@@ -1,14 +1,14 @@
 <div align="center">
 
-[![Download on Modrinth](https://raw.githubusercontent.com/intergrav/devins-badges/c7fd18efdadd1c3f12ae56b49afd834640d2d797/assets/cozy/available/modrinth_vector.svg "Download SkyRecipes on Modrinth")](https://modrinth.com/mod/skyrecipes)
-[![Join Discord](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-plural_vector.svg "Join the SkyRecipes Discord server")](https://discord.gg/FCPP2WPZ3U)
+[![Download on Modrinth](https://raw.githubusercontent.com/intergrav/devins-badges/c7fd18efdadd1c3f12ae56b49afd834640d2d797/assets/cozy/available/modrinth_vector.svg "Download SkyRecipes on Modrinth")](https://modrinth.com/project/Q7VEfkvq)
+[![Join Discord](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-plural_vector.svg "Join the Discord server")](https://discord.gg/FCPP2WPZ3U)
 [![Requires Fabric API](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/requires/fabric-api_vector.svg "Requires Fabric API")](https://modrinth.com/mod/fabric-api)
 
 </div>
 <div align="center">
 
 [![Requires RRV](https://img.shields.io/badge/requires-Reliable%20Recipe%20Viewer-9B59B6?logo=minecraft "Requires Reliable Recipe Viewer")](https://modrinth.com/mod/rrv)
-[![Modrinth Downloads](https://img.shields.io/modrinth/dt/skyrecipes?color=00AF5C&label=downloads&logo=modrinth "Total SkyRecipes downloads on Modrinth")](https://modrinth.com/mod/skyrecipes)
+[![Modrinth Downloads](https://img.shields.io/modrinth/dt/skyrecipes?color=00AF5C&label=downloads&logo=modrinth "Total SkyRecipes downloads on Modrinth")](https://modrinth.com/mod/enhanced-skyrecipes)
 [![Join Fluxer](https://img.shields.io/badge/Join-Fluxer-5865F2?style=for-the-badge "Join the Fluxer community")](https://fluxer.gg/3jJy9cp6)
 
 # SkyRecipes
@@ -199,9 +199,5 @@ This project includes derivative code from:
 - License: GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)
 - Affected file(s): `NeuCalculator.java` (adapted from NEU Calculator)
 - Notes: Original lexer, shunting-yard parsing, and RPN evaluation logic were adapted and extended.
-
-## Credits
-
-Massive thanks to the people who maintain the NEU-REPO and have made this project possible. The SkyRecipes mod uses the NEU-REPO to provide the data for all SkyBlock items and recipes.
 
 > AI tools were extensively used during the creation of this project.
