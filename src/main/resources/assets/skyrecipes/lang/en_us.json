@@ -23,6 +23,9 @@
   "skyrecipes.midnightconfig.wideRrvSearchBar": "Wide Search Bar",
   "skyrecipes.midnightconfig.wideRrvSearchBar.tooltip": "Expands the RRV search bar. In centred mode it widens up to the configured width but never shrinks below RRV's default. In item-list mode it is limited by the available item-list space.",
 
+  "skyrecipes.midnightconfig.blockKeybindsWhileTyping": "Block Keybinds While Typing",
+  "skyrecipes.midnightconfig.blockKeybindsWhileTyping.tooltip": "Stops other mods' inventory keybinds from firing while you are typing in an RRV search box. Escape and Tab still work as normal.",
+
   "skyrecipes.midnightconfig.rrvSearchBarWidth": "Search Bar Width",
   "skyrecipes.midnightconfig.rrvSearchBarWidth.tooltip": "Minimum width for the search bar when wide mode is enabled.",
 

@@ -48,6 +48,9 @@ public class SkyRecipesConfig extends MidnightConfig {
     @Entry(category = "rrv")
     public static boolean wideRrvSearchBar = true;
 
+    @Entry(category = "rrv")
+    public static boolean blockKeybindsWhileTyping = true;
+
     @Entry(category = "rrv", isSlider = true, min = 100, max = 300, precision = 1)
     public static int rrvSearchBarWidth = 200;
 

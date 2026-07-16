@@ -1,5 +1,6 @@
 ### 0.4.0
 
+- Pressing Tab in the search bar now completes the suggested item name instead of jumping to the next field.
 - Accessories, hatcessories, carnival masks and timecharms no longer show a Reforge tab — these can't be reforged, so the tab only appears for items now that correclt can be reforged.
 - Tiered SkyBlock items are now grouped in the item list: each minion, pet, enchantment, drill, and accessory upgrade line collapses into a single expandable entry instead of listing every tier separately. Click a group to expand it; searching still shows exact tiers directly.
 - SkyBlock items no longer get pulled into Reliable Recipe Viewer's built-in vanilla groups — previously every SkyBlock enchantment book was lumped into one giant "Enchanted Books" stack.

@@ -5,6 +5,7 @@ import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.client.gui.SearchBarCalculator;
+import com.github.kdgaming0.skyrecipes.client.gui.SearchSuggestionState;
 import com.github.kdgaming0.skyrecipes.core.search.SearchAutocomplete;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -76,25 +77,30 @@ public class SearchBarMixin {
         // Don't suggest on empty query
         if (newQuery == null || newQuery.isBlank()) {
             searchbar.setSuggestion(null);
+            SearchSuggestionState.clear();
             return;
         }
 
-        // Calculator: evaluate math expressions and show result as ghost text
+        // Calculator: evaluate math expressions and show result as ghost text.
+        // This is display text, not a completion, so Tab must not accept it.
         if (SkyRecipesConfig.calculatorEnabled && looksLikeMath(newQuery)) {
             String suggestion = SearchBarCalculator.calculateSuggestion(newQuery);
             searchbar.setSuggestion(suggestion);
+            SearchSuggestionState.clear();
             return;
         }
 
         SearchAutocomplete autocomplete = SkyRecipes.getSearchAutocomplete();
         if (autocomplete == null) {
             searchbar.setSuggestion(null);
+            SearchSuggestionState.clear();
             return;
         }
 
         List<SearchAutocomplete.Suggestion> suggestions = autocomplete.suggest(newQuery, 1);
         if (suggestions.isEmpty()) {
             searchbar.setSuggestion(null);
+            SearchSuggestionState.clear();
             return;
         }
 
@@ -102,8 +108,10 @@ public class SearchBarMixin {
         String suggestion = computeSuggestionSuffix(newQuery, bestMatch);
         if (suggestion != null && !suggestion.isEmpty()) {
             searchbar.setSuggestion(suggestion);
+            SearchSuggestionState.setCompletion(suggestion);
         } else {
             searchbar.setSuggestion(null);
+            SearchSuggestionState.clear();
         }
     }
 }

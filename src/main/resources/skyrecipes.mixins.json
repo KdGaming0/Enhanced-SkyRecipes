@@ -15,6 +15,7 @@
     "overlay.CategoryButtonMixin",
     "overlay.ItemFiltersMixin",
     "overlay.ItemViewOverlayMixin",
+    "overlay.SearchBarKeyInputMixin",
     "overlay.SearchBarMixin",
     "recipe.ClientRecipeCacheAccessor",
     "recipe.ClientRecipeCacheMixin",
