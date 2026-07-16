@@ -24,7 +24,7 @@ import java.util.*;
  */
 public class BinaryDataLoader {
 
-    public static final int EXPECTED_SCHEMA = 8;
+    public static final int EXPECTED_SCHEMA = 9;
     private static final int HEADER_SIZE = 96;
     private static final long MAX_METADATA_LENGTH = 1 << 20;
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
@@ -471,6 +471,7 @@ public class BinaryDataLoader {
         Map<String, EssenceUpgradeData> essenceCosts = new LinkedHashMap<>();
         Set<String> bazaarItems = new HashSet<>();
         Map<String, String> museumCategories = new LinkedHashMap<>();
+        Map<String, String> museumChildren = new LinkedHashMap<>();
         Map<String, ReforgeData> reforges = new LinkedHashMap<>();
         Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
         Set<String> knownStats = new HashSet<>();
@@ -537,6 +538,12 @@ public class BinaryDataLoader {
                     int msize = unpacker.unpackMapHeader();
                     for (int j = 0; j < msize; j++) {
                         museumCategories.put(unpacker.unpackString(), unpacker.unpackString());
+                    }
+                }
+                case "museumChildren" -> {
+                    int msize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < msize; j++) {
+                        museumChildren.put(unpacker.unpackString(), unpacker.unpackString());
                     }
                 }
                 case "reforges" -> {
@@ -631,7 +638,7 @@ public class BinaryDataLoader {
                 default -> unpacker.skipValue();
             }
         }
-        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
+        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins, museumChildren);
     }
 
     private MobRenderDefinition unpackMobRenderDefinition(MessageUnpacker unpacker) throws IOException {

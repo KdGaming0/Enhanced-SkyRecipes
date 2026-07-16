@@ -40,7 +40,7 @@ public class BinaryDataCompiler {
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[]{'S', 'K', 'Y', '2'};
-    private static final int SCHEMA_VERSION = 8;
+    private static final int SCHEMA_VERSION = 9;
     private static final int HEADER_SIZE = 96;
     private static final int SECTION_COUNT = 3; // items, constants, metadata
     /**
@@ -158,13 +158,14 @@ public class BinaryDataCompiler {
         Map<String, EssenceUpgradeData> essenceCosts = new LinkedHashMap<>();
         Set<String> bazaarItems = new HashSet<>();
         Map<String, String> museumCategories = new LinkedHashMap<>();
+        Map<String, String> museumChildren = new LinkedHashMap<>();
         Map<String, ReforgeData> reforges = new LinkedHashMap<>();
         Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
         Map<String, MobRenderDefinition> mobDefinitions = new LinkedHashMap<>();
         Map<String, byte[]> mobSkins = new LinkedHashMap<>();
         this.petResolver = null;
 
-        ParseStats parseStats = parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, mobDefinitions, mobSkins);
+        ParseStats parseStats = parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, museumChildren, reforges, reforgeStones, mobDefinitions, mobSkins);
 
         if (items.isEmpty()) {
             throw new IOException("Parsed 0 items from NEU repo ZIP — archive corrupt or format changed");
@@ -220,7 +221,7 @@ public class BinaryDataCompiler {
             packer.flush();
             itemsLength = counter.count();
 
-            packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
+            packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, museumChildren, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
             packer.flush();
             constantsLength = counter.count() - itemsLength;
 
@@ -418,6 +419,7 @@ public class BinaryDataCompiler {
     private ParseStats parseZip(Path zipFile, List<NeuItem> items, Map<String, List<String>> parents,
                                 Map<String, EssenceUpgradeData> essenceCosts, Set<String> bazaarItems,
                                 Map<String, String> museumCategories,
+                                Map<String, String> museumChildren,
                                 Map<String, ReforgeData> reforges,
                                 Map<String, ReforgeStoneData> reforgeStones,
                                 Map<String, MobRenderDefinition> mobDefinitions,
@@ -459,7 +461,7 @@ public class BinaryDataCompiler {
                         } else if (name.equals(prefix + "constants/bazaarstocks.json")) {
                             parseBazaarStocks(bytes, bazaarItems);
                         } else if (name.equals(prefix + "constants/museum.json")) {
-                            parseMuseum(bytes, museumCategories);
+                            parseMuseum(bytes, museumCategories, museumChildren);
                         } else if (name.equals(prefix + "constants/reforges.json")) {
                             parseReforges(bytes, reforges);
                         } else if (name.equals(prefix + "constants/reforgestones.json")) {
@@ -768,16 +770,28 @@ public class BinaryDataCompiler {
         }
     }
 
-    private void parseMuseum(byte[] bytes, Map<String, String> museumCategories) {
+    private void parseMuseum(byte[] bytes, Map<String, String> museumCategories,
+                             Map<String, String> museumChildren) {
         JsonObject obj = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
         JsonObject itemsObj = JsonUtil.getObject(obj, "items");
-        if (itemsObj == null) return;
+        if (itemsObj != null) {
+            for (Map.Entry<String, JsonElement> category : itemsObj.entrySet()) {
+                String categoryName = category.getKey();
+                if (category.getValue().isJsonArray()) {
+                    for (JsonElement item : category.getValue().getAsJsonArray()) {
+                        museumCategories.put(item.getAsString(), categoryName);
+                    }
+                }
+            }
+        }
 
-        for (Map.Entry<String, JsonElement> category : itemsObj.entrySet()) {
-            String categoryName = category.getKey();
-            if (category.getValue().isJsonArray()) {
-                for (JsonElement item : category.getValue().getAsJsonArray()) {
-                    museumCategories.put(item.getAsString(), categoryName);
+        // "children" is a curated upgrade map: item → the item it upgrades from.
+        JsonObject childrenObj = JsonUtil.getObject(obj, "children");
+        if (childrenObj != null) {
+            for (Map.Entry<String, JsonElement> e : childrenObj.entrySet()) {
+                JsonElement value = e.getValue();
+                if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+                    museumChildren.put(e.getKey(), value.getAsString());
                 }
             }
         }
@@ -1166,13 +1180,14 @@ public class BinaryDataCompiler {
                                Map<String, EssenceUpgradeData> essenceCosts,
                                Set<String> bazaarItems,
                                Map<String, String> museumCategories,
+                               Map<String, String> museumChildren,
                                Map<String, ReforgeData> reforges,
                                Map<String, ReforgeStoneData> reforgeStones,
                                Set<String> knownStats,
                                Map<String, String> reforgeNameToStone,
                                Map<String, MobRenderDefinition> mobDefinitions,
                                Map<String, byte[]> mobSkins) throws IOException {
-        packer.packMapHeader(10);
+        packer.packMapHeader(11);
 
         packer.packString("parents");
         packer.packMapHeader(parents.size());
@@ -1220,6 +1235,13 @@ public class BinaryDataCompiler {
         packer.packString("museum");
         packer.packMapHeader(museumCategories.size());
         for (Map.Entry<String, String> e : museumCategories.entrySet()) {
+            packer.packString(e.getKey());
+            packer.packString(e.getValue());
+        }
+
+        packer.packString("museumChildren");
+        packer.packMapHeader(museumChildren.size());
+        for (Map.Entry<String, String> e : museumChildren.entrySet()) {
             packer.packString(e.getKey());
             packer.packString(e.getValue());
         }

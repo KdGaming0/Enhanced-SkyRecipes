@@ -191,6 +191,10 @@ public final class SkyblockStackGroups {
             return Component.literal(prettify(base) + " Accessories");
         }
 
+        if (family.type() == FamilyType.VARIANT_SET) {
+            return Component.literal(variantSetName(family, items));
+        }
+
         String firstMember = family.members().iterator().next();
         String display = items.getByInternalName(firstMember)
                 .map(NeuItem::displayName)
@@ -216,6 +220,61 @@ public final class SkyblockStackGroups {
             display = TRAILING_TIER.matcher(display).replaceFirst("");
         }
         return Component.literal(display);
+    }
+
+    /**
+     * Names a variant set by what its members' display names share: the common
+     * trailing words, pluralized ("Matcha Dye"/"Lucky Dye" → "Dyes"), else the
+     * common leading words ("Blobfish BRONZE"/"Blobfish SILVER" → "Blobfish"),
+     * else the prettified family id.
+     */
+    private static String variantSetName(FamilyInfo family, ItemRegistry items) {
+        List<String[]> names = new ArrayList<>(family.members().size());
+        for (String member : family.members()) {
+            String display = items.getByInternalName(member)
+                    .map(NeuItem::displayName)
+                    .map(TextUtil::stripColorCodes)
+                    .orElse("").trim();
+            if (display.isEmpty()) continue;
+            names.add(display.split("\\s+"));
+        }
+        if (names.size() >= 2) {
+            String suffix = commonEdge(names, true);
+            if (!suffix.isEmpty()) {
+                return suffix.endsWith("s") ? suffix : suffix + "s";
+            }
+            String prefix = commonEdge(names, false);
+            if (!prefix.isEmpty()) {
+                return prefix;
+            }
+        }
+        return prettify(family.familyId());
+    }
+
+    /** Words shared by every name at its end ({@code fromEnd}) or start, joined; "" if none. */
+    private static String commonEdge(List<String[]> names, boolean fromEnd) {
+        String[] first = names.get(0);
+        int common = first.length;
+        for (int n = 1; n < names.size(); n++) {
+            String[] other = names.get(n);
+            int limit = Math.min(common, other.length);
+            int matched = 0;
+            while (matched < limit) {
+                String a = fromEnd ? first[first.length - 1 - matched] : first[matched];
+                String b = fromEnd ? other[other.length - 1 - matched] : other[matched];
+                if (!a.equalsIgnoreCase(b)) break;
+                matched++;
+            }
+            common = matched;
+            if (common == 0) return "";
+        }
+        // A full match means one member's name is entirely shared words — use it as-is.
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < common; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(fromEnd ? first[first.length - common + i] : first[i]);
+        }
+        return sb.toString();
     }
 
     /** "WHEAT_GENERATOR" → "Wheat Generator". */

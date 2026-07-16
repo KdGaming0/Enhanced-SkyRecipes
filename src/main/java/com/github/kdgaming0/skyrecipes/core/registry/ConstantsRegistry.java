@@ -19,6 +19,8 @@ public final class ConstantsRegistry {
     private final Map<String, EssenceUpgradeData> essenceCosts;
     private final Set<String> bazaarItems;
     private final Map<String, String> museumCategories;
+    /** museum.json "children": item → the item it upgrades from (curated upgrade lines). */
+    private final Map<String, String> museumChildren;
     private final Map<String, ReforgeData> reforges;
     private final Map<String, ReforgeStoneData> reforgeStones;
     private final Set<String> knownStats;
@@ -79,6 +81,25 @@ public final class ConstantsRegistry {
             Map<String, MobRenderDefinition> mobDefinitions,
             Map<String, byte[]> mobSkins
     ) {
+        this(parents, essenceCosts, bazaarItems, museumCategories,
+                reforges, reforgeStones, knownStats, reforgeNameToStone,
+                mobDefinitions, mobSkins, Collections.emptyMap());
+    }
+
+    public ConstantsRegistry(
+            Map<String, List<String>> parents,
+            Map<String, EssenceUpgradeData> essenceCosts,
+            Set<String> bazaarItems,
+            Map<String, String> museumCategories,
+            Map<String, ReforgeData> reforges,
+            Map<String, ReforgeStoneData> reforgeStones,
+            Set<String> knownStats,
+            Map<String, String> reforgeNameToStone,
+            Map<String, MobRenderDefinition> mobDefinitions,
+            Map<String, byte[]> mobSkins,
+            Map<String, String> museumChildren
+    ) {
+        this.museumChildren = museumChildren != null ? Collections.unmodifiableMap(museumChildren) : Collections.emptyMap();
         this.parents = parents != null ? Collections.unmodifiableMap(parents) : Collections.emptyMap();
         this.essenceCosts = essenceCosts != null ? Collections.unmodifiableMap(essenceCosts) : Collections.emptyMap();
         this.bazaarItems = bazaarItems != null ? Collections.unmodifiableSet(bazaarItems) : Collections.emptySet();
@@ -163,6 +184,11 @@ public final class ConstantsRegistry {
 
     public Map<String, String> getAllMuseumCategories() {
         return museumCategories;
+    }
+
+    /** museum.json "children": item → the item it upgrades from. */
+    public Map<String, String> getMuseumChildren() {
+        return museumChildren;
     }
 
     public Map<String, ReforgeData> getAllReforges() {

@@ -40,6 +40,11 @@ public enum FamilyType {
      */
     COLOR_VARIANT,
     /**
+     * Curated variant sets from parents.json that are not upgrade ladders (dyes,
+     * party hat colors, epoch cakes) — grouped in the item list, but do not expand.
+     */
+    VARIANT_SET,
+    /**
      * Thematically related items that are not craftable upgrades — do not expand.
      */
     COLLECTION,
@@ -66,6 +71,6 @@ public enum FamilyType {
      * Astraea/Hyperion/Scylla/Valkyrie), not an upgrade line.
      */
     public boolean formsStackGroup() {
-        return expandsForResults() && this != BRANCHING;
+        return (expandsForResults() && this != BRANCHING) || this == VARIANT_SET;
     }
 }
