@@ -9,6 +9,7 @@ dist/
 !src/**
 !.gradle/loom-cache
 !NotEnoughUpdates-REPO-master
+!vv_rrv_docs
 !build.gradle.kts
 !settings.gradle.kts
 !stonecutter.gradle.kts
