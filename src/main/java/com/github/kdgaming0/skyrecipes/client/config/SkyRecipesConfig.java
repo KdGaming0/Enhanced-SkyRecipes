@@ -31,6 +31,12 @@ public class SkyRecipesConfig extends MidnightConfig {
     // RRV integration settings
     // -----------------------------------------------------------------
     @Entry(category = "rrv")
+    public static boolean groupTieredItems = true;
+
+    @Entry(category = "rrv")
+    public static boolean groupCraftedChains = true;
+
+    @Entry(category = "rrv")
     public static boolean hideCategoryButtons = false;
 
     @Entry(category = "rrv")

@@ -5,7 +5,10 @@ import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.recipe.stackgroup.StackGroupManager;
 import cc.cassian.rrv.common.recipe.stackgroup.data.AbstractStackGroup;
 import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
+import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.StackGroupManagerAccessor;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockFamilyStackGroup;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -101,27 +104,50 @@ public final class StackGroupItemsCache {
      * Single registry sweep matching every group per item. Per-group insertion order is
      * identical to RRV's {@code getGroupItems} (each item's matching stack sensitives, then
      * the plain stack); final ordering is normalized by {@code sortByGroupOrder} at publish.
+     *
+     * <p>Stacks carrying a SkyBlock ID resolve to their family group via one hash lookup
+     * and never test the other groups — with 1000+ generated family groups, matching each
+     * of ~9000 SkyBlock stacks against every group would turn this sweep quadratic. Plain
+     * and foreign stacks only test the non-family groups, which is what RRV ships (~75).</p>
      */
     private static Map<AbstractStackGroup, List<ItemStack>> computeAllGroups(
             List<AbstractStackGroup> groups, Map<Item, List<ItemStack>> sensitives) {
         Map<AbstractStackGroup, List<ItemStack>> computed = new IdentityHashMap<>();
+        List<AbstractStackGroup> foreignGroups = new ArrayList<>();
         for (AbstractStackGroup group : groups) {
             computed.put(group, new ArrayList<>());
+            if (!(group instanceof SkyblockFamilyStackGroup)) {
+                foreignGroups.add(group);
+            }
         }
         for (Item item : BuiltInRegistries.ITEM) {
             ItemStack plain = new ItemStack(item);
             List<ItemStack> itemSensitives = sensitives.get(item);
-            for (AbstractStackGroup group : groups) {
-                List<ItemStack> members = computed.get(group);
-                if (itemSensitives != null) {
-                    for (ItemStack sensitive : itemSensitives) {
+            if (itemSensitives != null) {
+                for (ItemStack sensitive : itemSensitives) {
+                    String skyblockId = SkyblockIdExtractor.extract(sensitive);
+                    if (skyblockId != null) {
+                        SkyblockFamilyStackGroup family = SkyblockStackGroups.groupFor(skyblockId);
+                        if (family != null) {
+                            // Absent when the snapshot changed mid-computation; the
+                            // generation check at publish discards the result anyway.
+                            List<ItemStack> members = computed.get(family);
+                            if (members != null) {
+                                members.add(sensitive);
+                            }
+                        }
+                        continue; // SkyBlock stacks never join vanilla groups
+                    }
+                    for (AbstractStackGroup group : foreignGroups) {
                         if (group.match(sensitive)) {
-                            members.add(sensitive);
+                            computed.get(group).add(sensitive);
                         }
                     }
                 }
+            }
+            for (AbstractStackGroup group : foreignGroups) {
                 if (group.match(plain)) {
-                    members.add(plain);
+                    computed.get(group).add(plain);
                 }
             }
         }

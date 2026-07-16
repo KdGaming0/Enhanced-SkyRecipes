@@ -8,6 +8,7 @@ import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
 import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
+import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsCache;
@@ -30,6 +31,7 @@ import com.github.kdgaming0.skyrecipes.mixin.accessor.ItemViewOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -532,10 +534,12 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             long start = System.currentTimeMillis();
             FamilyResolver resolver = new FamilyResolver(
                     SkyRecipes.getConstantsRegistry(),
-                    SkyRecipes.getItemRegistry()
+                    SkyRecipes.getItemRegistry(),
+                    SkyRecipesConfig.groupCraftedChains
             );
             SkyblockRecipeCache.setFamilyResolver(resolver);
             SkyblockRecipeCache.rebuild(recipeResult.recipes());
+            SkyblockStackGroups.rebuild(resolver, SkyRecipes.getItemRegistry());
             PipelineStatus.recordStageDuration("prep", System.currentTimeMillis() - start);
             return resolver;
         }, SkyRecipesExecutors.worker()).thenAccept(_ -> {
@@ -672,6 +676,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         injectionInProgress = false;
         startupFinalized = true;
         firstInjection = false;
+
+        // Publish this cycle's SkyBlock family groups before the prewarm below computes
+        // group contents, so their members are included.
+        SkyblockStackGroups.injectInto();
 
         // Group-content memo entries built mid-batch missed later-registered stacks;
         // prewarm so the first search keystroke never pays the group sweep.

@@ -22,6 +22,12 @@ public enum FamilyType {
      */
     STARRED,
     /**
+     * Named armor upgrade lines: crafted successor pieces
+     * (MELON → CROPIE → … → HELIANTHUS) and Kuudra prefix ladders
+     * (CRIMSON → HOT_CRIMSON → … → INFERNAL_CRIMSON).
+     */
+    UPGRADE_CHAIN,
+    /**
      * One base item that branches into multiple named variants.
      */
     BRANCHING,
@@ -48,8 +54,18 @@ public enum FamilyType {
      */
     public boolean expandsForResults() {
         return switch (this) {
-            case TIERED, ACCESSORY_CHAIN, STARRED, BRANCHING -> true;
+            case TIERED, ACCESSORY_CHAIN, STARRED, BRANCHING, UPGRADE_CHAIN -> true;
             default -> false;
         };
+    }
+
+    /**
+     * Returns true if members of this family should collapse into one stack group in
+     * the item list. BRANCHING expands for recipe lookup but never groups: its members
+     * are mutually exclusive one-step side-grades of a base item (Necron Blade →
+     * Astraea/Hyperion/Scylla/Valkyrie), not an upgrade line.
+     */
+    public boolean formsStackGroup() {
+        return expandsForResults() && this != BRANCHING;
     }
 }

@@ -1,7 +1,8 @@
-### 0.3.1
+### 0.4.0
 
-- The Reforge tab now shows up reliably. Press R or U on any reforgeable item and you'll get a Reforge tab next to the recipe, listing every reforge that fits — and it shows the stats for *your* item's rarity instead of a mix of rarities.
-- Clicking a Reforge Stone in the item list now opens the reforge it applies (across all rarities) instead of just its info page. For items whose only other entry is an info page, the Reforge tab now opens by default.
-- Added all-rarities reforge view (shown when clicking a reforge stone), instead of one card per rarity. All rarities are now shown in a single card, with the stats for each rarity listed.
-- Item list items now correctly use custom textures from resource packs
-- Fixed a massive freeze when typing in the item list search bar with Reliable Recipe Viewer 8.6.0. RRV's new item-grouping feature recomputed each group's contents from scratch on every keystroke; SkyRecipes now works them out once in the background right after loading and cache training.
+- Tiered SkyBlock items are now grouped in the item list: each minion, pet, enchantment, drill, and accessory upgrade line collapses into a single expandable entry instead of listing every tier separately. Click a group to expand it; searching still shows exact tiers directly.
+- SkyBlock items no longer get pulled into Reliable Recipe Viewer's built-in vanilla groups — previously every SkyBlock enchantment book was lumped into one giant "Enchanted Books" stack.
+- Grouping can be turned off with the new "Group Tiered Items" setting, and individual groups can be managed in RRV's Stack Groups screen.
+- Accessory upgrade lines (Talisman → Ring → Artifact → Relic) now group correctly — previously most of them were not recognized as upgrade chains.
+- Armor upgrade lines now group too: Kuudra armor (Crimson/Aurora/Terror/Fervor/Hollow → Hot → Burning → Fiery → Infernal) and crafted upgrade lines like Melon → Cropie → Squash → Fermento → Helianthus, Hardened Diamond → Mineral → Glossy Mineral, Snorkeling → Diver → Abyssal, and many more.
+- Items that craft directly into one another now group as upgrade chains: compaction lines (Diamond → Enchanted Diamond → Enchanted Diamond Block), weapon lines (Aspect of the End → Aspect of the Void, Spider Sword → … → Sting), fishing rods, wands, and similar. Controlled by the new "Group Crafted Upgrade Chains" setting (takes effect after the next data load).

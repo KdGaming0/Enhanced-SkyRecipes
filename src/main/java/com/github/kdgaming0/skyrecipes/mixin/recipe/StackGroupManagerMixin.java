@@ -3,7 +3,10 @@ package com.github.kdgaming0.skyrecipes.mixin.recipe;
 import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.recipe.stackgroup.StackGroupManager;
 import cc.cassian.rrv.common.recipe.stackgroup.data.AbstractStackGroup;
+import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockFamilyStackGroup;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -40,7 +43,13 @@ import java.util.Set;
  * replaced with an equivalent implementation using a hash-set dedup keyed to
  * {@code ItemStack.isSameItemSameComponents} semantics.</p>
  *
- * <p><b>Upstream:</b> RRV bug, worth filing; remove this mixin if RRV caches group contents.</p>
+ * <p><b>Upstream:</b> RRV bug, worth filing; remove the memoization parts if RRV caches
+ * group contents.</p>
+ *
+ * <p>This mixin is also the integration point for SkyBlock family stack groups
+ * ({@code SkyblockStackGroups}): re-injection after RRV's reload clears the group list,
+ * per-stack (rather than per-{@code Item}) group resolution for stacks carrying a
+ * SkyBlock ID, and tier-ordered member sorting.</p>
  */
 @Mixin(value = StackGroupManager.class, remap = false)
 public class StackGroupManagerMixin {
@@ -81,8 +90,43 @@ public class StackGroupManagerMixin {
     /** RETURN (not TAIL): reload() has an early return when stack groups are disabled. */
     @Inject(method = "reload", at = @At("RETURN"))
     private static void skyrecipes$invalidateOnReload(CallbackInfo ci) {
+        // reload() cleared the group list; re-add the SkyBlock family groups before the
+        // prewarm so it computes their contents too.
+        SkyblockStackGroups.injectInto();
         StackGroupItemsCache.invalidate();
         StackGroupItemsCache.prewarm();
+    }
+
+    /**
+     * Per-stack group resolution for SkyBlock items. RRV's own lookup caches the result
+     * per Minecraft {@code Item} — but nearly all SkyBlock items share a handful of
+     * vanilla items (player heads, enchanted books, …), so that cache would pin every
+     * player-head stack to whichever family the first one matched. SkyBlock stacks
+     * resolve through an O(1) SkyBlock-ID map instead; returning null (rather than
+     * falling through) also keeps them out of RRV's vanilla groups when family grouping
+     * is disabled.
+     */
+    @Inject(method = "getGroupForItem", at = @At("HEAD"), cancellable = true)
+    private static void skyrecipes$resolveSkyblockGroup(ItemStack stack,
+                                                        CallbackInfoReturnable<AbstractStackGroup> cir) {
+        String skyblockId = SkyblockIdExtractor.extract(stack);
+        if (skyblockId != null) {
+            cir.setReturnValue(SkyblockStackGroups.isActive()
+                    ? SkyblockStackGroups.groupFor(skyblockId) : null);
+        }
+    }
+
+    /**
+     * Family groups sort by tier, not registry order — RRV's fallback ordering is keyed
+     * by the vanilla {@code Item}, which is identical for every member of a family.
+     * A user-configured order from RRV's group screen still wins (handled inside).
+     */
+    @Inject(method = "sortByGroupOrder", at = @At("HEAD"), cancellable = true)
+    private static void skyrecipes$sortFamilyGroupsByTier(List<ItemStack> items, Identifier groupId,
+                                                          CallbackInfo ci) {
+        if (SkyblockStackGroups.sortIfFamilyGroup(items, groupId)) {
+            ci.cancel();
+        }
     }
 
     /**
@@ -107,10 +151,18 @@ public class StackGroupManagerMixin {
         }
 
         for (AbstractStackGroup group : StackGroupManager.stackGroups) {
-            boolean match = group.getId().toString().toLowerCase(Locale.ROOT).contains(lower);
-            if (!match) {
-                Component groupName = group.getName();
-                match = groupName != null && groupName.getString().toLowerCase(Locale.ROOT).contains(lower);
+            boolean match;
+            if (group instanceof SkyblockFamilyStackGroup familyGroup) {
+                // Family groups match on their display name only, and never on 1-char
+                // queries: with 1000+ generated groups, RRV's id-substring rule would
+                // append most of the item database on the first keystroke.
+                match = lower.length() >= 2 && familyGroup.lowercaseName().contains(lower);
+            } else {
+                match = group.getId().toString().toLowerCase(Locale.ROOT).contains(lower);
+                if (!match) {
+                    Component groupName = group.getName();
+                    match = groupName != null && groupName.getString().toLowerCase(Locale.ROOT).contains(lower);
+                }
             }
             if (!match) continue;
 
