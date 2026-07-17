@@ -6,6 +6,7 @@ import com.github.kdgaming0.skyrecipes.core.recipe.util.ParserUtil;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockInfoClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -91,13 +92,13 @@ public final class NpcInfoRecipeBuilder {
 
         String island = formatIsland(item.island());
         if (!island.isEmpty()) {
-            lines.add(Component.literal("Island:"));
+            lines.add(RecipeUiHelper.label("Island:"));
             lines.add(Component.literal("  " + island));
         }
 
         if (item.x() != 0 || item.y() != 0 || item.z() != 0) {
             String coords = item.x() + ", " + item.y() + ", " + item.z();
-            lines.add(Component.literal("Location:"));
+            lines.add(RecipeUiHelper.label("Location:"));
             lines.add(Component.literal("  " + coords));
         }
 

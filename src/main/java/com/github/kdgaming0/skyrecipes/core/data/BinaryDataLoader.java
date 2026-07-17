@@ -24,7 +24,7 @@ import java.util.*;
  */
 public class BinaryDataLoader {
 
-    public static final int EXPECTED_SCHEMA = 9;
+    public static final int EXPECTED_SCHEMA = 10;
     private static final int HEADER_SIZE = 96;
     private static final long MAX_METADATA_LENGTH = 1 << 20;
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);
@@ -478,6 +478,7 @@ public class BinaryDataLoader {
         Map<String, String> reforgeNameToStone = new LinkedHashMap<>();
         Map<String, MobRenderDefinition> mobDefinitions = new LinkedHashMap<>();
         Map<String, byte[]> mobSkins = new LinkedHashMap<>();
+        Map<String, AttributeShardData> attributeShards = new LinkedHashMap<>();
 
         for (int i = 0; i < mapSize; i++) {
             String key = unpacker.unpackString();
@@ -635,10 +636,39 @@ public class BinaryDataLoader {
                         mobSkins.put(path, bytes);
                     }
                 }
+                case "attributeShards" -> {
+                    int ssize = unpacker.unpackMapHeader();
+                    for (int j = 0; j < ssize; j++) {
+                        String internalName = unpacker.unpackString();
+                        int smapSize = unpacker.unpackMapHeader();
+                        String shardName = "";
+                        String abilityName = "";
+                        String rarity = "";
+                        String alignment = "";
+                        List<String> family = Collections.emptyList();
+                        String shardId = "";
+                        String bazaarName = "";
+                        for (int k = 0; k < smapSize; k++) {
+                            String sk = unpacker.unpackString();
+                            switch (sk) {
+                                case "shardName" -> shardName = unpacker.unpackString();
+                                case "abilityName" -> abilityName = unpacker.unpackString();
+                                case "rarity" -> rarity = unpacker.unpackString();
+                                case "alignment" -> alignment = unpacker.unpackString();
+                                case "family" -> family = unpackStringList(unpacker);
+                                case "shardId" -> shardId = unpacker.unpackString();
+                                case "bazaarName" -> bazaarName = unpacker.unpackString();
+                                default -> unpacker.skipValue();
+                            }
+                        }
+                        attributeShards.put(internalName, new AttributeShardData(
+                                internalName, shardName, abilityName, rarity, alignment, family, shardId, bazaarName));
+                    }
+                }
                 default -> unpacker.skipValue();
             }
         }
-        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins, museumChildren);
+        return new ConstantsRegistry(parents, essenceCosts, bazaarItems, museumCategories, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins, museumChildren, attributeShards);
     }
 
     private MobRenderDefinition unpackMobRenderDefinition(MessageUnpacker unpacker) throws IOException {

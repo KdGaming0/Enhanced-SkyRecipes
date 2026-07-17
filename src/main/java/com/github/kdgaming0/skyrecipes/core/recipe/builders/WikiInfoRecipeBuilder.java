@@ -59,12 +59,12 @@ public final class WikiInfoRecipeBuilder {
 
         String formattedCraft = RecipeUiHelper.formatCraftText(item.craftText());
         if (!formattedCraft.isEmpty()) {
-            lines.add(Component.literal("Req: " + formattedCraft));
+            lines.add(RecipeUiHelper.labeledLine("Req:", formattedCraft));
         }
 
         String formattedSlayer = RecipeUiHelper.formatSlayerReq(item.slayerReq());
         if (!formattedSlayer.isEmpty()) {
-            lines.add(Component.literal("Slayer: " + formattedSlayer));
+            lines.add(RecipeUiHelper.labeledLine("Slayer:", formattedSlayer));
         }
 
         return lines;

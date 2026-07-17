@@ -5,7 +5,9 @@ import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.model.NeuRecipe;
 import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutation;
 import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutationRegistry;
+import com.github.kdgaming0.skyrecipes.core.model.AttributeShardData;
 import com.github.kdgaming0.skyrecipes.core.recipe.builders.NpcInfoRecipeBuilder;
+import com.github.kdgaming0.skyrecipes.core.recipe.builders.ShardInfoRecipeBuilder;
 import com.github.kdgaming0.skyrecipes.core.recipe.builders.WikiInfoRecipeBuilder;
 import com.github.kdgaming0.skyrecipes.core.recipe.generators.EssenceUpgradeGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.generators.ReforgeRecipeGenerator;
@@ -67,10 +69,24 @@ public final class RecipeGenerator {
                 }
             }
 
-            // Wiki info recipes (skip NPCs — they get a unified NPC info card instead)
+            // Attribute shard info recipes (from constants) — shards otherwise have
+            // no recipe or info data at all, so this is their only card
+            AttributeShardData shard = constantsRegistry != null
+                    ? constantsRegistry.getAttributeShard(item.internalName())
+                    : null;
+            if (shard != null) {
+                ReliableClientRecipe shardRecipe = ShardInfoRecipeBuilder.build(item, shard);
+                if (shardRecipe != null) {
+                    recipes.add(shardRecipe);
+                    indexRecipe(shardRecipe, item, List.of(), indexBuilder);
+                }
+            }
+
+            // Wiki info recipes (skip NPCs — they get a unified NPC info card instead;
+            // skip shards — their card above already carries the wiki URLs)
             String internalName = item.internalName();
             boolean isNpc = internalName != null && internalName.endsWith("_NPC");
-            if (!isNpc && item.infoType() != null && !item.infoType().isEmpty() && item.info() != null && !item.info().isEmpty()) {
+            if (!isNpc && shard == null && item.infoType() != null && !item.infoType().isEmpty() && item.info() != null && !item.info().isEmpty()) {
                 List<ReliableClientRecipe> wikiRecipes = WikiInfoRecipeBuilder.build(item);
                 for (ReliableClientRecipe recipe : wikiRecipes) {
                     recipes.add(recipe);

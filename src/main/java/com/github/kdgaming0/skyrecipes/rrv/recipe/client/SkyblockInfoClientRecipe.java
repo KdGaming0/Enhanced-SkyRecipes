@@ -36,7 +36,11 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     private static final int INFO_START_Y = 36;
     private static final int LINE_HEIGHT = 10;
     private static final int TEXT_MAX_WIDTH = 112;
-    private static final int MAX_INFO_LINES = 4;
+    private static final int INFO_TEXT_X = 6;
+    /** Wrap width for info lines: card width minus the left indent on both sides. */
+    private static final int INFO_WRAP_WIDTH = 108;
+    /** Total rendered (post-wrap) lines that fit between INFO_START_Y and the buttons. */
+    private static final int MAX_RENDERED_LINES = 6;
 
     private static final int NAV_BUTTON_WIDTH = 56;
     private static final int NAV_BUTTON_HEIGHT = 12;
@@ -47,25 +51,35 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     private final List<Component> infoLines;
     private final boolean isNpc;
     private final String npcDisplayName;
+    /** Search text for the in-game /bz command; empty hides the Bazaar button. */
+    private final String bazaarSearch;
     private volatile SlotContent lazyDisplayItem;
     private volatile Component lazyTitle;
 
     public SkyblockInfoClientRecipe(Identifier id, NeuItem neuItem,
                                     String displayName, List<Component> infoLines,
                                     List<String> wikiUrls) {
-        this(id, neuItem, displayName, infoLines, wikiUrls, false, "");
+        this(id, neuItem, displayName, infoLines, wikiUrls, false, "", "");
     }
 
     public SkyblockInfoClientRecipe(Identifier id, NeuItem neuItem,
                                     String displayName, List<Component> infoLines,
                                     List<String> wikiUrls, boolean isNpc,
                                     String npcDisplayName) {
+        this(id, neuItem, displayName, infoLines, wikiUrls, isNpc, npcDisplayName, "");
+    }
+
+    public SkyblockInfoClientRecipe(Identifier id, NeuItem neuItem,
+                                    String displayName, List<Component> infoLines,
+                                    List<String> wikiUrls, boolean isNpc,
+                                    String npcDisplayName, String bazaarSearch) {
         super(id, wikiUrls);
         this.neuItem = neuItem;
         this.rawDisplayName = displayName != null ? displayName : "";
         this.infoLines = infoLines != null ? List.copyOf(infoLines) : List.of();
         this.isNpc = isNpc;
         this.npcDisplayName = npcDisplayName != null ? npcDisplayName : "";
+        this.bazaarSearch = bazaarSearch != null ? bazaarSearch : "";
     }
 
     private static String stripFormatting(String raw) {
@@ -157,13 +171,18 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         int titleX = (pos.width() - titleWidth) / 2;
         graphics.text(font, title, titleX, TITLE_Y, RecipeUiHelper.TEXT_WHITE, true);
 
-        // Info lines — left-aligned with indent, relative to card origin (white with shadow)
+        // Info lines — left-aligned with indent, relative to card origin (white with
+        // shadow), word-wrapped to the card width up to a total rendered-line budget
         int y = INFO_START_Y;
-        int lineCount = Math.min(infoLines.size(), MAX_INFO_LINES);
-        for (int i = 0; i < lineCount; i++) {
-            Component line = infoLines.get(i);
-            graphics.text(font, line, 6, y, RecipeUiHelper.TEXT_WHITE, true);
-            y += LINE_HEIGHT;
+        int rendered = 0;
+        outer:
+        for (Component line : infoLines) {
+            for (var wrapped : font.split(line, INFO_WRAP_WIDTH)) {
+                if (rendered >= MAX_RENDERED_LINES) break outer;
+                graphics.text(font, wrapped, INFO_TEXT_X, y, RecipeUiHelper.TEXT_WHITE, true);
+                y += LINE_HEIGHT;
+                rendered++;
+            }
         }
 
         maintainButtons(screen, pos);
@@ -181,7 +200,42 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
             }
         }
 
+        // Bazaar and navigate buttons share the same slot; they never co-occur
+        // (navigate is NPC-only, bazaar is item-only).
+        if (!bazaarSearch.isEmpty()) {
+            Button bzBtn = placeBazaarButton(screen, pos, sentinel != null);
+            if (bzBtn != null) {
+                sentinel = bzBtn;
+            }
+        }
+
         return sentinel;
+    }
+
+    @Nullable
+    private Button placeBazaarButton(RecipeViewScreen screen, RecipePosition pos,
+                                     boolean hasWikiButton) {
+        int btnY = pos.top() + getType().getDisplayHeight() - NAV_BUTTON_HEIGHT - 4;
+        int btnX;
+        if (hasWikiButton) {
+            btnX = pos.left() + getType().getDisplayWidth() - 16 - BUTTON_GAP - NAV_BUTTON_WIDTH;
+        } else {
+            btnX = pos.left() + getType().getDisplayWidth() - NAV_BUTTON_WIDTH - 4;
+        }
+
+        Button btn = Button.builder(Component.literal("⚖ Bazaar"), _ -> sendBazaarCommand())
+                .pos(btnX, btnY)
+                .size(NAV_BUTTON_WIDTH, NAV_BUTTON_HEIGHT)
+                .build();
+        screen.addRecipeWidget(btn);
+        return btn;
+    }
+
+    private void sendBazaarCommand() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && mc.getConnection() != null) {
+            mc.getConnection().sendCommand("bz " + bazaarSearch);
+        }
     }
 
     @SuppressWarnings({"NullableProblems", "ConstantValue"})

@@ -40,7 +40,7 @@ public class BinaryDataCompiler {
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[]{'S', 'K', 'Y', '2'};
-    private static final int SCHEMA_VERSION = 9;
+    private static final int SCHEMA_VERSION = 10;
     private static final int HEADER_SIZE = 96;
     private static final int SECTION_COUNT = 3; // items, constants, metadata
     /**
@@ -163,9 +163,10 @@ public class BinaryDataCompiler {
         Map<String, ReforgeStoneData> reforgeStones = new LinkedHashMap<>();
         Map<String, MobRenderDefinition> mobDefinitions = new LinkedHashMap<>();
         Map<String, byte[]> mobSkins = new LinkedHashMap<>();
+        Map<String, AttributeShardData> attributeShards = new LinkedHashMap<>();
         this.petResolver = null;
 
-        ParseStats parseStats = parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, museumChildren, reforges, reforgeStones, mobDefinitions, mobSkins);
+        ParseStats parseStats = parseZip(zipPath, items, parents, essenceCosts, bazaarItems, museumCategories, museumChildren, reforges, reforgeStones, mobDefinitions, mobSkins, attributeShards);
 
         if (items.isEmpty()) {
             throw new IOException("Parsed 0 items from NEU repo ZIP — archive corrupt or format changed");
@@ -184,8 +185,8 @@ public class BinaryDataCompiler {
         if (callback != null) callback.onProgress("Serializing", 50);
 
         LOGGER.info("Parsed items: {} ok / {} failed", items.size(), parseStats.itemFailures());
-        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones, {} known stats, {} reforge name mappings, {} mob defs, {} mob skins",
-                parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size(), mobDefinitions.size(), mobSkins.size());
+        LOGGER.info("Constants: {} parents, {} essence costs, {} bazaar items, {} museum entries, {} reforges, {} reforge stones, {} known stats, {} reforge name mappings, {} mob defs, {} mob skins, {} attribute shards",
+                parents.size(), essenceCosts.size(), bazaarItems.size(), museumCategories.size(), reforges.size(), reforgeStones.size(), knownStats.size(), reforgeNameToStone.size(), mobDefinitions.size(), mobSkins.size(), attributeShards.size());
 
         // Write binary
         Files.createDirectories(outputPath.getParent());
@@ -221,7 +222,7 @@ public class BinaryDataCompiler {
             packer.flush();
             itemsLength = counter.count();
 
-            packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, museumChildren, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins);
+            packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, museumChildren, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins, attributeShards);
             packer.flush();
             constantsLength = counter.count() - itemsLength;
 
@@ -423,7 +424,8 @@ public class BinaryDataCompiler {
                                 Map<String, ReforgeData> reforges,
                                 Map<String, ReforgeStoneData> reforgeStones,
                                 Map<String, MobRenderDefinition> mobDefinitions,
-                                Map<String, byte[]> mobSkins) throws IOException {
+                                Map<String, byte[]> mobSkins,
+                                Map<String, AttributeShardData> attributeShards) throws IOException {
 
         String prefix = null;
 
@@ -466,6 +468,8 @@ public class BinaryDataCompiler {
                             parseReforges(bytes, reforges);
                         } else if (name.equals(prefix + "constants/reforgestones.json")) {
                             parseReforgeStones(bytes, reforgeStones);
+                        } else if (name.equals(prefix + "constants/attribute_shards.json")) {
+                            parseAttributeShards(bytes, attributeShards);
                         } else if (name.equals(prefix + "constants/petnums.json")) {
                             this.petResolver = PetStatResolver.load(JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject());
                         } else if (name.startsWith(prefix + "mobs/") && name.endsWith(".json")) {
@@ -767,6 +771,28 @@ public class BinaryDataCompiler {
                     }
                 }
             }
+        }
+    }
+
+    private void parseAttributeShards(byte[] bytes, Map<String, AttributeShardData> attributeShards) {
+        JsonObject obj = JsonParser.parseString(new String(bytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonElement attributes = obj.get("attributes");
+        if (attributes == null || !attributes.isJsonArray()) return;
+        for (JsonElement e : attributes.getAsJsonArray()) {
+            if (!e.isJsonObject()) continue;
+            JsonObject shard = e.getAsJsonObject();
+            String internalName = JsonUtil.getString(shard, "internalName");
+            if (internalName.isEmpty()) continue;
+            attributeShards.put(internalName, new AttributeShardData(
+                    internalName,
+                    JsonUtil.getString(shard, "displayName"),
+                    JsonUtil.getString(shard, "abilityName"),
+                    JsonUtil.getString(shard, "rarity"),
+                    JsonUtil.getString(shard, "alignment"),
+                    JsonUtil.getStringList(shard, "family"),
+                    JsonUtil.getString(shard, "shardId"),
+                    JsonUtil.getString(shard, "bazaarName")
+            ));
         }
     }
 
@@ -1186,8 +1212,9 @@ public class BinaryDataCompiler {
                                Set<String> knownStats,
                                Map<String, String> reforgeNameToStone,
                                Map<String, MobRenderDefinition> mobDefinitions,
-                               Map<String, byte[]> mobSkins) throws IOException {
-        packer.packMapHeader(11);
+                               Map<String, byte[]> mobSkins,
+                               Map<String, AttributeShardData> attributeShards) throws IOException {
+        packer.packMapHeader(12);
 
         packer.packString("parents");
         packer.packMapHeader(parents.size());
@@ -1394,6 +1421,29 @@ public class BinaryDataCompiler {
             packer.packString(e.getKey());
             packer.packBinaryHeader(e.getValue().length);
             packer.addPayload(e.getValue());
+        }
+
+        packer.packString("attributeShards");
+        packer.packMapHeader(attributeShards.size());
+        for (Map.Entry<String, AttributeShardData> e : attributeShards.entrySet()) {
+            packer.packString(e.getKey());
+            AttributeShardData d = e.getValue();
+            packer.packMapHeader(7);
+            packer.packString("shardName");
+            packer.packString(d.shardName());
+            packer.packString("abilityName");
+            packer.packString(d.abilityName());
+            packer.packString("rarity");
+            packer.packString(d.rarity());
+            packer.packString("alignment");
+            packer.packString(d.alignment());
+            packer.packString("family");
+            packer.packArrayHeader(d.family().size());
+            for (String f : d.family()) packer.packString(f);
+            packer.packString("shardId");
+            packer.packString(d.shardId());
+            packer.packString("bazaarName");
+            packer.packString(d.bazaarName());
         }
     }
 

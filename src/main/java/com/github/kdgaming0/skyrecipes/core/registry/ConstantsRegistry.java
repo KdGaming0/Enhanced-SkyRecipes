@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.registry;
 
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
+import com.github.kdgaming0.skyrecipes.core.model.AttributeShardData;
 import com.github.kdgaming0.skyrecipes.core.model.EssenceUpgradeData;
 import com.github.kdgaming0.skyrecipes.core.model.ReforgeData;
 import com.github.kdgaming0.skyrecipes.core.model.ReforgeStoneData;
@@ -27,6 +28,7 @@ public final class ConstantsRegistry {
     private final Map<String, String> reforgeNameToStone;
     private final Map<String, MobRenderDefinition> mobDefinitions;
     private final Map<String, byte[]> mobSkins;
+    private final Map<String, AttributeShardData> attributeShards;
 
     public ConstantsRegistry(
             Map<String, List<String>> parents,
@@ -99,6 +101,26 @@ public final class ConstantsRegistry {
             Map<String, byte[]> mobSkins,
             Map<String, String> museumChildren
     ) {
+        this(parents, essenceCosts, bazaarItems, museumCategories,
+                reforges, reforgeStones, knownStats, reforgeNameToStone,
+                mobDefinitions, mobSkins, museumChildren, Collections.emptyMap());
+    }
+
+    public ConstantsRegistry(
+            Map<String, List<String>> parents,
+            Map<String, EssenceUpgradeData> essenceCosts,
+            Set<String> bazaarItems,
+            Map<String, String> museumCategories,
+            Map<String, ReforgeData> reforges,
+            Map<String, ReforgeStoneData> reforgeStones,
+            Set<String> knownStats,
+            Map<String, String> reforgeNameToStone,
+            Map<String, MobRenderDefinition> mobDefinitions,
+            Map<String, byte[]> mobSkins,
+            Map<String, String> museumChildren,
+            Map<String, AttributeShardData> attributeShards
+    ) {
+        this.attributeShards = attributeShards != null ? Collections.unmodifiableMap(attributeShards) : Collections.emptyMap();
         this.museumChildren = museumChildren != null ? Collections.unmodifiableMap(museumChildren) : Collections.emptyMap();
         this.parents = parents != null ? Collections.unmodifiableMap(parents) : Collections.emptyMap();
         this.essenceCosts = essenceCosts != null ? Collections.unmodifiableMap(essenceCosts) : Collections.emptyMap();
@@ -209,5 +231,14 @@ public final class ConstantsRegistry {
 
     public Map<String, byte[]> getAllMobSkins() {
         return mobSkins;
+    }
+
+    /** Attribute shard metadata keyed by NEU internal name (e.g. "ATTRIBUTE_SHARD_EARTH_ELEMENTAL;1"). */
+    public AttributeShardData getAttributeShard(String internalName) {
+        return attributeShards.get(internalName);
+    }
+
+    public Map<String, AttributeShardData> getAllAttributeShards() {
+        return attributeShards;
     }
 }

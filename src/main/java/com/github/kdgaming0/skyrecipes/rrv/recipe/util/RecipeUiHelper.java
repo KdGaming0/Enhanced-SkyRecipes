@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.util;
 
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 
@@ -137,6 +138,29 @@ public final class RecipeUiHelper {
             }
         }
         return raw.substring(i);
+    }
+
+    /**
+     * Style applied to every info-card label prefix ("Ability:", "Island:",
+     * "Req:", …). Edit this one constant to restyle all cards.
+     */
+    private static final ChatFormatting[] LABEL_STYLE = {ChatFormatting.GREEN, ChatFormatting.ITALIC};
+
+    /**
+     * A standalone info-card label (e.g. "Island:") in the shared label style.
+     */
+    public static Component label(String label) {
+        return Component.literal(label).withStyle(LABEL_STYLE);
+    }
+
+    /**
+     * "Label: value" info-card line. Built on an empty parent so the value
+     * does not inherit the label style.
+     */
+    public static Component labeledLine(String label, String value) {
+        return Component.empty()
+                .append(label(label))
+                .append(Component.literal(" " + value));
     }
 
     /**
