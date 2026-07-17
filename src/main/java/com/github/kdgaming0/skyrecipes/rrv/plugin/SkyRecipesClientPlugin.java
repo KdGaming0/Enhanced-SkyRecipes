@@ -11,6 +11,10 @@ import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
+import com.github.kdgaming0.skyrecipes.core.fusion.ShardFusionData;
+import com.github.kdgaming0.skyrecipes.core.fusion.ShardFusionFetcher;
+import com.github.kdgaming0.skyrecipes.core.fusion.ShardFusionMpkCache;
+import com.github.kdgaming0.skyrecipes.core.fusion.ShardFusionRegistry;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsCache;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsFetcher;
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsRegistry;
@@ -95,6 +99,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      * How long generation waits for Hypixel stats before proceeding with fallback values.
      */
     private static final long HYPIXEL_WAIT_SECONDS = 5;
+    /**
+     * How long generation waits for the shard fusion fetch before proceeding without it.
+     */
+    private static final long SHARD_FUSION_WAIT_SECONDS = 10;
     private static volatile boolean recipesReady = false;
     /**
      * True from the injection commit point in {@link #beginBatchedInjection} until
@@ -179,6 +187,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      */
     private volatile boolean cacheHasSkyRecipesEntries = false;
     private volatile CompletableFuture<?> hypixelFetch = null;
+    private volatile CompletableFuture<?> shardFusionCacheLoad = null;
+    private volatile CompletableFuture<?> shardFusionFetch = null;
     private volatile RecipeResult pendingRecipeResult = null;
     private volatile StackBuildResult pendingStackResult = null;
     private StartupBatcher startupBatcher = null;
@@ -327,6 +337,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         SkyRecipes.addDataReadyListener(_ -> {
             resetPipelineCycle();
             startHypixelFetch();
+            startShardFusionFetch();
             startWorkIfReady();
 
             Minecraft mc = Minecraft.getInstance();
@@ -443,6 +454,67 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 LOGGER.warn("Hypixel fetch failed", e);
             }
         }, SkyRecipesExecutors.worker());
+    }
+
+    /**
+     * Load the SkyShards fusion dataset: MPK disk cache first (instant — recipe
+     * generation never waits on the network when a cache exists), then a
+     * background ETag-conditional refresh, mirroring the NEU repo's
+     * update-detection. A 304 costs a few hundred bytes; new data is saved back
+     * to the MPK cache and picked up by the next generation cycle.
+     */
+    private void startShardFusionFetch() {
+        if (!SkyRecipesConfig.shardFusionRecipes) return;
+        CompletableFuture<?> inFlight = shardFusionFetch;
+        if (inFlight != null && !inFlight.isDone()) return;
+
+        CompletableFuture<?> cacheLoad =
+                CompletableFuture.runAsync(this::loadShardFusionCache, SkyRecipesExecutors.worker());
+        shardFusionCacheLoad = cacheLoad;
+        shardFusionFetch =
+                cacheLoad.thenRunAsync(this::refreshShardFusionsFromNetwork, SkyRecipesExecutors.worker());
+    }
+
+    private void loadShardFusionCache() {
+        try {
+            if (ShardFusionRegistry.get() == null) {
+                ShardFusionMpkCache.Loaded cached =
+                        ShardFusionMpkCache.load(SkyRecipes.getCacheLayout().shardFusionsFile());
+                if (cached != null) {
+                    ShardFusionRegistry.load(cached.data(), cached.etag());
+                    LOGGER.info("Loaded shard fusion data from cache: {} shards, {} pairs",
+                            cached.data().shardCount(), cached.data().totalPairs());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Shard fusion cache load failed", e);
+        }
+    }
+
+    private void refreshShardFusionsFromNetwork() {
+        try {
+            String etag = ShardFusionRegistry.get() != null ? ShardFusionRegistry.getEtag() : null;
+            ShardFusionFetcher.FetchResult result =
+                    ShardFusionFetcher.fetch(SkyRecipesExecutors.httpClient(), etag);
+            if (result == null) {
+                if (ShardFusionRegistry.get() == null) {
+                    LOGGER.warn("Shard fusion data unavailable and no cache — fusion recipes will be absent");
+                }
+                return;
+            }
+            if (result.notModified()) {
+                LOGGER.debug("Shard fusion data unchanged (ETag match)");
+                return;
+            }
+            ShardFusionData parsed = ShardFusionFetcher.parse(result.body());
+            if (parsed == null) return;
+            ShardFusionRegistry.load(parsed, result.etag());
+            ShardFusionMpkCache.save(SkyRecipes.getCacheLayout().shardFusionsFile(), parsed, result.etag());
+            LOGGER.info("Fetched shard fusion data: {} shards, {} pairs",
+                    parsed.shardCount(), parsed.totalPairs());
+        } catch (Exception e) {
+            LOGGER.warn("Shard fusion refresh failed", e);
+        }
     }
 
     /**
@@ -773,11 +845,39 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         }
     }
 
+    /**
+     * Wait briefly for shard fusion data so fusion cards are part of this
+     * generation cycle. The MPK cache load is near-instant; the network fetch
+     * (first run only — a cache hit never blocks on the network) gets a longer
+     * budget since the file is ~2 MB. On a miss the cycle simply generates
+     * without fusion recipes.
+     */
+    private void awaitShardFusionFetch() {
+        CompletableFuture<?> cacheLoad = shardFusionCacheLoad;
+        if (cacheLoad == null) return;
+        try {
+            cacheLoad.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            LOGGER.debug("Shard fusion cache load not ready", e);
+        }
+        if (ShardFusionRegistry.get() != null) return;
+
+        CompletableFuture<?> fetch = shardFusionFetch;
+        if (fetch == null) return;
+        try {
+            fetch.get(SHARD_FUSION_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            LOGGER.debug("Shard fusion data not ready after {} s — generating without fusion recipes",
+                    SHARD_FUSION_WAIT_SECONDS);
+        }
+    }
+
     private RecipeResult generateRecipes() {
         ItemRegistry registry = SkyRecipes.getItemRegistry();
         if (registry == null) return null;
         try {
             awaitHypixelFetch();
+            awaitShardFusionFetch();
             long start = System.currentTimeMillis();
             ConstantsRegistry constants = SkyRecipes.getConstantsRegistry();
             RecipeGenerator generator = new RecipeGenerator(registry, constants);

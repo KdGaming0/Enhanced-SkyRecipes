@@ -23,7 +23,46 @@ import java.util.List;
  */
 public final class ShardInfoRecipeBuilder {
 
+    private static final String ATTRIBUTE_WIKI_BASE = "https://hypixelskyblock.minecraft.wiki/w/Attributes#";
+
     private ShardInfoRecipeBuilder() {
+    }
+
+    /**
+     * Wiki URL for a shard's attribute section, generated from the attribute
+     * name (e.g. "Strong Arms" → {@code .../w/Attributes#Strong_Arms}) — NEU
+     * shard items carry no wiki links of their own.
+     *
+     * @return a single-element list, or an empty list when no attribute name is known
+     */
+    public static List<String> attributeWikiUrls(AttributeShardData shard) {
+        if (shard == null || shard.abilityName().isEmpty()) {
+            return List.of();
+        }
+        return List.of(ATTRIBUTE_WIKI_BASE + shard.abilityName().trim().replace(' ', '_'));
+    }
+
+    /**
+     * Extracts the attribute's effect text from the shard item's lore: the
+     * lines after the attribute title (line 0) up to the first blank line,
+     * joined so the info card can re-wrap them to its own width.
+     */
+    private static String extractEffect(List<String> lore) {
+        if (lore == null || lore.size() < 2) {
+            return "";
+        }
+        StringBuilder effect = new StringBuilder();
+        for (int i = 1; i < lore.size(); i++) {
+            String line = lore.get(i);
+            if (TextUtil.stripColorCodes(line).isBlank()) {
+                break;
+            }
+            if (!effect.isEmpty()) {
+                effect.append(' ');
+            }
+            effect.append(line.trim());
+        }
+        return effect.toString();
     }
 
     /**
@@ -35,9 +74,9 @@ public final class ShardInfoRecipeBuilder {
         try {
             Identifier id = IdentifierUtil.skyRecipeId("shard_info/", item.internalName());
 
-            List<Component> lines = new ArrayList<>(4);
+            List<Component> lines = new ArrayList<>(6);
             if (!shard.abilityName().isEmpty()) {
-                lines.add(RecipeUiHelper.labeledLine("Ability:", shard.abilityName()));
+                lines.add(RecipeUiHelper.labeledLine("Attribute:", shard.abilityName()));
             }
             String rarityLine = shard.rarity();
             if (!shard.alignment().isEmpty()) {
@@ -52,15 +91,24 @@ public final class ShardInfoRecipeBuilder {
             if (!shard.family().isEmpty()) {
                 lines.add(RecipeUiHelper.labeledLine("Family:", String.join(", ", shard.family())));
             }
+            // Last, so a long effect can only ever truncate itself — never the
+            // short metadata lines above (the card shows the full text on hover).
+            String effect = extractEffect(item.lore());
+            if (!effect.isEmpty()) {
+                lines.add(RecipeUiHelper.labeledLine("Effect:", effect));
+            }
 
             String bazaarSearch = TextUtil.stripColorCodes(item.displayName()).trim();
+
+            List<String> wikiUrls = item.info() != null && !item.info().isEmpty()
+                    ? item.info() : attributeWikiUrls(shard);
 
             return new SkyblockInfoClientRecipe(
                     id,
                     item,
                     item.displayName(),
                     lines,
-                    item.info(),
+                    wikiUrls,
                     false,
                     "",
                     bazaarSearch

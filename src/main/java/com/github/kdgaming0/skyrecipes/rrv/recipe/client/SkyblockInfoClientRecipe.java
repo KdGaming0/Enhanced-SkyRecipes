@@ -18,9 +18,11 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -172,16 +174,28 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         graphics.text(font, title, titleX, TITLE_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         // Info lines — left-aligned with indent, relative to card origin (white with
-        // shadow), word-wrapped to the card width up to a total rendered-line budget
-        int y = INFO_START_Y;
-        int rendered = 0;
-        outer:
+        // shadow), word-wrapped to the card width up to a total rendered-line budget.
+        // When the content overflows the budget, the last slot becomes an "…" line
+        // and the full text is available as a tooltip over the info area.
+        List<FormattedCharSequence> wrapped = new ArrayList<>();
         for (Component line : infoLines) {
-            for (var wrapped : font.split(line, INFO_WRAP_WIDTH)) {
-                if (rendered >= MAX_RENDERED_LINES) break outer;
-                graphics.text(font, wrapped, INFO_TEXT_X, y, RecipeUiHelper.TEXT_WHITE, true);
-                y += LINE_HEIGHT;
-                rendered++;
+            wrapped.addAll(font.split(line, INFO_WRAP_WIDTH));
+        }
+        boolean truncated = wrapped.size() > MAX_RENDERED_LINES;
+        int shown = truncated ? MAX_RENDERED_LINES - 1 : wrapped.size();
+
+        int y = INFO_START_Y;
+        for (int i = 0; i < shown; i++) {
+            graphics.text(font, wrapped.get(i), INFO_TEXT_X, y, RecipeUiHelper.TEXT_WHITE, true);
+            y += LINE_HEIGHT;
+        }
+        if (truncated) {
+            graphics.text(font, Component.literal("…"), INFO_TEXT_X, y, RecipeUiHelper.TEXT_WHITE, true);
+            y += LINE_HEIGHT;
+            if (mouseX >= INFO_TEXT_X - 2 && mouseX < INFO_TEXT_X + INFO_WRAP_WIDTH + 4
+                    && mouseY >= INFO_START_Y - 2 && mouseY < y + 2) {
+                graphics.setComponentTooltipForNextFrame(font, infoLines,
+                        pos.left() + mouseX, pos.top() + mouseY);
             }
         }
 

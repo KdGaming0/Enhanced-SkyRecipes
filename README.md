@@ -13,7 +13,7 @@
 
 # SkyRecipes
 
-**The complete SkyBlock recipe viewer — 8,000+ items, 11 recipe types, and powerful search.**
+**The complete SkyBlock recipe viewer — 8,000+ items, 12 recipe types, and powerful search.**
 
 Browse crafting recipes, forge recipes, mob drops, NPC shops, essence upgrades, reforges, garden mutations, and more. Built on Reliable Recipe Viewer as its display layer, with data sourced from the NEU repository and kept up to date automatically.
 </div>
@@ -24,7 +24,7 @@ SkyRecipes is a standalone Fabric client mod that adds the full SkyBlock item an
 
 ## Recipe Types
 
-SkyRecipes registers **11 custom SkyBlock recipe categories** in RRV. Press `R` over an item to see how it's crafted or obtained, and `U` to see what recipes use it.
+SkyRecipes registers **12 custom SkyBlock recipe categories** in RRV. Press `R` over an item to see how it's crafted or obtained, and `U` to see what recipes use it.
 
 **SkyBlock Crafting** — Classic 3×3 crafting grid recipes pulled from the NEU `recipe` field. Shows ingredients, output count, craft requirements, and a direct link to the SkyBlock wiki.
 
@@ -48,6 +48,7 @@ SkyRecipes registers **11 custom SkyBlock recipe categories** in RRV. Press `R` 
 
 **SkyBlock Garden Mutation** — A built-in garden mutation reference with a 6×6 grid layout, surface/water requirements, spreading conditions, effects, and copper cost. Quickly look up the required layout for any mutation.
 
+**SkyBlock Shard Fusion** — Every attribute shard shows the fusion combinations that produce it, with input amounts and output quantity.
 ## Search & Discovery
 
 ### Smart Autocomplete
@@ -156,6 +157,7 @@ Open the config through **Mod Menu → SkyRecipes → Config**. SkyRecipes uses 
 | **UI** | `calculatorEnabled` | Enables math expressions in the RRV search bar |
 | **UI** | `calculatorPrecision` | Decimal places for search-bar calculator results (0–10) |
 | **UI** | `familyExpansionEnabled` | Groups tiered items (pets, minions, stars, accessory upgrades) into families |
+| **RRV** | `shardFusionRecipes` | Shows fusion recipes for attribute shards (data from skyshards.com) |
 | **RRV** | `hideCategoryButtons` | Completely hides the category icon row above the RRV search bar |
 | **RRV** | `hideCategoryButtonsWhenNotSearching` | Hides category buttons when RRV is in "Only visible when searching" mode and the search bar is empty |
 | **RRV** | `hideEmptyBookmarkPanel` | Auto-hides the bookmark side panel when no bookmarks exist |
@@ -190,11 +192,21 @@ Want to support development? You can do so on **Ko-fi**. All donations are great
 
 [**Support on Ko-fi**](https://ko-fi.com/kdgaming1)
 
-## Third-Party Attribution
+## Credits & Third-Party Attribution
+
+### Data sources
+
+SkyRecipes would not exist without these community-maintained data sources:
+
+- **[NotEnoughUpdates Repository](https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO)** (MIT) — the SkyBlock item and recipe database (items, crafting, forge, drops, NPC shops, essence upgrades, attribute shards, and more). Downloaded and compiled at runtime, kept refreshed in the background.
+- **[SkyShards](https://skyshards.com/)** by [Campionnn](https://github.com/Campionnn/SkyShards) — the attribute shard fusion dataset powering the Shard Fusion recipe category. Fetched at runtime; visit skyshards.com for optimal fusion paths and live prices.
+- **[Hypixel SkyBlock Wiki](https://hypixelskyblock.minecraft.wiki/)** — the target of the in-mod wiki buttons.
+
+### Derivative code
 
 This project includes derivative code from:
 
-### NotEnoughUpdates (NEU)
+**NotEnoughUpdates (NEU)**
 - Project: https://github.com/NotEnoughUpdates/NotEnoughUpdates
 - License: GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)
 - Affected file(s): `NeuCalculator.java` (adapted from NEU Calculator)

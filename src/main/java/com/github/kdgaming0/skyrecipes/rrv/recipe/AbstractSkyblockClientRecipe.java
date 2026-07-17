@@ -143,6 +143,24 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
         // default no-op
     }
 
+    /**
+     * Offer a mouse click at recipe-relative coordinates to this recipe's
+     * custom-rendered content (RRV's own {@code mouseClicked} only handles bound
+     * slots). Return {@code true} to consume the click.
+     */
+    public boolean handleClick(double relX, double relY, int button) {
+        return false;
+    }
+
+    /**
+     * Offer a mouse-wheel scroll at recipe-relative coordinates to this recipe's
+     * custom-rendered content, before RRV consumes it for recipe page flipping.
+     * Return {@code true} to consume the scroll.
+     */
+    public boolean handleScroll(double relX, double relY, double scrollY) {
+        return false;
+    }
+
     // -- Wiki button ---------------------------------------------------------
 
     /**

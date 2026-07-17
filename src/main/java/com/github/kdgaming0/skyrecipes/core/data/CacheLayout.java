@@ -25,6 +25,7 @@ public final class CacheLayout {
     private static final String BINARY_TEMP_NAME = "skyrecipes_data_new.mpk";
     private static final String META_TEMP_NAME = "skyrecipes_data_new.meta.json";
     private static final String HYPIXEL_NAME = "hypixel_items.json";
+    private static final String SHARD_FUSIONS_NAME = "shard_fusions.mpk";
     private static final String NEU_ETAG_NAME = "neu-repo.etag";
     private static final String NEU_ZIP_NAME = "neu-repo.zip";
 
@@ -68,6 +69,10 @@ public final class CacheLayout {
 
     public Path hypixelItemsFile() {
         return dataDir.resolve(HYPIXEL_NAME);
+    }
+
+    public Path shardFusionsFile() {
+        return dataDir.resolve(SHARD_FUSIONS_NAME);
     }
 
     /**

@@ -11,11 +11,13 @@ import com.github.kdgaming0.skyrecipes.core.recipe.builders.ShardInfoRecipeBuild
 import com.github.kdgaming0.skyrecipes.core.recipe.builders.WikiInfoRecipeBuilder;
 import com.github.kdgaming0.skyrecipes.core.recipe.generators.EssenceUpgradeGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.generators.ReforgeRecipeGenerator;
+import com.github.kdgaming0.skyrecipes.core.recipe.generators.ShardFusionGenerator;
 import com.github.kdgaming0.skyrecipes.core.recipe.parsers.*;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockFusionClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockGardenMutationClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockReforgeClientRecipe;
 import net.minecraft.resources.Identifier;
@@ -201,6 +203,23 @@ public final class RecipeGenerator {
             } catch (Exception e) {
                 LOGGER.error("Failed to generate garden mutation recipes", e);
                 generatorFailures.add("garden mutations");
+            }
+
+            // Shard fusion recipes (from the SkyShards dataset, fetched at startup)
+            try {
+                List<ReliableClientRecipe> fusionRecipes = ShardFusionGenerator.generateAll(constantsRegistry, itemRegistry);
+                for (ReliableClientRecipe recipe : fusionRecipes) {
+                    recipes.add(recipe);
+                    if (recipe instanceof SkyblockFusionClientRecipe fusion) {
+                        indexBuilder.addResult(fusion.getOutputInternalName(), recipe.getId());
+                        for (String inputName : fusion.getInputInternalNames()) {
+                            indexBuilder.addIngredient(inputName, recipe.getId());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.error("Failed to generate shard fusion recipes", e);
+                generatorFailures.add("shard fusions");
             }
         }
 

@@ -8,7 +8,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractScrollArea;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.input.MouseButtonEvent;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -29,7 +31,9 @@ public class RecipeViewScreenMixin {
      * RRV consumes mouse-wheel events anywhere over the recipe GUI to flip recipe
      * pages, so scrollable recipe widgets (e.g. the reforge rarity table) never
      * receive them through vanilla routing. Give a hovered, actually-scrollable
-     * widget first refusal; when its content fits, fall through to page flipping.
+     * widget first refusal, then the hovered recipe's custom content (e.g. the
+     * fusion card's combination pager); when neither consumes, fall through to
+     * page flipping.
      */
     @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
     private void skyrecipes$scrollHoveredWidget(double mouseX, double mouseY, double scrollX, double scrollY,
@@ -43,6 +47,45 @@ public class RecipeViewScreenMixin {
                 return;
             }
         }
+        if (skyrecipes$offerToRecipes((skyRecipe, relX, relY) ->
+                skyRecipe.handleScroll(relX, relY, scrollY), mouseX, mouseY)) {
+            cir.setReturnValue(true);
+        }
+    }
+
+    /**
+     * RRV's {@code mouseClicked} only handles bound slots, so clicks on
+     * custom-rendered recipe content (e.g. the fusion card's input shards)
+     * would fall through. Offer them to the hovered recipe first.
+     */
+    @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
+    private void skyrecipes$clickRecipeContent(MouseButtonEvent event, boolean doubled,
+                                               CallbackInfoReturnable<Boolean> cir) {
+        if (skyrecipes$offerToRecipes((skyRecipe, relX, relY) ->
+                skyRecipe.handleClick(relX, relY, event.button()), event.x(), event.y())) {
+            cir.setReturnValue(true);
+        }
+    }
+
+    @FunctionalInterface
+    private interface RecipeMouseHandler {
+        boolean offer(AbstractSkyblockClientRecipe recipe, double relX, double relY);
+    }
+
+    @Unique
+    private boolean skyrecipes$offerToRecipes(RecipeMouseHandler handler, double mouseX, double mouseY) {
+        RecipeViewScreen screen = (RecipeViewScreen) (Object) this;
+        RecipeViewMenu menu = screen.getMenu();
+        int guiLeft = screen.getLeftPos() + menu.guiOffsetLeft();
+        for (int i = 0; i < menu.getCurrentDisplay().size(); i++) {
+            if (menu.getCurrentDisplay().get(i) instanceof AbstractSkyblockClientRecipe skyRecipe) {
+                int guiTop = screen.getTopPos() + menu.guiOffsetTop(i);
+                if (handler.offer(skyRecipe, mouseX - guiLeft, mouseY - guiTop)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Inject(method = "checkGui", at = @At("RETURN"))

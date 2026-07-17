@@ -11,6 +11,8 @@
   "skyrecipes.midnightconfig.groupTieredItems.tooltip": "Collapse tiered SkyBlock items (minion tiers, pet rarities, enchantment levels, accessory upgrades, ...) into expandable stacks in the item list. Individual groups can be managed in RRV's Stack Groups screen.",
   "skyrecipes.midnightconfig.groupCraftedChains": "Group Crafted Upgrade Chains",
   "skyrecipes.midnightconfig.groupCraftedChains.tooltip": "Also group items that craft directly into one another: compaction lines (Diamond → Enchanted Diamond → Enchanted Diamond Block), weapon upgrade lines (Aspect of the End → Aspect of the Void), and similar. Takes effect after the next data load (usually a game restart).",
+  "skyrecipes.midnightconfig.shardFusionRecipes": "Shard Fusion Recipes",
+  "skyrecipes.midnightconfig.shardFusionRecipes.tooltip": "Show fusion recipes for attribute shards (data from skyshards.com). Takes effect after the next data load (usually a game restart).",
   "skyrecipes.midnightconfig.hideCategoryButtons": "Hide Category Buttons",
   "skyrecipes.midnightconfig.hideCategoryButtons.tooltip": "Completely hides the compact category icon row above the RRV search bar.",
 

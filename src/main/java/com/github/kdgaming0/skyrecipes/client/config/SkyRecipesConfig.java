@@ -37,6 +37,9 @@ public class SkyRecipesConfig extends MidnightConfig {
     public static boolean groupCraftedChains = true;
 
     @Entry(category = "rrv")
+    public static boolean shardFusionRecipes = true;
+
+    @Entry(category = "rrv")
     public static boolean hideCategoryButtons = false;
 
     @Entry(category = "rrv")
