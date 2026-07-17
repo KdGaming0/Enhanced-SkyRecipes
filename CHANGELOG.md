@@ -13,3 +13,4 @@
 - New Shard Fusion recipe category: every attribute shard now shows the fusion combinations that produce it, with input amounts and output quantity.
   - Each fusion card has a SkyShards button (opens skyshards.com for optimal fusion paths and prices) and a Bazaar button.
 - Fixed the wiki button sometimes not appearing when reopening a recipe by clicking an item in the item list. The button now shows reliably every time.
+- Pressing the recipe/uses keybinds (R and U) on an enchanted book, pet, rune, or potion in your inventory now opens its recipe or info card correctly.

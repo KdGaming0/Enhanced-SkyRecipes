@@ -1,6 +1,9 @@
 package com.github.kdgaming0.skyrecipes.core.util;
 
+import com.github.kdgaming0.skyrecipes.core.model.SkyblockRarity;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
@@ -8,6 +11,8 @@ import net.minecraft.world.item.component.CustomData;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Locale;
 
 /**
  * Extracts the SkyBlock internal name ({@code ExtraAttributes.id}) from an {@link ItemStack}.
@@ -63,5 +68,108 @@ public final class SkyblockIdExtractor {
         }
 
         return null;
+    }
+
+    /**
+     * Extract the <b>NEU internal name</b> from the given stack, reconstructing it for
+     * items that share a generic {@code ExtraAttributes.id} on the live Hypixel server.
+     *
+     * <p>Enchanted books, pets, runes and potions all report a single base id
+     * ({@code ENCHANTED_BOOK}, {@code PET}, {@code RUNE}, {@code POTION}) on real inventory
+     * stacks, with the distinguishing detail held in a side field ({@code enchantments},
+     * {@code petInfo}, {@code runes}, {@code potion}/{@code potion_level}). NEU keys these
+     * items by their expanded internal name (e.g. {@code GROWTH;1}, {@code ENDER_DRAGON;4}),
+     * so a raw {@link #extract(ItemStack)} of the base id never matches the recipe index.
+     * This method rebuilds that internal name so R/U lookups resolve.</p>
+     *
+     * <p>For every other item this returns exactly what {@link #extract(ItemStack)} returns.
+     * Applied on both the index and lookup sides of {@code SkyblockRecipeCache}, so the two
+     * always agree regardless of which id form a given NEU {@code nbttag} happens to use.</p>
+     *
+     * @return the NEU internal name, or {@code null} if the stack carries no SkyBlock id
+     */
+    public static String extractInternalName(ItemStack stack) {
+        String id = extract(stack);
+        if (id == null) {
+            return null;
+        }
+        if (!isSharedBaseId(id)) {
+            return id;
+        }
+        try {
+            CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+            if (data == null) {
+                return id;
+            }
+            CompoundTag tag = ((CustomDataAccessor) (Object) data).skyrecipes$getTag();
+            // NEU-built stacks nest these fields under ExtraAttributes; live Hypixel
+            // items flatten them to the top level of custom_data. Support both.
+            CompoundTag source = tag.getCompound("ExtraAttributes").orElse(tag);
+            String reconstructed = reconstructInternalName(id, source);
+            return reconstructed != null ? reconstructed : id;
+        } catch (Exception e) {
+            LOGGER.debug("Failed to reconstruct internal name for base id '{}'", id, e);
+            return id;
+        }
+    }
+
+    private static boolean isSharedBaseId(String id) {
+        return switch (id) {
+            case "ENCHANTED_BOOK", "PET", "RUNE", "POTION" -> true;
+            default -> false;
+        };
+    }
+
+    private static String reconstructInternalName(String baseId, CompoundTag extra) {
+        return switch (baseId) {
+            case "ENCHANTED_BOOK" -> singleEntry(extra, "enchantments", "");
+            case "RUNE" -> singleEntry(extra, "runes", "_RUNE");
+            case "PET" -> petInternalName(extra);
+            case "POTION" -> {
+                String potion = extra.getStringOr("potion", "");
+                if (potion.isEmpty()) {
+                    yield null;
+                }
+                int level = extra.getInt("potion_level").orElse(0);
+                yield "POTION_" + potion.toUpperCase(Locale.ROOT) + ";" + level;
+            }
+            default -> null;
+        };
+    }
+
+    /**
+     * Builds {@code <KEY><suffix>;<level>} from the first (and, for books/runes, only)
+     * entry of a {@code {KEY:level}} compound.
+     */
+    private static String singleEntry(CompoundTag extra, String field, String keySuffix) {
+        CompoundTag compound = extra.getCompound(field).orElse(null);
+        if (compound == null) {
+            return null;
+        }
+        for (String key : compound.keySet()) {
+            int level = compound.getInt(key).orElse(0);
+            return key.toUpperCase(Locale.ROOT) + keySuffix + ";" + level;
+        }
+        return null;
+    }
+
+    private static String petInternalName(CompoundTag extra) {
+        String petInfo = extra.getStringOr("petInfo", "");
+        if (petInfo.isEmpty()) {
+            return null;
+        }
+        try {
+            JsonObject obj = JsonParser.parseString(petInfo).getAsJsonObject();
+            if (!obj.has("type") || !obj.has("tier")) {
+                return null;
+            }
+            String type = obj.get("type").getAsString();
+            String tier = obj.get("tier").getAsString();
+            SkyblockRarity rarity = SkyblockRarity.valueOf(tier.toUpperCase(Locale.ROOT));
+            return type.toUpperCase(Locale.ROOT) + ";" + rarity.ordinal();
+        } catch (Exception e) {
+            LOGGER.debug("Failed to parse petInfo '{}'", petInfo, e);
+            return null;
+        }
     }
 }
