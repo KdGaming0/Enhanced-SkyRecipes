@@ -43,8 +43,8 @@ public final class SkyblockStackGroups {
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockStackGroups.class);
 
     private static final String NAMESPACE = "skyrecipes";
-    /** Trailing tier token on tiered display names: "Wheat Minion XI" / "Sharpness 5". */
-    private static final Pattern TRAILING_TIER = Pattern.compile("\\s+([IVXLCDM]+|\\d+)$");
+    /** Trailing tier on tiered display names: "Wheat Minion XI", "Sharpness 5", "Master Skull - Tier 1". */
+    private static final Pattern TRAILING_TIER = Pattern.compile("(?:\\s*-\\s*Tier)?\\s+([IVXLCDM]+|\\d+)$");
     /** NEU pet display-name prefix: "[Lvl {LVL}] Armadillo". */
     private static final Pattern PET_LEVEL_PREFIX = Pattern.compile("^\\[Lvl[^]]*]\\s*");
     private static final Pattern INVALID_PATH_CHARS = Pattern.compile("[^a-z0-9/._-]");

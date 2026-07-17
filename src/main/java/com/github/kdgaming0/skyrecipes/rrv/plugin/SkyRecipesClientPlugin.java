@@ -912,7 +912,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                                     int attemptedItems, int failedItems) {
     }
 
-    private record ItemSortKey(String familyBase, int tier, String cleanDisplayName, String internalName)
+    private record ItemSortKey(String familyBase, int tier, int armorSlot,
+                               String cleanDisplayName, String internalName)
             implements Comparable<ItemSortKey> {
 
         static ItemSortKey of(NeuItem item) {
@@ -921,6 +922,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             return new ItemSortKey(
                     com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractBaseName(name),
                     com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.extractTier(name),
+                    com.github.kdgaming0.skyrecipes.core.family.FamilyResolver.armorSlotRank(name),
                     TextUtil.stripColorCodes(display),
                     name
             );
@@ -931,6 +933,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             int c = this.familyBase.compareTo(other.familyBase);
             if (c != 0) return c;
             c = Integer.compare(this.tier, other.tier);
+            if (c != 0) return c;
+            // Pieces of one armor set share a family base and tier 0; without this
+            // they'd list alphabetically (Boots, Chestplate, Helmet, Leggings).
+            c = Integer.compare(this.armorSlot, other.armorSlot);
             if (c != 0) return c;
             c = this.cleanDisplayName.compareTo(other.cleanDisplayName);
             if (c != 0) return c;

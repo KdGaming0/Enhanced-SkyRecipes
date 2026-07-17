@@ -14,12 +14,18 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 
 /**
- * Resolves item families for recipe lookup expansion.
+ * Resolves item families: which items belong together, and how ({@link FamilyType}).
  *
- * <p>Builds explicit families from {@code constants/parents.json} and implicit families by
- * scanning all items in the {@link ItemRegistry}. Families are classified into
- * {@link FamilyType}s that determine whether pressing <b>R</b> on a member should show
- * recipes for all family members.</p>
+ * <p>Families drive two behaviors — merging recipes when the player presses <b>R</b> on a
+ * member, and collapsing members into one stack in the RRV item list (see
+ * {@code SkyblockStackGroups}). They are discovered in four passes; earlier passes win:</p>
+ *
+ * <ol>
+ *   <li>Explicit families curated in NEU's {@code constants/parents.json}</li>
+ *   <li>Museum upgrade chains from {@code constants/museum.json}</li>
+ *   <li>Implicit families from item name patterns (armor sets, pets, accessories, drills)</li>
+ *   <li>General crafted-into upgrade chains (config-gated)</li>
+ * </ol>
  *
  * <p>Immutable after construction — safe to share across threads.</p>
  */
@@ -28,19 +34,46 @@ public final class FamilyResolver {
     private static final Logger LOGGER = LoggerFactory.getLogger(FamilyResolver.class);
 
     /**
-     * Prefixes of families that have numeric-looking members but are actually collections.
+     * Members matching these prefixes never group: their families look tiered but the
+     * "tiers" are unrelated items (dungeon music discs) or vanilla material variants
+     * (the wood→diamond hoe line). The family is left unregistered rather than claimed.
      */
-    private static final Set<String> DENYLIST_PREFIXES = Set.of(
-            "MASTER_SKULL_TIER", "DUNGEON_DISC_",
-            "BANNER", "CARPET", "INK_SACK", "STAINED_CLAY", "STAINED_GLASS",
-            "STAINED_GLASS_PANE", "WOOL", "WOOD", "WOOD_STEP", "STONE", "STEP",
-            "LOG", "SANDSTONE", "RED_SANDSTONE", "PRISMARINE", "QUARTZ_BLOCK",
-            "SMOOTH_BRICK"
+    private static final Set<String> NEVER_GROUP_PREFIXES = Set.of("DUNGEON_DISC_", "WOOD_HOE");
+
+    /**
+     * Roots of curated families whose children are mutually exclusive side-grades of the
+     * base item, not an upgrade ladder: Necron's Blade → Astraea/Hyperion/Scylla/Valkyrie,
+     * Wither armor → Necron's/Storm's/Goldor's/Maxor's pieces.
+     */
+    private static final Set<String> BRANCHING_ROOTS = Set.of(
+            "NECRON_BLADE",
+            "WITHER_HELMET", "WITHER_CHESTPLATE", "WITHER_LEGGINGS", "WITHER_BOOTS"
     );
 
-    private static final Set<String> ACCESSORY_SUFFIXES = Set.of("TALISMAN", "RING", "ARTIFACT", "RELIC", "HEIRLOOM", "CHRONOMICON");
+    /** Accessory chain suffix → tier: ZOMBIE_TALISMAN(1) → RING(2) → ARTIFACT(3) → … */
+    private static final Map<String, Integer> ACCESSORY_SUFFIX_TIERS = Map.of(
+            "TALISMAN", 1,
+            "RING", 2,
+            "ARTIFACT", 3,
+            "RELIC", 4,
+            "HEIRLOOM", 5,
+            "CHRONOMICON", 6
+    );
 
-    private static final Map<String, Integer> ACCESSORY_TIER_MAP;
+    /**
+     * Accessory words that also appear as name <em>prefixes</em> on higher tiers
+     * (RING_OF_COINS, ARTIFACT_POTION_AFFINITY). TALISMAN is deliberately absent:
+     * tier-1 accessories are always suffix-named, while many non-accessories
+     * (TALISMAN_ENRICHMENT_*) start with the word.
+     */
+    private static final Map<String, Integer> ACCESSORY_PREFIX_TIERS = Map.of(
+            "RING", 2,
+            "ARTIFACT", 3,
+            "RELIC", 4,
+            "HEIRLOOM", 5,
+            "CHRONOMICON", 6
+    );
+
     private static final Map<String, Integer> GEMSTONE_TIER_MAP = Map.of(
             "ROUGH", 1,
             "FLAWED", 2,
@@ -65,46 +98,16 @@ public final class FamilyResolver {
             "DIAMOND", 4
     );
 
-    /**
-     * Accessory words that also appear as name <em>prefixes</em> on higher tiers
-     * (RING_OF_COINS, ARTIFACT_POTION_AFFINITY). TALISMAN is deliberately absent:
-     * tier-1 accessories are always suffix-named, while many non-accessories
-     * (TALISMAN_ENRICHMENT_*) start with the word.
-     */
-    private static final Map<String, Integer> ACCESSORY_PREFIX_TIER_MAP = Map.of(
-            "RING", 2,
-            "ARTIFACT", 3,
-            "RELIC", 4,
-            "HEIRLOOM", 5,
-            "CHRONOMICON", 6
-    );
-
+    /** In display order — also the sort order of armor-set members. */
     private static final String[] ARMOR_SLOT_SUFFIXES = {"_HELMET", "_CHESTPLATE", "_LEGGINGS", "_BOOTS"};
 
-    static {
-        Map<String, Integer> map = new LinkedHashMap<>();
-        map.put("TALISMAN", 1);
-        map.put("RING", 2);
-        map.put("ARTIFACT", 3);
-        map.put("RELIC", 4);
-        map.put("HEIRLOOM", 5);
-        map.put("CHRONOMICON", 6);
-        ACCESSORY_TIER_MAP = Collections.unmodifiableMap(map);
-    }
-
     private final Map<String, FamilyInfo> memberToFamily;
-    /** Tier → rarity → name ordering; rarity comes from the item registry when available. */
-    private final Comparator<String> memberComparator;
 
     /**
      * @param groupCraftedChains also build general crafted-into upgrade chains (compaction
      *                           lines, weapon upgrades) — see {@link #buildGeneralCraftedChains}
      */
     public FamilyResolver(ConstantsRegistry constants, ItemRegistry items, boolean groupCraftedChains) {
-        this.memberComparator = Comparator
-                .comparingInt(FamilyResolver::extractTier)
-                .thenComparingInt(id -> rarityOrdinal(items, id))
-                .thenComparing(Comparator.naturalOrder());
         Map<String, FamilyInfo> map = new HashMap<>();
         if (constants != null) {
             buildExplicitFamilies(constants, items, map);
@@ -113,7 +116,7 @@ public final class FamilyResolver {
             if (constants != null) {
                 buildMuseumChains(constants, items, map);
             }
-            buildImplicitFamilies(constants, items, map);
+            buildImplicitFamilies(items, map);
             if (groupCraftedChains) {
                 buildGeneralCraftedChains(items, map);
             }
@@ -121,6 +124,193 @@ public final class FamilyResolver {
         this.memberToFamily = Collections.unmodifiableMap(map);
         LOGGER.info("FamilyResolver built: {} items in {} families",
                 map.size(), (int) map.values().stream().map(FamilyInfo::familyId).distinct().count());
+    }
+
+    /**
+     * Returns the set of internal names to search for recipes when the player presses
+     * <b>R</b> on the given item: the whole family in tier order for expanding family
+     * types, otherwise a singleton of the given name. Never null.
+     */
+    public Set<String> getFamilyMembers(String internalName) {
+        FamilyInfo info = memberToFamily.get(internalName);
+        if (info == null || !info.type().expandsForResults()) {
+            return Collections.singleton(internalName);
+        }
+        return info.members();
+    }
+
+    /** Returns every distinct family (explicit and implicit), each appearing once. */
+    public Collection<FamilyInfo> getAllFamilies() {
+        return memberToFamily.values().stream().distinct().toList();
+    }
+
+    // -----------------------------------------------------------------
+    // Tier / base-name extraction (shared with sorting and group naming)
+    // -----------------------------------------------------------------
+
+    /**
+     * Extracts the numeric tier from an internal name: a numeric {@code _N}/{@code ;N}
+     * suffix (minions, pets, enchantments, drills), else the accessory suffix/prefix rank
+     * (TALISMAN=1 … CHRONOMICON=6), else the trophy medal (BRONZE=1 … DIAMOND=4), else the
+     * gemstone quality prefix on {@code *_GEM} items (ROUGH=1 … PERFECT=5), else the
+     * Kuudra prefix on armor pieces (HOT=1 … INFERNAL=4). Returns 0 when no tier is found.
+     */
+    public static int extractTier(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return 0;
+        }
+
+        int sep = numericSuffixSeparator(internalName);
+        if (sep >= 0) {
+            try {
+                return Integer.parseInt(internalName.substring(sep + 1));
+            } catch (NumberFormatException ignored) {
+                // absurdly long digit run — fall through to the pattern checks
+            }
+        }
+
+        for (Map.Entry<String, Integer> entry : ACCESSORY_SUFFIX_TIERS.entrySet()) {
+            if (internalName.endsWith("_" + entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        Integer accessoryPrefixTier = accessoryPrefixTier(internalName);
+        if (accessoryPrefixTier != null) {
+            return accessoryPrefixTier;
+        }
+
+        int lastUnderscore = internalName.lastIndexOf('_');
+        if (lastUnderscore > 0) {
+            Integer medal = TROPHY_TIER_MAP.get(internalName.substring(lastUnderscore + 1));
+            if (medal != null) {
+                return medal;
+            }
+        }
+
+        Integer gemstone = leadingWordTier(internalName, GEMSTONE_TIER_MAP, internalName.endsWith("_GEM"));
+        if (gemstone != null) {
+            return gemstone;
+        }
+        Integer kuudra = leadingWordTier(internalName, KUUDRA_TIER_MAP, isArmorPiece(internalName));
+        if (kuudra != null) {
+            return kuudra;
+        }
+        return 0;
+    }
+
+    /**
+     * Extracts the family base name from an internal name by stripping the tier marker:
+     * numeric suffix ({@code WHEAT_GENERATOR_3} → {@code WHEAT_GENERATOR}), accessory
+     * suffix/prefix ({@code ZOMBIE_TALISMAN} → {@code ZOMBIE}, {@code RING_OF_COINS} →
+     * {@code COINS}), armor slot suffix ({@code DIAMOND_CHESTPLATE} → {@code DIAMOND}),
+     * or gemstone quality prefix ({@code FINE_RUBY_GEM} → {@code RUBY_GEM}).
+     * Returns the full name when no marker is found.
+     */
+    public static String extractBaseName(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return "";
+        }
+
+        int sep = numericSuffixSeparator(internalName);
+        if (sep >= 0) {
+            return internalName.substring(0, sep);
+        }
+
+        for (String suffix : ACCESSORY_SUFFIX_TIERS.keySet()) {
+            String withUnderscore = "_" + suffix;
+            if (internalName.endsWith(withUnderscore)) {
+                return internalName.substring(0, internalName.length() - withUnderscore.length());
+            }
+        }
+        if (accessoryPrefixTier(internalName) != null) {
+            String rest = internalName.substring(internalName.indexOf('_') + 1);
+            return rest.startsWith("OF_") ? rest.substring(3) : rest;
+        }
+
+        String armorSuffix = getArmorSlotSuffix(internalName);
+        if (armorSuffix != null) {
+            return internalName.substring(0, internalName.length() - armorSuffix.length());
+        }
+
+        if (internalName.endsWith("_GEM")
+                && leadingWordTier(internalName, GEMSTONE_TIER_MAP, true) != null) {
+            return internalName.substring(internalName.indexOf('_') + 1);
+        }
+
+        return internalName;
+    }
+
+    /**
+     * Index of the {@code _} or {@code ;} introducing an all-digit tier suffix, or -1.
+     * {@code ;} (pets, enchantments) takes precedence over {@code _} (minions, drills).
+     */
+    private static int numericSuffixSeparator(String id) {
+        int semi = id.lastIndexOf(';');
+        if (semi >= 0 && semi < id.length() - 1 && isAllDigits(id.substring(semi + 1))) {
+            return semi;
+        }
+        int underscore = id.lastIndexOf('_');
+        if (underscore >= 0 && underscore < id.length() - 1 && isAllDigits(id.substring(underscore + 1))) {
+            return underscore;
+        }
+        return -1;
+    }
+
+    /** The tier of the name's first {@code _}-delimited word per {@code tiers}, when {@code eligible}. */
+    private static Integer leadingWordTier(String id, Map<String, Integer> tiers, boolean eligible) {
+        if (!eligible) return null;
+        int firstUnderscore = id.indexOf('_');
+        if (firstUnderscore <= 0) return null;
+        return tiers.get(id.substring(0, firstUnderscore));
+    }
+
+    /** Tier for prefix-form accessory names ({@code RING_OF_COINS} → 2), or null. */
+    private static Integer accessoryPrefixTier(String internalName) {
+        int firstUnderscore = internalName.indexOf('_');
+        if (firstUnderscore <= 0 || firstUnderscore == internalName.length() - 1) return null;
+        return ACCESSORY_PREFIX_TIERS.get(internalName.substring(0, firstUnderscore));
+    }
+
+    private static boolean isAllDigits(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            if (!Character.isDigit(s.charAt(i))) return false;
+        }
+        return !s.isEmpty();
+    }
+
+    // -----------------------------------------------------------------
+    // Member ordering
+    // -----------------------------------------------------------------
+
+    private record MemberSortKey(int tier, int rarity, int armorSlot, String name)
+            implements Comparable<MemberSortKey> {
+        private static final Comparator<MemberSortKey> ORDER = Comparator
+                .comparingInt(MemberSortKey::tier)
+                .thenComparingInt(MemberSortKey::rarity)
+                .thenComparingInt(MemberSortKey::armorSlot)
+                .thenComparing(MemberSortKey::name);
+
+        @Override
+        public int compareTo(MemberSortKey other) {
+            return ORDER.compare(this, other);
+        }
+    }
+
+    /**
+     * Orders members by tier, then rarity (from the item's lore), then armor slot
+     * (helmet → boots, so armor sets display in wear order), then name. Sort keys are
+     * computed once per member — the rarity lookup parses lore and is too expensive to
+     * run per comparison.
+     */
+    private static Set<String> tierOrderedMembers(Collection<String> members, ItemRegistry items) {
+        Map<String, MemberSortKey> keys = new HashMap<>(members.size() * 2);
+        for (String member : members) {
+            keys.put(member, new MemberSortKey(
+                    extractTier(member), rarityOrdinal(items, member), armorSlotRank(member), member));
+        }
+        List<String> sorted = new ArrayList<>(members);
+        sorted.sort(Comparator.comparing(keys::get));
+        return Collections.unmodifiableSet(new LinkedHashSet<>(sorted));
     }
 
     /** Rarity position for sorting; 0 when the registry or the rarity is unknown. */
@@ -136,269 +326,50 @@ public final class FamilyResolver {
         return SkyblockRarity.fromLoreOrNull(item.lore().getLast());
     }
 
-    /**
-     * Extracts the numeric tier from an internal name.
-     *
-     * <p>Priority order:</p>
-     * <ol>
-     *   <li>Numeric suffix {@code _N} or {@code ;N} (minions, pets, enchantments, drills)</li>
-     *   <li>Accessory suffix ({@code TALISMAN=1}, {@code RING=2}, {@code ARTIFACT=3},
-     *       {@code RELIC=4}, {@code HEIRLOOM=5}, {@code CHRONOMICON=6})</li>
-     *   <li>Gemstone quality prefix ({@code ROUGH=1}, {@code FLAWED=2}, {@code FINE=3},
-     *       {@code FLAWLESS=4}, {@code PERFECT=5}) for {@code *_GEM} items</li>
-     * </ol>
-     *
-     * <p>Returns 0 when no tier is found.</p>
-     */
-    public static int extractTier(String internalName) {
-        if (internalName == null || internalName.isEmpty()) {
-            return 0;
+    /** Position of the armor slot suffix in wear order (helmet first); -1 for non-armor. */
+    public static int armorSlotRank(String id) {
+        for (int i = 0; i < ARMOR_SLOT_SUFFIXES.length; i++) {
+            if (id.endsWith(ARMOR_SLOT_SUFFIXES[i])) return i;
         }
-
-        // Tiered: ;N suffix (pets, enchantments, etc.)
-        int semi = internalName.lastIndexOf(';');
-        if (semi != -1 && semi < internalName.length() - 1) {
-            String suffix = internalName.substring(semi + 1);
-            if (isAllDigits(suffix)) {
-                try {
-                    return Integer.parseInt(suffix);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-
-        // Tiered: _N suffix (minions, drills, etc.)
-        int lastUnderscore = internalName.lastIndexOf('_');
-        if (lastUnderscore != -1 && lastUnderscore < internalName.length() - 1) {
-            String suffix = internalName.substring(lastUnderscore + 1);
-            if (isAllDigits(suffix)) {
-                try {
-                    return Integer.parseInt(suffix);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-
-        // Accessory chain suffixes
-        for (Map.Entry<String, Integer> entry : ACCESSORY_TIER_MAP.entrySet()) {
-            String suffix = "_" + entry.getKey();
-            if (internalName.endsWith(suffix)) {
-                return entry.getValue();
-            }
-        }
-
-        // Accessory chain prefixes (RING_OF_COINS, ARTIFACT_POTION_AFFINITY)
-        Integer accessoryPrefixTier = accessoryPrefixTier(internalName);
-        if (accessoryPrefixTier != null) {
-            return accessoryPrefixTier;
-        }
-
-        // Trophy fish medal suffixes (BLOBFISH_BRONZE → … → BLOBFISH_DIAMOND)
-        int lastToken = internalName.lastIndexOf('_');
-        if (lastToken > 0) {
-            Integer medal = TROPHY_TIER_MAP.get(internalName.substring(lastToken + 1));
-            if (medal != null) {
-                return medal;
-            }
-        }
-
-        // Gemstone quality prefixes
-        if (internalName.endsWith("_GEM")) {
-            int firstUnderscore = internalName.indexOf('_');
-            if (firstUnderscore > 0) {
-                String prefix = internalName.substring(0, firstUnderscore);
-                Integer tier = GEMSTONE_TIER_MAP.get(prefix);
-                if (tier != null) {
-                    return tier;
-                }
-            }
-        }
-
-        // Kuudra upgrade prefixes, only on armor pieces (HOT_CRIMSON_HELMET)
-        if (getArmorSlotSuffix(internalName) != null) {
-            int firstUnderscore = internalName.indexOf('_');
-            if (firstUnderscore > 0) {
-                Integer tier = KUUDRA_TIER_MAP.get(internalName.substring(0, firstUnderscore));
-                if (tier != null) {
-                    return tier;
-                }
-            }
-        }
-
-        return 0;
+        return -1;
     }
 
     // -----------------------------------------------------------------
-    // Tier extraction utilities (shared across sorting contexts)
+    // Pass 1 — explicit families from parents.json
     // -----------------------------------------------------------------
 
-    /**
-     * Extracts the family base name from an internal name.
-     *
-     * <p>For tiered items this is the prefix before the numeric tier suffix
-     * (e.g. {@code WHEAT_GENERATOR_3} → {@code WHEAT_GENERATOR},
-     * {@code ARMADILLO;2} → {@code ARMADILLO}).</p>
-     *
-     * <p>For accessory chains the accessory suffix is stripped
-     * (e.g. {@code ZOMBIE_TALISMAN} → {@code ZOMBIE}).</p>
-     *
-     * <p>For armor sets the armor-piece suffix is stripped
-     * (e.g. {@code DIAMOND_CHESTPLATE} → {@code DIAMOND}).</p>
-     *
-     * <p>For gemstones the quality prefix is stripped
-     * (e.g. {@code FINE_RUBY_GEM} → {@code RUBY_GEM}).</p>
-     *
-     * <p>For all other items the full internal name is returned.</p>
-     */
-    public static String extractBaseName(String internalName) {
-        if (internalName == null || internalName.isEmpty()) {
-            return "";
-        }
-
-        // Tiered: ;N suffix (pets, enchantments, etc.)
-        int semi = internalName.lastIndexOf(';');
-        if (semi != -1 && semi < internalName.length() - 1) {
-            String suffix = internalName.substring(semi + 1);
-            if (isAllDigits(suffix)) {
-                return internalName.substring(0, semi);
-            }
-        }
-
-        // Tiered: _N suffix (minions, drills, etc.)
-        int lastUnderscore = internalName.lastIndexOf('_');
-        if (lastUnderscore != -1 && lastUnderscore < internalName.length() - 1) {
-            String suffix = internalName.substring(lastUnderscore + 1);
-            if (isAllDigits(suffix)) {
-                return internalName.substring(0, lastUnderscore);
-            }
-        }
-
-        // Accessory chain suffixes
-        for (String accSuffix : ACCESSORY_SUFFIXES) {
-            String withUnderscore = "_" + accSuffix;
-            if (internalName.endsWith(withUnderscore)) {
-                return internalName.substring(0, internalName.length() - withUnderscore.length());
-            }
-        }
-
-        // Accessory chain prefixes: RING_OF_COINS → COINS, ARTIFACT_POTION_AFFINITY → POTION_AFFINITY
-        if (accessoryPrefixTier(internalName) != null) {
-            String rest = internalName.substring(internalName.indexOf('_') + 1);
-            return rest.startsWith("OF_") ? rest.substring(3) : rest;
-        }
-
-        // Armor set suffixes
-        if (internalName.endsWith("_HELMET")) {
-            return internalName.substring(0, internalName.length() - 7);
-        }
-        if (internalName.endsWith("_CHESTPLATE")) {
-            return internalName.substring(0, internalName.length() - 11);
-        }
-        if (internalName.endsWith("_LEGGINGS")) {
-            return internalName.substring(0, internalName.length() - 9);
-        }
-        if (internalName.endsWith("_BOOTS")) {
-            return internalName.substring(0, internalName.length() - 6);
-        }
-
-        // Gemstone quality prefixes
-        if (internalName.endsWith("_GEM")) {
-            int firstUnderscore = internalName.indexOf('_');
-            if (firstUnderscore > 0) {
-                String prefix = internalName.substring(0, firstUnderscore);
-                if (GEMSTONE_TIER_MAP.containsKey(prefix)) {
-                    return internalName.substring(firstUnderscore + 1);
-                }
-            }
-        }
-
-        return internalName;
-    }
-
-    /** Tier for prefix-form accessory names ({@code RING_OF_COINS} → 2), or null. */
-    private static Integer accessoryPrefixTier(String internalName) {
-        int firstUnderscore = internalName.indexOf('_');
-        if (firstUnderscore <= 0 || firstUnderscore == internalName.length() - 1) return null;
-        return ACCESSORY_PREFIX_TIER_MAP.get(internalName.substring(0, firstUnderscore));
-    }
-
-    private static boolean isAllDigits(String s) {
-        for (int i = 0; i < s.length(); i++) {
-            if (!Character.isDigit(s.charAt(i))) return false;
-        }
-        return !s.isEmpty();
-    }
-
-    // -----------------------------------------------------------------
-    // Explicit families from parents.json
-    // -----------------------------------------------------------------
-
-    /**
-     * Returns the set of internal names to search for recipes when the player presses
-     * <b>R</b> on the given item.
-     *
-     * <p>If the item's family type does not expand for results, returns a singleton set
-     * containing only the given name.</p>
-     *
-     * <p>For expanding families, members are returned in tier-aware order (lower tiers
-     * first) so that recipe views display progression chains logically.</p>
-     *
-     * @param internalName the SkyBlock internal name (e.g. {@code "WHEAT_GENERATOR_3"})
-     * @return set of names to query; never null
-     */
-    /**
-     * Returns every distinct family (explicit and implicit), each appearing once.
-     */
-    public Collection<FamilyInfo> getAllFamilies() {
-        return memberToFamily.values().stream().distinct().toList();
-    }
-
-    public Set<String> getFamilyMembers(String internalName) {
-        FamilyInfo info = memberToFamily.get(internalName);
-        if (info == null) {
-            return Collections.singleton(internalName);
-        }
-        if (!info.type().expandsForResults()) {
-            return Collections.singleton(internalName);
-        }
-        return info.members();
-    }
-
-    private void buildExplicitFamilies(ConstantsRegistry constants, ItemRegistry items,
-                                       Map<String, FamilyInfo> out) {
+    private static void buildExplicitFamilies(ConstantsRegistry constants, ItemRegistry items,
+                                              Map<String, FamilyInfo> out) {
         Map<String, List<String>> parentToChildren = constants.getAllParents();
         if (parentToChildren == null || parentToChildren.isEmpty()) return;
 
-        // Build child->parent map for root detection
+        // Child->parent map for root detection; first parent wins for duplicate children.
         Map<String, String> childToParent = new HashMap<>();
         for (Map.Entry<String, List<String>> entry : parentToChildren.entrySet()) {
             for (String child : entry.getValue()) {
-                // In case of duplicate children, first parent wins
                 childToParent.putIfAbsent(child, entry.getKey());
             }
         }
 
         for (String parent : parentToChildren.keySet()) {
-            // Skip non-roots (this parent is itself a child of someone else)
-            if (childToParent.containsKey(parent)) continue;
+            if (childToParent.containsKey(parent)) continue; // not a root
 
             Set<String> members = new LinkedHashSet<>();
             collectDescendants(parent, parentToChildren, members);
-
             if (members.size() < 2) continue;
 
             FamilyType type = classifyExplicitFamily(parent, members, items);
-            List<String> sortedMembers = members.stream()
-                    .sorted(memberComparator)
-                    .toList();
-            FamilyInfo info = new FamilyInfo(parent, type, Collections.unmodifiableSet(new LinkedHashSet<>(sortedMembers)));
-            for (String member : members) {
+            if (type == null) continue; // never-group family: leave members unclaimed
+
+            FamilyInfo info = new FamilyInfo(parent, type, tierOrderedMembers(members, items));
+            for (String member : info.members()) {
                 out.put(member, info);
             }
         }
     }
 
-    private void collectDescendants(String node, Map<String, List<String>> parentToChildren, Set<String> members) {
+    private static void collectDescendants(String node, Map<String, List<String>> parentToChildren,
+                                           Set<String> members) {
         // members doubles as the visited set — a cyclic parents.json must not recurse forever
         if (!members.add(node)) return;
         List<String> children = parentToChildren.get(node);
@@ -408,69 +379,32 @@ public final class FamilyResolver {
         }
     }
 
-    // -----------------------------------------------------------------
-    // Museum upgrade chains from museum.json "children"
-    // -----------------------------------------------------------------
-
     /**
-     * Registers upgrade lines curated in NEU's {@code constants/museum.json}
-     * {@code children} map (item → the item it upgrades from). This is the only data
-     * source for lines that upgrade outside crafting — shop-bought progressions like
-     * HYDRO_CAN_1000 → … → AQUAMASTER_HYDROMAX or the Mithril/Titanium pickaxes.
-     *
-     * <p>Entries whose ends are not both known, unregistered items are skipped —
-     * the map also relates museum armor-set names, which are not item ids.</p>
+     * Classifies a curated parents.json family, or returns null for families that must
+     * not group <em>and</em> must not claim their members — vanilla metadata variants
+     * (wool/glass colors) and the {@link #NEVER_GROUP_PREFIXES} denylist. Leaving those
+     * members unclaimed lets a later pass still chain a base form into its upgrade line
+     * (COAL → ENCHANTED_COAL → ENCHANTED_COAL_BLOCK).
      */
-    private void buildMuseumChains(ConstantsRegistry constants, ItemRegistry items,
-                                   Map<String, FamilyInfo> out) {
-        Map<String, String> upgradedFrom = constants.getMuseumChildren();
-        if (upgradedFrom == null || upgradedFrom.isEmpty()) return;
-
-        Map<String, String> parentOf = new HashMap<>();
-        Map<String, List<String>> childrenOf = new HashMap<>();
-        for (Map.Entry<String, String> entry : upgradedFrom.entrySet()) {
-            String item = entry.getKey();
-            String base = entry.getValue();
-            if (base == null || base.isEmpty() || base.equals(item)) continue;
-            if (out.containsKey(item) || out.containsKey(base)) continue;
-            if (items.getByInternalName(item).isEmpty()
-                    || items.getByInternalName(base).isEmpty()) continue;
-            parentOf.put(item, base);
-            childrenOf.computeIfAbsent(base, k -> new ArrayList<>(2)).add(item);
-        }
-
-        registerLinearChains(parentOf, childrenOf, out, null);
-    }
-
-    // -----------------------------------------------------------------
-    // Implicit families from item name patterns
-    // -----------------------------------------------------------------
-
-    private FamilyType classifyExplicitFamily(String root, Set<String> members, ItemRegistry items) {
-        // Denylist
+    private static FamilyType classifyExplicitFamily(String root, Set<String> members, ItemRegistry items) {
         for (String m : members) {
-            for (String prefix : DENYLIST_PREFIXES) {
-                if (m.startsWith(prefix)) {
-                    return FamilyType.COLLECTION;
-                }
+            if (isVanillaMetaVariant(m)) return null;
+            for (String prefix : NEVER_GROUP_PREFIXES) {
+                if (m.startsWith(prefix)) return null;
             }
         }
 
-        // Starred dungeon items
         for (String m : members) {
             if (m.startsWith("STARRED_")) {
                 return FamilyType.STARRED;
             }
         }
 
-        // Hardcoded branching families
-        if ("NECRON_BLADE".equals(root)) {
+        if (BRANCHING_ROOTS.contains(root)) {
             return FamilyType.BRANCHING;
         }
 
         // Kuudra armor ladders: CRIMSON_HELMET → HOT_/BURNING_/FIERY_/INFERNAL_CRIMSON_HELMET.
-        // Wither armor has the same parents.json shape but POWER/SPEED/TANK/WISE are
-        // side-grades, not ladder steps — its prefixes fail the map lookup.
         if (isKuudraChain(root, members)) {
             return FamilyType.UPGRADE_CHAIN;
         }
@@ -481,17 +415,14 @@ public final class FamilyResolver {
             return FamilyType.TIERED;
         }
 
-        // Tiered: at least two members have numeric tier suffixes
-        long numericCount = members.stream().filter(this::hasNumericTier).count();
+        long numericCount = members.stream().filter(m -> numericSuffixSeparator(m) >= 0).count();
         if (numericCount >= 2) {
             return FamilyType.TIERED;
         }
 
-        // Accessory chain: nearly all accessory upgrade lines are recorded in
-        // parents.json (e.g. SPEED_RELIC -> ARTIFACT -> RING -> TALISMAN), so they
-        // arrive here rather than through the implicit suffix scan. Two suffixed
-        // or prefixed (RING_OF_COINS) members suffice: chains may include odd-named
-        // top tiers (SEAL_OF_THE_FAMILY, PESTHUNTER_BADGE).
+        // Accessory chain: nearly all accessory upgrade lines are curated here rather than
+        // found by the implicit suffix scan. Two suffixed or prefixed (RING_OF_COINS)
+        // members suffice: chains may include odd-named top tiers (SEAL_OF_THE_FAMILY).
         long accessoryCount = members.stream()
                 .filter(m -> getAccessoryBase(m) != null || accessoryPrefixTier(m) != null)
                 .count();
@@ -508,6 +439,15 @@ public final class FamilyResolver {
         // Everything else NEU curated as a family (dyes, party hat colors, trophy
         // fish medals, …) still collapses in the item list, without R-expansion.
         return FamilyType.VARIANT_SET;
+    }
+
+    /**
+     * True for 1.8 metadata ids like {@code WOOL-5} or {@code LOG-2} — vanilla
+     * color/material variants that should never group with their base item.
+     */
+    private static boolean isVanillaMetaVariant(String id) {
+        int dash = id.lastIndexOf('-');
+        return dash > 0 && dash < id.length() - 1 && isAllDigits(id.substring(dash + 1));
     }
 
     /** True when all members share one display name but span at least two rarities. */
@@ -550,7 +490,7 @@ public final class FamilyResolver {
 
     /** True when every non-root member is {@code <KUUDRA_PREFIX>_<root>} for an armor-piece root. */
     private static boolean isKuudraChain(String root, Set<String> members) {
-        if (getArmorSlotSuffix(root) == null) {
+        if (!isArmorPiece(root)) {
             return false;
         }
         for (String m : members) {
@@ -564,7 +504,45 @@ public final class FamilyResolver {
         return true;
     }
 
-    private void buildImplicitFamilies(ConstantsRegistry constants, ItemRegistry items, Map<String, FamilyInfo> out) {
+    // -----------------------------------------------------------------
+    // Pass 2 — museum upgrade chains from museum.json "children"
+    // -----------------------------------------------------------------
+
+    /**
+     * Registers upgrade lines curated in NEU's {@code constants/museum.json}
+     * {@code children} map (item → the item it upgrades from). This is the only data
+     * source for lines that upgrade outside crafting — shop-bought progressions like
+     * HYDRO_CAN_1000 → … → AQUAMASTER_HYDROMAX or the Mithril/Titanium pickaxes.
+     *
+     * <p>Entries whose ends are not both known, unregistered items are skipped —
+     * the map also relates museum armor-set names, which are not item ids.</p>
+     */
+    private static void buildMuseumChains(ConstantsRegistry constants, ItemRegistry items,
+                                          Map<String, FamilyInfo> out) {
+        Map<String, String> upgradedFrom = constants.getMuseumChildren();
+        if (upgradedFrom == null || upgradedFrom.isEmpty()) return;
+
+        Map<String, String> parentOf = new HashMap<>();
+        Map<String, List<String>> childrenOf = new HashMap<>();
+        for (Map.Entry<String, String> entry : upgradedFrom.entrySet()) {
+            String item = entry.getKey();
+            String base = entry.getValue();
+            if (base == null || base.isEmpty() || base.equals(item)) continue;
+            if (out.containsKey(item) || out.containsKey(base)) continue;
+            if (items.getByInternalName(item).isEmpty()
+                    || items.getByInternalName(base).isEmpty()) continue;
+            parentOf.put(item, base);
+            childrenOf.computeIfAbsent(base, k -> new ArrayList<>(2)).add(item);
+        }
+
+        registerLinearChains(parentOf, childrenOf, out, null);
+    }
+
+    // -----------------------------------------------------------------
+    // Pass 3 — implicit families from item name patterns
+    // -----------------------------------------------------------------
+
+    private static void buildImplicitFamilies(ItemRegistry items, Map<String, FamilyInfo> out) {
         Set<String> alreadyRegistered = new HashSet<>(out.keySet());
         buildCraftedUpgradeChains(items, alreadyRegistered, out);
 
@@ -573,56 +551,65 @@ public final class FamilyResolver {
         Map<String, Set<String>> accessoryChains = new HashMap<>();
         Map<String, Set<String>> drillFamilies = new HashMap<>();
 
+        // First matching pattern claims the item.
         for (NeuItem item : items.getAllItems()) {
             String id = item.internalName();
             if (alreadyRegistered.contains(id)) continue;
 
-            // Armor set piece
-            String armorBase = getArmorBase(id);
-            if (armorBase != null) {
-                armorSets.computeIfAbsent(armorBase, k -> new HashSet<>()).add(id);
+            String armorSuffix = getArmorSlotSuffix(id);
+            if (armorSuffix != null) {
+                String base = id.substring(0, id.length() - armorSuffix.length());
+                armorSets.computeIfAbsent(base, k -> new HashSet<>()).add(id);
                 continue;
             }
-
-            // Pet tier
             String petBase = getPetBase(id);
             if (petBase != null) {
                 petFamilies.computeIfAbsent(petBase, k -> new HashSet<>()).add(id);
                 continue;
             }
-
-            // Accessory chain piece
             String accessoryBase = getAccessoryBase(id);
             if (accessoryBase != null) {
                 accessoryChains.computeIfAbsent(accessoryBase, k -> new HashSet<>()).add(id);
                 continue;
             }
-
-            // Drill tier
             String drillBase = getDrillBase(id);
             if (drillBase != null) {
                 drillFamilies.computeIfAbsent(drillBase, k -> new HashSet<>()).add(id);
             }
         }
 
-        registerImplicitFamily(armorSets, FamilyType.ARMOR_SET, "_SET", 2, out);
-        registerImplicitFamily(petFamilies, FamilyType.TIERED, "_PET", 2, out);
-        registerImplicitFamily(accessoryChains, FamilyType.ACCESSORY_CHAIN, "_ACCESSORY", 2, out);
-        registerImplicitFamily(drillFamilies, FamilyType.TIERED, "_DRILL", 2, out);
+        registerImplicitFamilies(armorSets, FamilyType.ARMOR_SET, "_SET", items, out);
+        registerImplicitFamilies(petFamilies, FamilyType.TIERED, "_PET", items, out);
+        registerImplicitFamilies(accessoryChains, FamilyType.ACCESSORY_CHAIN, "_ACCESSORY", items, out);
+        registerImplicitFamilies(drillFamilies, FamilyType.TIERED, "_DRILL", items, out);
+    }
+
+    /** Registers each group of ≥2 members as a family named {@code <base><idSuffix>}. */
+    private static void registerImplicitFamilies(Map<String, Set<String>> groups, FamilyType type,
+                                                 String idSuffix, ItemRegistry items,
+                                                 Map<String, FamilyInfo> out) {
+        for (Map.Entry<String, Set<String>> entry : groups.entrySet()) {
+            if (entry.getValue().size() < 2) continue;
+            FamilyInfo info = new FamilyInfo(entry.getKey() + idSuffix, type,
+                    tierOrderedMembers(entry.getValue(), items));
+            for (String member : info.members()) {
+                out.put(member, info);
+            }
+        }
     }
 
     /**
      * Discovers named armor upgrade lines (MELON_HELMET → CROPIE_HELMET → … →
      * HELIANTHUS_HELMET) by following crafting recipes: a piece whose recipe contains
      * exactly one other piece of the same slot is an upgrade of that piece. Only
-     * maximal linear chains qualify — a base with several crafted variants
-     * (WITHER_HELMET → POWER/SPEED/TANK/WISE) is a set of side-grades, not a chain.
+     * maximal linear chains qualify — a base with several crafted variants is a set
+     * of side-grades, not a chain.
      *
      * <p>Members are registered in chain order (base first) and added to
-     * {@code alreadyRegistered} so the armor-set pass below skips them.</p>
+     * {@code alreadyRegistered} so the armor-set pass skips them.</p>
      */
-    private void buildCraftedUpgradeChains(ItemRegistry items, Set<String> alreadyRegistered,
-                                           Map<String, FamilyInfo> out) {
+    private static void buildCraftedUpgradeChains(ItemRegistry items, Set<String> alreadyRegistered,
+                                                  Map<String, FamilyInfo> out) {
         Map<String, String> parentOf = new HashMap<>();
         Map<String, List<String>> childrenOf = new HashMap<>();
         for (NeuItem item : items.getAllItems()) {
@@ -641,35 +628,84 @@ public final class FamilyResolver {
     }
 
     /**
+     * The single same-slot armor piece appearing in the item's crafting recipes, or null
+     * when there is none, several distinct ones, or the candidate is unknown/already in
+     * an explicit family.
+     */
+    private static String craftedFromSameSlot(NeuItem item, String id, String slot,
+                                              ItemRegistry items, Set<String> alreadyRegistered) {
+        String found = null;
+        if (item.recipe() instanceof NeuRecipe.CraftingRecipe crafting) {
+            found = sameSlotIngredient(crafting, id, slot, items, alreadyRegistered, found);
+            if (found == CONFLICT) return null;
+        }
+        if (item.recipes() != null) {
+            for (NeuRecipe recipe : item.recipes()) {
+                if (recipe instanceof NeuRecipe.CraftingRecipe crafting) {
+                    found = sameSlotIngredient(crafting, id, slot, items, alreadyRegistered, found);
+                    if (found == CONFLICT) return null;
+                }
+            }
+        }
+        return found;
+    }
+
+    /** Sentinel: several distinct same-slot ingredients — no unambiguous upgrade parent. */
+    private static final String CONFLICT = "\0CONFLICT";
+
+    private static String sameSlotIngredient(NeuRecipe.CraftingRecipe recipe, String id, String slot,
+                                             ItemRegistry items, Set<String> alreadyRegistered,
+                                             String found) {
+        for (String cell : recipe.grid().values()) {
+            String ingredient = ingredientId(cell);
+            if (ingredient == null || !ingredient.endsWith(slot) || ingredient.equals(id)) continue;
+            if (alreadyRegistered.contains(ingredient)
+                    || items.getByInternalName(ingredient).isEmpty()) continue;
+            if (found != null && !found.equals(ingredient)) return CONFLICT;
+            found = ingredient;
+        }
+        return found;
+    }
+
+    // -----------------------------------------------------------------
+    // Pass 4 — general crafted upgrade chains (config-gated)
+    // -----------------------------------------------------------------
+
+    /**
      * General crafted-into upgrade chains, discovered from crafting recipes across all
      * remaining items: compaction lines (DIAMOND → ENCHANTED_DIAMOND →
      * ENCHANTED_DIAMOND_BLOCK), weapon lines (ASPECT_OF_THE_END → ASPECT_OF_THE_VOID,
-     * SPIDER_SWORD → … → STING), rods, wands, etc. Config-gated (see constructor).
+     * SPIDER_SWORD → … → STING), rods, wands, etc.
      *
-     * <p>An edge means "crafted from": a recipe with a single distinct ingredient, or —
-     * for weapon/tool-like items — a recipe whose ingredients include exactly one item
-     * of the same category. When alternate recipes yield two candidate parents that are
-     * themselves linked (ENCHANTED_DIAMOND from DIAMOND or DIAMOND_BLOCK), the more
-     * derived one wins so the chain stays linear. As with armor, only maximal linear
-     * chains register — branching bases are side-grades.</p>
+     * <p>An edge means "crafted from" — see {@link #chainParent}. When alternate recipes
+     * yield two candidate parents that are themselves linked (ENCHANTED_DIAMOND from
+     * DIAMOND or DIAMOND_BLOCK), the more derived one wins so the chain stays linear.
+     * As with armor, only maximal linear chains register — branching bases are side-grades.</p>
      */
-    private void buildGeneralCraftedChains(ItemRegistry items, Map<String, FamilyInfo> out) {
+    private static void buildGeneralCraftedChains(ItemRegistry items, Map<String, FamilyInfo> out) {
         Set<String> registered = out.keySet();
 
         Map<String, Set<String>> candidates = new HashMap<>();
-        Map<String, SkyblockItemCategory> categoryCache = new HashMap<>();
+        Set<String> vanillaIds = new HashSet<>();
+        Map<String, SkyblockItemCategory> categories = new HashMap<>();
         for (NeuItem item : items.getAllItems()) {
             String id = item.internalName();
             if (registered.contains(id)) continue;
-            Set<String> parents = candidateParents(item, id, items, registered, categoryCache);
+            if (item.vanilla()) vanillaIds.add(id);
+            Set<String> parents = candidateParents(item, id, items, registered, categories);
             if (!parents.isEmpty()) {
                 candidates.put(id, parents);
             }
         }
 
+        // Vanilla items may be chain bases (COAL → ENCHANTED_COAL) but never chain
+        // children: their crafted vanilla side-products (Bonemeal from Bone, panes from
+        // glass) are not upgrades, and such edges would branch and thereby kill the real
+        // compaction line. Their candidates still feed resolveParent's derivation checks.
         Map<String, String> parentOf = new HashMap<>();
         Map<String, List<String>> childrenOf = new HashMap<>();
         for (Map.Entry<String, Set<String>> entry : candidates.entrySet()) {
+            if (vanillaIds.contains(entry.getKey())) continue;
             String parent = resolveParent(entry.getValue(), candidates);
             if (parent != null) {
                 parentOf.put(entry.getKey(), parent);
@@ -707,6 +743,73 @@ public final class FamilyResolver {
      * ignored when checking name continuity along a chain edge.
      */
     private static final Set<String> CHAIN_MODIFIER_TOKENS = Set.of("ENCHANTED", "ITEM", "BLOCK");
+
+    /** Possible crafted-from parents of the item, one candidate per qualifying recipe. */
+    private static Set<String> candidateParents(NeuItem item, String id, ItemRegistry items,
+                                                Set<String> registered,
+                                                Map<String, SkyblockItemCategory> categories) {
+        Set<String> result = Collections.emptySet();
+        NeuRecipe direct = item.recipe();
+        List<NeuRecipe> extras = item.recipes();
+        int extraCount = extras != null ? extras.size() : 0;
+        for (int i = direct != null ? -1 : 0; i < extraCount; i++) {
+            NeuRecipe recipe = i < 0 ? direct : extras.get(i);
+            if (!(recipe instanceof NeuRecipe.CraftingRecipe crafting)) continue;
+            String candidate = chainParent(crafting, item, id, items, registered, categories);
+            if (candidate != null) {
+                if (result.isEmpty()) result = new HashSet<>(2);
+                result.add(candidate);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * The crafted-from parent one recipe implies, or null. A recipe with a single
+     * distinct ingredient makes that ingredient the parent — but only when the names
+     * show continuity (a compaction tier of the same material, not a product merely
+     * crafted out of it). Weapon/tool-like items skip the continuity check since
+     * upgrades legitimately rename (ASPECT_OF_THE_END → ASPECT_OF_THE_VOID); for those,
+     * a multi-ingredient recipe also chains when exactly one ingredient shares the
+     * item's category (SPIDER_SWORD → … → STING).
+     */
+    private static String chainParent(NeuRecipe.CraftingRecipe crafting, NeuItem item, String id,
+                                      ItemRegistry items, Set<String> registered,
+                                      Map<String, SkyblockItemCategory> categories) {
+        Set<String> distinct = new HashSet<>(4);
+        for (String cell : crafting.grid().values()) {
+            String ingredient = ingredientId(cell);
+            if (ingredient == null || ingredient.equals(id) || registered.contains(ingredient)
+                    || items.getByInternalName(ingredient).isEmpty()) continue;
+            distinct.add(ingredient);
+        }
+        if (distinct.isEmpty()) return null;
+
+        SkyblockItemCategory category =
+                categories.computeIfAbsent(id, k -> ItemCategoryResolver.resolve(item));
+        if (distinct.size() == 1) {
+            String only = distinct.iterator().next();
+            if (CHAINABLE_CATEGORIES.contains(category) || hasTokenContinuity(only, id)
+                    || hasDisplayContinuity(only, item, items)) {
+                return only;
+            }
+            return null;
+        }
+
+        if (!CHAINABLE_CATEGORIES.contains(category)) return null;
+        String candidate = null;
+        for (String ingredient : distinct) {
+            SkyblockItemCategory ingredientCategory = categories.computeIfAbsent(
+                    ingredient, ing -> items.getByInternalName(ing)
+                            .map(ItemCategoryResolver::resolve)
+                            .orElse(SkyblockItemCategory.UNKNOWN));
+            if (ingredientCategory == category) {
+                if (candidate != null) return null; // two same-category ingredients: ambiguous
+                candidate = ingredient;
+            }
+        }
+        return candidate;
+    }
 
     /**
      * True when the child's internal name keeps every core token of the parent's — the
@@ -749,75 +852,6 @@ public final class FamilyResolver {
         Set<String> tokens = new HashSet<>(Arrays.asList(stripped.split("[^A-Z0-9]+")));
         tokens.remove("");
         return tokens;
-    }
-
-    /** Possible crafted-from parents of the item, one candidate per qualifying recipe. */
-    private Set<String> candidateParents(NeuItem item, String id, ItemRegistry items,
-                                         Set<String> registered,
-                                         Map<String, SkyblockItemCategory> categoryCache) {
-        Set<String> result = Collections.emptySet();
-        SkyblockItemCategory category = null;
-        boolean categoryResolved = false;
-
-        NeuRecipe direct = item.recipe();
-        List<NeuRecipe> extra = item.recipes();
-        int recipeCount = (direct != null ? 1 : 0) + (extra != null ? extra.size() : 0);
-        for (int i = 0; i < recipeCount; i++) {
-            NeuRecipe recipe = direct != null ? (i == 0 ? direct : extra.get(i - 1))
-                    : extra.get(i);
-            if (!(recipe instanceof NeuRecipe.CraftingRecipe crafting)) continue;
-
-            // Distinct known, unregistered ingredients of this one recipe
-            Set<String> distinct = new HashSet<>(4);
-            for (String cell : crafting.grid().values()) {
-                if (cell == null || cell.isEmpty()) continue;
-                int colon = cell.indexOf(':');
-                String ingredient = colon >= 0 ? cell.substring(0, colon) : cell;
-                if (ingredient.equals(id) || registered.contains(ingredient)
-                        || items.getByInternalName(ingredient).isEmpty()) continue;
-                distinct.add(ingredient);
-            }
-
-            String candidate = null;
-            if (distinct.size() == 1) {
-                String only = distinct.iterator().next();
-                if (!categoryResolved) {
-                    category = ItemCategoryResolver.resolve(item);
-                    categoryResolved = true;
-                }
-                // Weapon/tool-like upgrades legitimately rename (ASPECT_OF_THE_END →
-                // ASPECT_OF_THE_VOID); everything else must keep the material's name.
-                if (CHAINABLE_CATEGORIES.contains(category) || hasTokenContinuity(only, id)
-                        || hasDisplayContinuity(only, item, items)) {
-                    candidate = only;
-                }
-            } else if (distinct.size() > 1) {
-                if (!categoryResolved) {
-                    category = ItemCategoryResolver.resolve(item);
-                    categoryResolved = true;
-                }
-                if (CHAINABLE_CATEGORIES.contains(category)) {
-                    for (String ingredient : distinct) {
-                        SkyblockItemCategory ingredientCategory = categoryCache.computeIfAbsent(
-                                ingredient, ing -> items.getByInternalName(ing)
-                                        .map(ItemCategoryResolver::resolve)
-                                        .orElse(SkyblockItemCategory.UNKNOWN));
-                        if (ingredientCategory == category) {
-                            if (candidate != null) {
-                                candidate = null; // two same-category ingredients: ambiguous
-                                break;
-                            }
-                            candidate = ingredient;
-                        }
-                    }
-                }
-            }
-            if (candidate != null) {
-                if (result.isEmpty()) result = new HashSet<>(2);
-                result.add(candidate);
-            }
-        }
-        return result;
     }
 
     /**
@@ -889,86 +923,19 @@ public final class FamilyResolver {
         }
     }
 
-    /**
-     * The single same-slot armor piece appearing in the item's crafting recipes, or null
-     * when there is none, several distinct ones, or the candidate is unknown/already in
-     * an explicit family.
-     */
-    private String craftedFromSameSlot(NeuItem item, String id, String slot,
-                                       ItemRegistry items, Set<String> alreadyRegistered) {
-        String found = null;
-        if (item.recipe() instanceof NeuRecipe.CraftingRecipe crafting) {
-            found = sameSlotIngredient(crafting, id, slot, items, alreadyRegistered, found);
-            if (found == CONFLICT) return null;
-        }
-        if (item.recipes() != null) {
-            for (NeuRecipe recipe : item.recipes()) {
-                if (recipe instanceof NeuRecipe.CraftingRecipe crafting) {
-                    found = sameSlotIngredient(crafting, id, slot, items, alreadyRegistered, found);
-                    if (found == CONFLICT) return null;
-                }
-            }
-        }
-        return found;
-    }
-
-    /** Sentinel: several distinct same-slot ingredients — no unambiguous upgrade parent. */
-    private static final String CONFLICT = "\0CONFLICT";
-
-    private String sameSlotIngredient(NeuRecipe.CraftingRecipe recipe, String id, String slot,
-                                      ItemRegistry items, Set<String> alreadyRegistered, String found) {
-        for (String cell : recipe.grid().values()) {
-            if (cell == null || cell.isEmpty()) continue;
-            int colon = cell.indexOf(':');
-            String ingredient = colon >= 0 ? cell.substring(0, colon) : cell;
-            if (!ingredient.endsWith(slot) || ingredient.equals(id)) continue;
-            if (alreadyRegistered.contains(ingredient)
-                    || items.getByInternalName(ingredient).isEmpty()) continue;
-            if (found != null && !found.equals(ingredient)) return CONFLICT;
-            found = ingredient;
-        }
-        return found;
-    }
-
     // -----------------------------------------------------------------
-    // Pattern detection helpers
+    // Name pattern helpers
     // -----------------------------------------------------------------
 
-    private void registerImplicitFamily(Map<String, Set<String>> groups, FamilyType type,
-                                        String idSuffix, int minSize, Map<String, FamilyInfo> out) {
-        for (Map.Entry<String, Set<String>> entry : groups.entrySet()) {
-            if (entry.getValue().size() >= minSize) {
-                List<String> sorted = entry.getValue().stream()
-                        .sorted(memberComparator)
-                        .toList();
-                Set<String> members = Collections.unmodifiableSet(new LinkedHashSet<>(sorted));
-                FamilyInfo info = new FamilyInfo(entry.getKey() + idSuffix, type, members);
-                for (String member : members) {
-                    out.put(member, info);
-                }
-            }
-        }
+    /** SkyBlock id of a recipe grid cell ({@code "INK_SACK:3"} → {@code INK_SACK}), or null. */
+    private static String ingredientId(String cell) {
+        if (cell == null || cell.isEmpty()) return null;
+        int colon = cell.indexOf(':');
+        return colon >= 0 ? cell.substring(0, colon) : cell;
     }
 
-    private boolean hasNumericTier(String id) {
-        // Match _N at end (e.g. GENERATOR_1, PERFECT_BOOTS_12)
-        int lastUnderscore = id.lastIndexOf('_');
-        if (lastUnderscore != -1 && lastUnderscore < id.length() - 1) {
-            String suffix = id.substring(lastUnderscore + 1);
-            if (isAllDigits(suffix)) return true;
-        }
-        // Match ;N at end (e.g. SHARPNESS;3, ARMADILLO;1)
-        int semi = id.lastIndexOf(';');
-        if (semi != -1 && semi < id.length() - 1) {
-            String suffix = id.substring(semi + 1);
-            return isAllDigits(suffix);
-        }
-        return false;
-    }
-
-    private String getArmorBase(String id) {
-        String suffix = getArmorSlotSuffix(id);
-        return suffix != null ? id.substring(0, id.length() - suffix.length()) : null;
+    private static boolean isArmorPiece(String id) {
+        return getArmorSlotSuffix(id) != null;
     }
 
     private static String getArmorSlotSuffix(String id) {
@@ -978,14 +945,15 @@ public final class FamilyResolver {
         return null;
     }
 
-    private String getPetBase(String id) {
+    /** Pet ids are {@code BASE;N} (tier in the suffix): {@code ARMADILLO;2} → {@code ARMADILLO}. */
+    private static String getPetBase(String id) {
         int semi = id.lastIndexOf(';');
         if (semi == -1) return null;
         return id.substring(0, semi);
     }
 
-    private String getAccessoryBase(String id) {
-        for (String suffix : ACCESSORY_SUFFIXES) {
+    private static String getAccessoryBase(String id) {
+        for (String suffix : ACCESSORY_SUFFIX_TIERS.keySet()) {
             String withUnderscore = "_" + suffix;
             if (id.endsWith(withUnderscore)) {
                 return id.substring(0, id.length() - withUnderscore.length());
@@ -994,16 +962,11 @@ public final class FamilyResolver {
         return null;
     }
 
-    private String getDrillBase(String id) {
-        int lastUnderscore = id.lastIndexOf('_');
-        if (lastUnderscore == -1 || lastUnderscore == id.length() - 1) return null;
-        String suffix = id.substring(lastUnderscore + 1);
-        if (!isAllDigits(suffix)) return null;
-        String prefix = id.substring(0, lastUnderscore);
-        if (prefix.endsWith("_DRILL")) {
-            return prefix;
-        }
-        return null;
+    private static String getDrillBase(String id) {
+        int sep = numericSuffixSeparator(id);
+        if (sep <= 0 || id.charAt(sep) != '_') return null;
+        String prefix = id.substring(0, sep);
+        return prefix.endsWith("_DRILL") ? prefix : null;
     }
 
 }
