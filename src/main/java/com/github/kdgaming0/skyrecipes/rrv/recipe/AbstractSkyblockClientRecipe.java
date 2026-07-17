@@ -119,6 +119,7 @@ public abstract class AbstractSkyblockClientRecipe implements ReliableClientReci
         if (!buttonsDirty && !dropped) {
             return;
         }
+        wikiButton = null;
         sentinelWidget = placeButtons(screen, pos);
         buttonsDirty = false;
     }
