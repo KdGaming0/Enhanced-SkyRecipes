@@ -36,6 +36,7 @@
     "rrv.fix.RecipeViewMenuFixesMixin",
     "rrv.fix.RrvScreenNullItemGuardMixin",
     "skyblocker.GardenPlotsWidgetMixin",
+    "skyblocker.ItemViewOverlayLookupMixin",
     "skyblocker.MuseumManagerMixin"
   ],
   "injectors": {

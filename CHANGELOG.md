@@ -1,5 +1,6 @@
 ### 0.4.0
 
+- Skyblocker's item lookup keybinds now work on items in the Reliable Recipe Viewer item list. Hovering an item there and pressing Item Price Lookup keybind now shows the item on the Bazaar/Auction House — previously these keybinds did nothing on items in the item list.
 - Pressing Tab in the search bar now completes the suggested item name instead of jumping to the next field.
 - Accessories, hatcessories, carnival masks and timecharms no longer show a Reforge tab — these can't be reforged, so the tab only appears for items now that correclt can be reforged.
 - Tiered SkyBlock items are now grouped in the item list: each minion, pet, enchantment, drill, and accessory upgrade line collapses into a single expandable entry instead of listing every tier separately. Click a group to expand it; searching still shows exact tiers directly.

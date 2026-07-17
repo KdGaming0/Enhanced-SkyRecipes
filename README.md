@@ -199,7 +199,7 @@ Want to support development? You can do so on **Ko-fi**. All donations are great
 SkyRecipes would not exist without these community-maintained data sources:
 
 - **[NotEnoughUpdates Repository](https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO)** (MIT) — the SkyBlock item and recipe database (items, crafting, forge, drops, NPC shops, essence upgrades, attribute shards, and more). Downloaded and compiled at runtime, kept refreshed in the background.
-- **[SkyShards](https://skyshards.com/)** by [Campionnn](https://github.com/Campionnn/SkyShards) — the attribute shard fusion dataset powering the Shard Fusion recipe category. Fetched at runtime; visit skyshards.com for optimal fusion paths and live prices.
+- **[SkyShards](https://github.com/Campionnn/SkyShards)** by [Campionnn](https://github.com/Campionnn/SkyShards) — the attribute shard fusion dataset powering the Shard Fusion recipe category. Fetched at runtime; visit skyshards.com for optimal fusion paths accounting for price.
 - **[Hypixel SkyBlock Wiki](https://hypixelskyblock.minecraft.wiki/)** — the target of the in-mod wiki buttons.
 
 ### Derivative code
