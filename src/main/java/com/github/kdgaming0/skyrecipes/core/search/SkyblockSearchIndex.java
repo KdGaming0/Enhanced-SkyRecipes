@@ -690,9 +690,10 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolveKeywordUncached(String token) {
-        // Single-character numeric tokens: exact match only to prevent "1" from
-        // matching "10", "11", "12", etc. via prefix expansion.
-        if (token.length() == 1 && Character.isDigit(token.charAt(0))) {
+        // Purely numeric tokens: exact match only. Prefix expansion would make "1"
+        // match "10"/"12s", and the fuzzy fallback would make "12" match "13" — both
+        // wrong for tier segments split out of IDs like COBBLESTONE_GENERATOR_12.
+        if (isAllDigits(token)) {
             BitSet exact = anyTokenIndex.get(token);
             return exact != null ? (BitSet) exact.clone() : new BitSet();
         }
@@ -1462,14 +1463,33 @@ public final class SkyblockSearchIndex {
     }
 
     private void addNameToken(String token, int itemIndex) {
-        if (token.length() <= 1) return;
+        if (isTooShortToIndex(token)) return;
         addToken(nameTokenIndex, token, itemIndex);
         addToken(anyTokenIndex, token, itemIndex);
     }
 
     private void addAnyToken(String token, int itemIndex) {
-        if (token.length() <= 1) return;
+        if (isTooShortToIndex(token)) return;
         addToken(anyTokenIndex, token, itemIndex);
+    }
+
+    /**
+     * Single-character tokens are dropped except digits: internal-name segments like the
+     * "0" in {@code GIRAFFE;0} or the "1" in {@code COBBLESTONE_GENERATOR_1} must be
+     * indexed, because the query parser emits them as standalone keyword clauses and
+     * {@link #resolveKeywordUncached} resolves them by exact lookup.
+     */
+    private static boolean isTooShortToIndex(String token) {
+        if (token.isEmpty()) return true;
+        return token.length() == 1 && !Character.isDigit(token.charAt(0));
+    }
+
+    private static boolean isAllDigits(String token) {
+        if (token.isEmpty()) return false;
+        for (int i = 0; i < token.length(); i++) {
+            if (!Character.isDigit(token.charAt(i))) return false;
+        }
+        return true;
     }
 
     private void indexSlayerRequirements(int itemIndex, PreparedItem prep, Set<String> itemTokens) {
