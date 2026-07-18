@@ -112,9 +112,12 @@ public class SkyRecipesCommand {
         src.sendFeedback(Component.literal(checks.toString()));
 
         if (snap.lastErrorMessage() != null) {
+            String origin = snap.lastErrorType() != null
+                    ? snap.lastErrorStage() + ", " + snap.lastErrorType()
+                    : snap.lastErrorStage();
             src.sendFeedback(Component.literal(String.format(
                     "§7Last problem §8(%s, %s)§7: §c%s",
-                    snap.lastErrorStage(), agoOrNever(snap.lastErrorTime(), now), snap.lastErrorMessage())));
+                    origin, agoOrNever(snap.lastErrorTime(), now), snap.lastErrorMessage())));
         }
 
         sendActionHint(src, snap);

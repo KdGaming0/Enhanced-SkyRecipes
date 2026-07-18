@@ -276,6 +276,10 @@ public class RuntimeUpdateService {
      */
     public void checkEtagAsync(Consumer<Boolean> onComplete) {
         scheduler.execute(() -> {
+            // The decision is computed inside the try but delivered outside it,
+            // so a throw from the consumer itself can never re-trigger the catch
+            // and fire onComplete a second time.
+            boolean decision;
             try {
                 long checkStart = System.currentTimeMillis();
                 String currentEtag = readCurrentEtag();
@@ -285,29 +289,26 @@ public class RuntimeUpdateService {
 
                 if (remoteEtag == null) {
                     LOGGER.warn("Could not fetch remote ETag (network unavailable). Using local data if present.");
-                    onComplete.accept(currentEtag != null);
-                    return;
-                }
-
-                if (currentEtag == null) {
+                    decision = currentEtag != null;
+                } else if (currentEtag == null) {
                     LOGGER.info("No local metadata found — cold start required.");
-                    onComplete.accept(false);
-                    return;
-                }
-
-                boolean matches = etagsMatch(remoteEtag, currentEtag);
-                if (matches) {
-                    LOGGER.info("Remote ETag matches local ({}). Warm start permitted.", remoteEtag);
+                    decision = false;
                 } else {
-                    LOGGER.info("Remote ETag changed (remote: {}, local: {}). Cold start required.",
-                            remoteEtag, currentEtag);
+                    boolean matches = etagsMatch(remoteEtag, currentEtag);
+                    if (matches) {
+                        LOGGER.info("Remote ETag matches local ({}). Warm start permitted.", remoteEtag);
+                    } else {
+                        LOGGER.info("Remote ETag changed (remote: {}, local: {}). Cold start required.",
+                                remoteEtag, currentEtag);
+                    }
+                    decision = matches;
                 }
-                onComplete.accept(matches);
-
-            } catch (Exception e) {
+            } catch (Throwable e) {
+                if (e instanceof VirtualMachineError vme) throw vme;
                 LOGGER.error("ETag check failed unexpectedly", e);
-                onComplete.accept(false);
+                decision = false;
             }
+            onComplete.accept(decision);
         });
     }
 
@@ -319,7 +320,8 @@ public class RuntimeUpdateService {
             try {
                 BinaryDataCompiler.CompileResult result = downloadAndCompile(null);
                 onComplete.accept(result);
-            } catch (Exception e) {
+            } catch (Throwable e) {
+                if (e instanceof VirtualMachineError vme) throw vme;
                 // Record before the callback so the pipeline is already FAILED when
                 // downstream fallbacks (e.g. the overlay mixins) check the state.
                 if (isNetworkError(e)) {
@@ -409,7 +411,14 @@ public class RuntimeUpdateService {
                 compileInProgress = false;
             }
 
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            // A Throwable escaping a scheduleWithFixedDelay task silently cancels
+            // every future execution — including the backoff retries scheduled on
+            // this same executor. Only genuinely fatal VM errors may escape.
+            if (e instanceof VirtualMachineError vme) {
+                LOGGER.error("Fatal error in update check — update service halted", vme);
+                throw vme;
+            }
             if (isNetworkError(e)) {
                 String reason = describeNetworkError(e);
                 LOGGER.warn("Update check failed: {}", reason);
@@ -560,6 +569,12 @@ public class RuntimeUpdateService {
                     int responseCode = conn.getResponseCode();
                     if (responseCode != 200) {
                         LOGGER.warn("HEAD request returned {}", responseCode);
+                        // GitHub answered, so "check your internet" would mislead —
+                        // record the status so describeNetworkError reports it.
+                        lastEtagFetchError = new IOException("GitHub responded with HTTP " + responseCode
+                                + (responseCode == 429 || responseCode == 403
+                                ? " (rate limited — usually resolves on its own; not a connection problem)"
+                                : ""));
                         return null;
                     }
                     return conn.getHeaderField("ETag");

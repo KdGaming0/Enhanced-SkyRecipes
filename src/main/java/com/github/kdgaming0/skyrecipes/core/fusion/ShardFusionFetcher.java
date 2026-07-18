@@ -62,6 +62,9 @@ public final class ShardFusionFetcher {
             }
             String etag = response.headers().firstValue("ETag").orElse("");
             return new FetchResult(response.body(), etag, false);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
         } catch (Exception e) {
             LOGGER.warn("Failed to fetch shard fusion data", e);
             return null;

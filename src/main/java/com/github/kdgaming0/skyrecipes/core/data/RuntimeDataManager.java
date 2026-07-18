@@ -130,23 +130,30 @@ public class RuntimeDataManager {
         state = State.LOADING;
         LOGGER.info("Starting cold start — downloading and compiling NEU data...");
 
-        updateService.compileNow(result -> {
-            if (result != null) {
-                loadCompiledData(result.outputPath(), result.metaPath());
-            } else {
-                state = State.ERROR;
-            }
+        updateService.compileNow(this::onColdCompileFinished);
+    }
 
-            if (state == State.READY) {
-                updateService.onPipelineSuccess();
-            } else {
-                LOGGER.error("Cold start failed — automatic retry scheduled.");
-                updateService.scheduleRetry();
-            }
-            // Regular cadence must exist regardless of outcome, so recovery
-            // does not depend on a successful first attempt.
-            updateService.start();
-        });
+    /**
+     * Completion of the cold-start compile, on the update-service thread.
+     * Synchronized like every other state mutation so the check-then-act on
+     * {@code state} cannot interleave with a concurrent publish.
+     */
+    private synchronized void onColdCompileFinished(BinaryDataCompiler.CompileResult result) {
+        if (result != null) {
+            loadCompiledData(result.outputPath(), result.metaPath());
+        } else {
+            state = State.ERROR;
+        }
+
+        if (state == State.READY) {
+            updateService.onPipelineSuccess();
+        } else {
+            LOGGER.error("Cold start failed — automatic retry scheduled.");
+            updateService.scheduleRetry();
+        }
+        // Regular cadence must exist regardless of outcome, so recovery
+        // does not depend on a successful first attempt.
+        updateService.start();
     }
 
     /**

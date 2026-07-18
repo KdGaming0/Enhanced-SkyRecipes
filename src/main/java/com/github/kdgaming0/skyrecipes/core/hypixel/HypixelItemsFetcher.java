@@ -50,6 +50,9 @@ public final class HypixelItemsFetcher {
                          new InputStreamReader(body, StandardCharsets.UTF_8))) {
                 return parseResponse(reader);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
         } catch (Exception e) {
             LOGGER.warn("Failed to fetch Hypixel items API", e);
             return null;

@@ -796,10 +796,16 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     // =========================================================================
 
     private void handleEndClientTick(Minecraft client) {
-        handleSearchBarSuggestionCommit(client);
+        // A throw from a Fabric tick handler crashes the client, and this runs
+        // every tick — never let search-bar or launch work escape.
+        try {
+            handleSearchBarSuggestionCommit(client);
 
-        if (awaitingComponentBinding && SkyRecipes.isDataReady() && areComponentsBound()) {
-            launchBackgroundGeneration();
+            if (awaitingComponentBinding && SkyRecipes.isDataReady() && areComponentsBound()) {
+                launchBackgroundGeneration();
+            }
+        } catch (Exception e) {
+            LOGGER.error("SkyRecipes tick handler failed", e);
         }
 
         if (startupBatcher != null) {
@@ -839,6 +845,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (fetch == null) return;
         try {
             fetch.get(HYPIXEL_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             LOGGER.debug("Hypixel stats not ready after {} s — proceeding with fallback values",
                     HYPIXEL_WAIT_SECONDS);
@@ -857,6 +865,9 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (cacheLoad == null) return;
         try {
             cacheLoad.get(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
         } catch (Exception e) {
             LOGGER.debug("Shard fusion cache load not ready", e);
         }
@@ -866,6 +877,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (fetch == null) return;
         try {
             fetch.get(SHARD_FUSION_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             LOGGER.debug("Shard fusion data not ready after {} s — generating without fusion recipes",
                     SHARD_FUSION_WAIT_SECONDS);

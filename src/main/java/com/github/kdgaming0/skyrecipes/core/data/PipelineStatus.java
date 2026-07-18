@@ -31,6 +31,7 @@ public final class PipelineStatus {
 
     private static String lastErrorStage = null;
     private static String lastErrorMessage = null;
+    private static String lastErrorType = null;
     private static long lastErrorTime = 0L;
 
     private static long dataBuildTimestamp = 0L;
@@ -66,10 +67,10 @@ public final class PipelineStatus {
      * if live data exists, otherwise {@code FAILED}, and a one-shot chat
      * notification is armed (see {@link #consumeErrorNotification()}).
      */
-    @SuppressWarnings("unused")
     public static synchronized void recordError(String stage, String userMessage, Throwable t) {
         lastErrorStage = stage;
         lastErrorMessage = userMessage;
+        lastErrorType = t != null ? t.getClass().getSimpleName() : null;
         lastErrorTime = System.currentTimeMillis();
         errorNotificationPending = true;
         refreshInProgress = false;
@@ -135,7 +136,7 @@ public final class PipelineStatus {
 
     public static synchronized Snapshot snapshot() {
         return new Snapshot(state, refreshInProgress, providerOnlyMode,
-                lastErrorStage, lastErrorMessage, lastErrorTime,
+                lastErrorStage, lastErrorMessage, lastErrorType, lastErrorTime,
                 dataBuildTimestamp, etag, itemCount,
                 recipeCount, stackCount, recipeFailures, stackFailures,
                 injectedRecipes, skippedRecipes,
@@ -158,7 +159,8 @@ public final class PipelineStatus {
     }
 
     public record Snapshot(State state, boolean refreshInProgress, boolean providerOnlyMode,
-                           String lastErrorStage, String lastErrorMessage, long lastErrorTime,
+                           String lastErrorStage, String lastErrorMessage, String lastErrorType,
+                           long lastErrorTime,
                            long dataBuildTimestamp, String etag, int itemCount,
                            int recipeCount, int stackCount, int recipeFailures, int stackFailures,
                            int injectedRecipes, int skippedRecipes,
