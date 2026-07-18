@@ -31,9 +31,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * Replaces RRV's inventory slot highlighting with SkyBlock ID-aware matching.
@@ -73,24 +73,22 @@ public class ItemViewOverlayMixin {
     // enchanted books (Hypixel books all share id ENCHANTED_BOOK — the specific
     // enchant lives in ExtraAttributes/lore, never in the repo entry). This path
     // evaluates keyword/phrase/regex clauses against the live stack's name, lore,
-    // and enchant NBT. Both caches are identity-keyed and render-thread-only:
-    // liveText survives query changes (NBT doesn't change under one instance),
-    // liveMatch is per query.
+    // and enchant NBT. All three caches are render-thread-only and effectively
+    // identity-keyed: ItemStack does not override equals/hashCode (MC 26.1.2), so
+    // WeakHashMap compares keys by identity — and its weak keys let stacks from
+    // refreshed/closed containers be collected instead of pinning them until a
+    // size cap forced a clear-all. liveText survives query changes (NBT doesn't
+    // change under one instance); liveMatch is per query.
     @Unique
-    private static final Map<ItemStack, String> liveTextCache = new IdentityHashMap<>();
+    private static final Map<ItemStack, String> liveTextCache = new WeakHashMap<>();
     @Unique
-    private static final Map<ItemStack, Boolean> liveMatchCache = new IdentityHashMap<>();
-    @Unique
-    private static final int LIVE_TEXT_CACHE_LIMIT = 4096;
+    private static final Map<ItemStack, Boolean> liveMatchCache = new WeakHashMap<>();
     // Full per-slot verdict (id extraction + filtered-id lookup + index match + live
-    // match) for the current query. Identity-keyed and render-thread-only like the
-    // caches above; cleared alongside liveMatchCache when the query or index changes.
-    // Container refreshes deliver new ItemStack instances, so stale entries are never
-    // served — they just linger until the cap or the next query change.
+    // match) for the current query; cleared alongside liveMatchCache when the query
+    // or index changes. Container refreshes deliver new ItemStack instances, so
+    // stale entries are never served — the weak keys collect them.
     @Unique
-    private static final Map<ItemStack, Boolean> slotMatchCache = new IdentityHashMap<>();
-    @Unique
-    private static final int SLOT_MATCH_CACHE_LIMIT = 4096;
+    private static final Map<ItemStack, Boolean> slotMatchCache = new WeakHashMap<>();
 
     @Unique
     private static boolean liveStackMatches(ItemStack stack, SearchQuery parsed) {
@@ -127,9 +125,6 @@ public class ItemViewOverlayMixin {
                     break;
                 }
             }
-        }
-        if (liveMatchCache.size() >= LIVE_TEXT_CACHE_LIMIT) {
-            liveMatchCache.clear();
         }
         liveMatchCache.put(stack, matched);
         return matched;
@@ -185,9 +180,6 @@ public class ItemViewOverlayMixin {
         appendEnchantmentIds(stack.get(DataComponents.STORED_ENCHANTMENTS), sb);
 
         String text = sb.toString().toLowerCase();
-        if (liveTextCache.size() >= LIVE_TEXT_CACHE_LIMIT) {
-            liveTextCache.clear();
-        }
         liveTextCache.put(stack, text);
         return text;
     }
@@ -358,9 +350,6 @@ public class ItemViewOverlayMixin {
                     matched = liveStackMatches(slotStack, cachedParsedQuery);
                 }
 
-                if (slotMatchCache.size() >= SLOT_MATCH_CACHE_LIMIT) {
-                    slotMatchCache.clear();
-                }
                 slotMatchCache.put(slotStack, matched);
             }
 

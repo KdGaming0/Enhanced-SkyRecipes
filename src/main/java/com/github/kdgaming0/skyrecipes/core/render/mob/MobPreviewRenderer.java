@@ -349,7 +349,7 @@ public final class MobPreviewRenderer {
 
         ItemStack stack = SKULL_STACK_CACHE.computeIfAbsent(helmetItemId, id -> {
             try {
-                NeuItem item = registry.getByInternalName(id).orElse(null);
+                NeuItem item = registry.getOrNull(id);
                 return item != null ? ItemStackBuilder.build(item) : ItemStack.EMPTY;
             } catch (Exception e) {
                 LOGGER.debug("Failed to build skull preview stack for '{}'", id, e);

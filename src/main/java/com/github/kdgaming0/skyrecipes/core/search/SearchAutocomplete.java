@@ -112,10 +112,10 @@ public final class SearchAutocomplete {
             }
         }
 
-        // Sort by tier priority, then alphabetically
-        results.sort(Comparator
-                .comparingInt((Suggestion s) -> s.tier().priority)
-                .thenComparing(s -> s.text().toLowerCase()));
+        // The prefix scan above visits entries in ascending Entry.lower order, so
+        // results are already alphabetical; the stable sort by tier alone keeps that
+        // order within each tier without re-lowercasing text in the comparator.
+        results.sort(Comparator.comparingInt((Suggestion s) -> s.tier().priority));
 
         if (results.size() > maxResults) {
             return results.subList(0, maxResults);
@@ -145,39 +145,6 @@ public final class SearchAutocomplete {
             }
         }
         return lo;
-    }
-
-    /**
-     * Return suggestions that match the query via fuzzy matching.
-     *
-     * @param query       the user's query
-     * @param maxResults  maximum number of suggestions
-     * @param maxDistance maximum Damerau–Levenshtein distance
-     * @return fuzzy suggestions
-     */
-    public List<Suggestion> suggestFuzzy(String query, int maxResults, int maxDistance) {
-        if (query == null || query.isBlank()) {
-            return List.of();
-        }
-
-        String q = query.toLowerCase();
-        List<Suggestion> results = new ArrayList<>();
-
-        FuzzyTokenMatcher.Scratch scratch = new FuzzyTokenMatcher.Scratch();
-        for (Entry entry : entries) {
-            if (FuzzyTokenMatcher.matches(q, entry.lower(), maxDistance, scratch)) {
-                results.add(new Suggestion(entry.text(), entry.tier()));
-            }
-        }
-
-        results.sort(Comparator
-                .comparingInt((Suggestion s) -> s.tier().priority)
-                .thenComparing(s -> s.text().toLowerCase()));
-
-        if (results.size() > maxResults) {
-            return results.subList(0, maxResults);
-        }
-        return results;
     }
 
     /**

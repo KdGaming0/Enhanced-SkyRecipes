@@ -85,6 +85,12 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
     private ItemStack coinStack;
     /** Compact coin count, rebuilt only on slider change (BigDecimal math is too costly per frame). */
     private Component coinLabel;
+    /** Pixel width of {@link #coinLabel}; recomputed lazily after each slider change. */
+    private int coinLabelWidth = -1;
+    /** Duration line and width; timeSeconds is fixed, so both are frame-invariant. */
+    @Nullable
+    private Component cachedDuration;
+    private int cachedDurationWidth;
 
     private int petLevel = 0;
     @Nullable
@@ -181,10 +187,12 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         var font = Minecraft.getInstance().font;
 
         // Duration text — centred horizontally (only text line)
-        Component duration = RecipeUiHelper.formatDuration(timeSeconds, true, "Time: ");
-        int textWidth = font.width(duration);
-        int textX = (pos.width() - textWidth) / 2;
-        graphics.text(font, duration, textX, DURATION_Y, RecipeUiHelper.TEXT_WHITE, true);
+        if (cachedDuration == null) {
+            cachedDuration = RecipeUiHelper.formatDuration(timeSeconds, true, "Time: ");
+            cachedDurationWidth = font.width(cachedDuration);
+        }
+        int textX = (pos.width() - cachedDurationWidth) / 2;
+        graphics.text(font, cachedDuration, textX, DURATION_Y, RecipeUiHelper.TEXT_WHITE, true);
 
         maintainButtons(screen, pos);
     }
@@ -194,8 +202,10 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
                               GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
         var font = Minecraft.getInstance().font;
 
-        int compactW = font.width(coinLabel);
-        int countX = COIN_SLOT_X + 17 - compactW;
+        if (coinLabelWidth < 0) {
+            coinLabelWidth = font.width(coinLabel);
+        }
+        int countX = COIN_SLOT_X + 17 - coinLabelWidth;
         int countY = COIN_SLOT_Y + 9;
 
         graphics.text(font, coinLabel, countX, countY, RecipeUiHelper.TEXT_WHITE, true);
@@ -237,6 +247,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         }
         coinStack = buildCoinStack(petLevel);
         coinLabel = buildCoinLabel(petLevel);
+        coinLabelWidth = -1;
     }
 
     private ItemStack rebuildStack(NeuItem neuItem, int level) {

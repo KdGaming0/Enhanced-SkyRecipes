@@ -16,3 +16,4 @@
 - Pressing the recipe/uses keybinds (R and U) on an enchanted book, pet, rune, or potion in your inventory now opens its recipe or info card correctly.
 - Fixed some crafting recipes wrongly appearing in an item's "uses" list when the recipe outputs a different item than its ingredients suggest.
 - Searching for an exact item ID ending in a digit (like `GIRAFFE;0` or `COBBLESTONE_GENERATOR_1`) now finds that item — previously these searches showed no results.
+- Performance improvements: the item list now loads faster, and searching for items is more responsive and other small optimizations across the board.

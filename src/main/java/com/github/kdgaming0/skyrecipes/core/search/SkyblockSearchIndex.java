@@ -37,6 +37,15 @@ public final class SkyblockSearchIndex {
     private final Map<String, BitSet> anyTokenIndex;
     private final Map<String, BitSet> nameTokenIndex;
     private final String[] sortedTokens;
+    /**
+     * {@link #sortedTokens} regrouped by token length. The fuzzy fallback only ever
+     * matches candidates within edit distance 2, and edit distance is at least the
+     * length difference — so it scans just the five relevant buckets instead of the
+     * whole vocabulary on every keystroke of a not-yet-matching token.
+     */
+    private final String[][] tokensByLength;
+    /** Inverted {@code getReforgeNameToStone()}: lowercased stone id → reforge name. */
+    private final Map<String, String> stoneIdToReforgeName;
 
     // Stat index: statName -> value -> items
     private final Map<String, TreeMap<Integer, BitSet>> statIndex;
@@ -145,6 +154,15 @@ public final class SkyblockSearchIndex {
         java.util.stream.IntStream.range(0, itemCount).parallel()
                 .forEach(i -> prepared[i] = prepareItem(this.items.get(i)));
 
+        // Inverted before the item loop: the per-item reverse scan over
+        // getReforgeNameToStone() was O(items × reforges). putIfAbsent keeps the
+        // first mapping per stone, matching the old loop's first-match-wins break.
+        Map<String, String> stoneToReforge = new HashMap<>();
+        for (Map.Entry<String, String> entry : constantsRegistry.getReforgeNameToStone().entrySet()) {
+            stoneToReforge.putIfAbsent(entry.getValue().toLowerCase(), entry.getKey());
+        }
+        this.stoneIdToReforgeName = stoneToReforge;
+
         // Phase 2 (serial): map/BitSet insertions, in the original item order.
         Map<String, Integer> idToIndex = new HashMap<>(itemCount);
         for (int i = 0; i < itemCount; i++) {
@@ -168,6 +186,7 @@ public final class SkyblockSearchIndex {
         this.sortedTokens = anyTokenIndex.keySet().stream()
                 .sorted()
                 .toArray(String[]::new);
+        this.tokensByLength = bucketByLength(sortedTokens);
 
         LOGGER.info("SkyblockSearchIndex built: {} items, {} distinct tokens, {} stats, {} aliases",
                 itemCount, sortedTokens.length, statIndex.size(), aliases.size());
@@ -380,12 +399,16 @@ public final class SkyblockSearchIndex {
                                   @Nullable String subtype) {
         SearchQuery parsed = SearchQueryParser.parse(query);
         if (parsed.isEmpty() && category == null) {
-            return new ArrayList<>(items);
+            // The master list is immutable (List.copyOf); returning it directly avoids
+            // an ~8k-element copy every time the query is cleared. RRV consumes filter
+            // results via filteredItems.addAll(...) (verified against 8.6.3 sources) and
+            // never mutates the returned list; a mutating caller would fail loudly here.
+            return items;
         }
 
         BitSet candidates = resolveQuery(parsed, category, subtype);
         if (candidates.isEmpty()) {
-            return new ArrayList<>();
+            return List.of();
         }
 
         return rankToList(parsed, candidates);
@@ -767,18 +790,31 @@ public final class SkyblockSearchIndex {
         BitSet result = new BitSet(itemCount);
         FuzzyTokenMatcher.Scratch scratch = new FuzzyTokenMatcher.Scratch();
         int tokenLen = token.length();
-        for (String candidate : sortedTokens) {
-            // Edit distance is at least the length difference — skip candidates
-            // that can never come under the threshold before entering the DP.
-            if (Math.abs(candidate.length() - tokenLen) > 2) {
-                continue;
-            }
-            if (FuzzyTokenMatcher.matches(token, candidate, 2, scratch)) {
-                BitSet bs = anyTokenIndex.get(candidate);
-                if (bs != null) result.or(bs);
+        // Edit distance is at least the length difference, so only the ±2 length
+        // buckets can contain matches — the rest of the vocabulary is never touched.
+        int lo = Math.max(0, tokenLen - 2);
+        int hi = Math.min(tokensByLength.length - 1, tokenLen + 2);
+        for (int len = lo; len <= hi; len++) {
+            for (String candidate : tokensByLength[len]) {
+                if (FuzzyTokenMatcher.matches(token, candidate, 2, scratch)) {
+                    BitSet bs = anyTokenIndex.get(candidate);
+                    if (bs != null) result.or(bs);
+                }
             }
         }
         return result;
+    }
+
+    private static String[][] bucketByLength(String[] tokens) {
+        int maxLen = 0;
+        for (String t : tokens) maxLen = Math.max(maxLen, t.length());
+        int[] counts = new int[maxLen + 1];
+        for (String t : tokens) counts[t.length()]++;
+        String[][] buckets = new String[maxLen + 1][];
+        for (int len = 0; len <= maxLen; len++) buckets[len] = new String[counts[len]];
+        int[] fill = new int[maxLen + 1];
+        for (String t : tokens) buckets[t.length()][fill[t.length()]++] = t;
+        return buckets;
     }
 
     private BitSet resolveStat(SearchQuery.StatClause stat) {
@@ -1200,17 +1236,14 @@ public final class SkyblockSearchIndex {
         }
 
         // Reverse map lookup: if this item is a known reforge stone, index the reforge name
-        if (!reforgeIndexed) {
-            for (Map.Entry<String, String> entry : constantsRegistry.getReforgeNameToStone().entrySet()) {
-                if (entry.getValue().equalsIgnoreCase(neuItem.internalName())) {
-                    String reforgeName = entry.getKey().toLowerCase();
-                    tokenize(reforgeName, (token) -> {
-                        addAnyToken(token, itemIndex);
-                        if (itemTokens != null) itemTokens.add(token);
-                    });
-                    reforgeIndexed = true;
-                    break;
-                }
+        if (!reforgeIndexed && neuItem.internalName() != null) {
+            String reforgeName = stoneIdToReforgeName.get(neuItem.internalName().toLowerCase());
+            if (reforgeName != null) {
+                tokenize(reforgeName, (token) -> {
+                    addAnyToken(token, itemIndex);
+                    if (itemTokens != null) itemTokens.add(token);
+                });
+                reforgeIndexed = true;
             }
         }
 

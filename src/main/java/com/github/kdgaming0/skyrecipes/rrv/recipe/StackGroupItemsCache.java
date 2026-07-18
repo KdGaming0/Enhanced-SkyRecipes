@@ -1,7 +1,9 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
+import cc.cassian.rrv.api.recipe.ItemView;
 import cc.cassian.rrv.client.recipe.ClientRecipeCache;
 import cc.cassian.rrv.common.config.Configs;
+import com.github.kdgaming0.skyrecipes.mixin.recipe.ClientRecipeCacheAccessor;
 import cc.cassian.rrv.common.recipe.stackgroup.StackGroupManager;
 import cc.cassian.rrv.common.recipe.stackgroup.data.AbstractStackGroup;
 import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
@@ -81,13 +83,21 @@ public final class StackGroupItemsCache {
         int gen = generation;
 
         // Snapshot the stack sensitives on the render thread: the backing map is mutated
-        // there (batched injection, RRV rebuilds) with no synchronization.
+        // there (batched injection, RRV rebuilds) with no synchronization. One pass over
+        // the ~200 populated map entries via the accessor, not a stream per registry item.
         Map<Item, List<ItemStack>> sensitives = new IdentityHashMap<>();
-        for (Item item : BuiltInRegistries.ITEM) {
-            List<ItemStack> stacks = ClientRecipeCache.INSTANCE.streamStackSensitives(item).toList();
-            if (!stacks.isEmpty()) {
-                sensitives.put(item, stacks);
+        var backing = ((ClientRecipeCacheAccessor) ClientRecipeCache.INSTANCE)
+                .skyrecipes$getStackSensitives();
+        for (Map.Entry<Item, List<ItemView.StackSensitive>> entry : backing.entrySet()) {
+            List<ItemView.StackSensitive> list = entry.getValue();
+            if (list.isEmpty()) {
+                continue;
             }
+            List<ItemStack> stacks = new ArrayList<>(list.size());
+            for (ItemView.StackSensitive sensitive : list) {
+                stacks.add(sensitive.stack());
+            }
+            sensitives.put(entry.getKey(), stacks);
         }
 
         SkyRecipesExecutors.worker().execute(() -> {

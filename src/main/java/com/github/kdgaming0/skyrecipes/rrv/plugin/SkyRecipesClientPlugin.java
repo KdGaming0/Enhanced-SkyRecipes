@@ -976,14 +976,14 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
         if (registry == null) return;
 
         for (Map.Entry<String, String> entry : SearchAliases.MAP.entrySet()) {
-            registry.getByInternalName(entry.getValue()).ifPresent(neuItem -> {
-                try {
-                    Item item = resolveAliasItem(neuItem);
-                    if (item != null) ItemView.addAlias(item, entry.getKey());
-                } catch (Exception e) {
-                    LOGGER.debug("Failed to register alias for {}", entry.getValue());
-                }
-            });
+            NeuItem neuItem = registry.getOrNull(entry.getValue());
+            if (neuItem == null) continue;
+            try {
+                Item item = resolveAliasItem(neuItem);
+                if (item != null) ItemView.addAlias(item, entry.getKey());
+            } catch (Exception e) {
+                LOGGER.debug("Failed to register alias for {}", entry.getValue());
+            }
         }
     }
 

@@ -52,6 +52,9 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
     private final RecipeViewMenu.AdditionalStackModifier[] chanceModifiers;
     @Nullable
     private Component cachedMobName;
+    /** Hover tooltip line; mobName is final, so it never changes after first build. */
+    @Nullable
+    private Component cachedHoverTip;
 
     public SkyblockDropsClientRecipe(Identifier id, String mobName, String renderRef,
                                      @Nullable ItemStack sourceStack,
@@ -213,7 +216,11 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
                                             RecipePosition pos, int mouseX, int mouseY) {
         if (!previewController.isHovered() || mobName.isEmpty()) return;
 
-        Component tip = Component.literal(mobName).withStyle(ChatFormatting.GOLD);
+        Component tip = cachedHoverTip;
+        if (tip == null) {
+            tip = Component.literal(mobName).withStyle(ChatFormatting.GOLD);
+            cachedHoverTip = tip;
+        }
         gfx.setComponentTooltipForNextFrame(
                 screen.getFont(),
                 List.of(tip),
