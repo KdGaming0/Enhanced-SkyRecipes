@@ -8,7 +8,7 @@
 <div align="center">
 
 [![Requires RRV](https://img.shields.io/badge/requires-Reliable%20Recipe%20Viewer-9B59B6?logo=minecraft "Requires Reliable Recipe Viewer")](https://modrinth.com/mod/rrv)
-[![Modrinth Downloads](https://img.shields.io/modrinth/dt/skyrecipes?color=00AF5C&label=downloads&logo=modrinth "Total SkyRecipes downloads on Modrinth")](https://modrinth.com/mod/enhanced-skyrecipes)
+[![Modrinth Downloads](https://img.shields.io/modrinth/dt/Q7VEfkvq?color=00AF5C&label=downloads&logo=modrinth "Total SkyRecipes downloads on Modrinth")](https://modrinth.com/mod/enhanced-skyrecipes)
 [![Join Fluxer](https://img.shields.io/badge/Join-Fluxer-5865F2?style=for-the-badge "Join the Fluxer community")](https://fluxer.gg/3jJy9cp6)
 
 # SkyRecipes
@@ -48,7 +48,8 @@ SkyRecipes registers **12 custom SkyBlock recipe categories** in RRV. Press `R` 
 
 **SkyBlock Garden Mutation** — A built-in garden mutation reference with a 6×6 grid layout, surface/water requirements, spreading conditions, effects, and copper cost. Quickly look up the required layout for any mutation.
 
-**SkyBlock Shard Fusion** — Every attribute shard shows the fusion combinations that produce it, with input amounts and output quantity.
+**SkyBlock Shard Fusion** — Every attribute shard shows the fusion combinations that produce it, with input amounts and output quantity. Each fusion card includes a **SkyShards** button (optimal fusion paths and prices on skyshards.com) and a **Bazaar** button. Clicking a shard also opens an info card with its ability, rarity, category, shard ID, and family.
+
 ## Search & Discovery
 
 ### Smart Autocomplete
@@ -148,36 +149,42 @@ Evaluate math directly in the RRV search bar. The result appears as gray ghost t
 ### Family Expansion
 Tiered items — dungeon stars, pet tiers, minion tiers, accessory upgrades, and enchantment levels — are grouped into families. When family expansion is enabled, pressing `R` on one member can show recipes across the entire family, so you don't have to hunt down each tier separately.
 
+### Tiered Item Grouping
+The item list groups tiered items into single expandable entries: minions, pets, enchantments, drills, accessory upgrade lines (Talisman → Ring → Artifact → Relic), armor upgrade lines, and crafted upgrade chains (Diamond → Enchanted Diamond → Enchanted Diamond Block, Aspect of the End → Aspect of the Void, and similar). Click a group to expand it; searching still surfaces exact tiers directly. Controlled by the `groupTieredItems` and `groupCraftedChains` settings, with per-group management in RRV's Stack Groups screen.
+
 ## Configuration
 
 Open the config through **Mod Menu → SkyRecipes → Config**. SkyRecipes uses MidnightLib, so all options are editable in-game with live saving.
 
-| Category | Option | Description |
-|----------|--------|-------------|
-| **UI** | `calculatorEnabled` | Enables math expressions in the RRV search bar |
-| **UI** | `calculatorPrecision` | Decimal places for search-bar calculator results (0–10) |
-| **UI** | `familyExpansionEnabled` | Groups tiered items (pets, minions, stars, accessory upgrades) into families |
-| **RRV** | `shardFusionRecipes` | Shows fusion recipes for attribute shards (data from skyshards.com) |
-| **RRV** | `hideCategoryButtons` | Completely hides the category icon row above the RRV search bar |
-| **RRV** | `hideCategoryButtonsWhenNotSearching` | Hides category buttons when RRV is in "Only visible when searching" mode and the search bar is empty |
-| **RRV** | `hideEmptyBookmarkPanel` | Auto-hides the bookmark side panel when no bookmarks exist |
-| **RRV** | `wideRrvSearchBar` | Expands the RRV search bar (centred mode: up to the configured width; item-list mode: limited by available space) |
-| **RRV** | `rrvSearchBarWidth` | Minimum width for the search bar when wide mode is enabled |
-| **RRV** | `rrvItemListWidthPercent` | Adjusts the RRV item-list overlay width (25–100%) |
-| **RRV** | `rrvSidePanelWidthPercent` | Adjusts the RRV side-panel overlay width (25–100%) |
+| Category | Option | Description                                                                                                        |
+|----------|--------|--------------------------------------------------------------------------------------------------------------------|
+| **UI** | `calculatorEnabled` | Enables math expressions in the RRV search bar                                                                     |
+| **UI** | `calculatorPrecision` | Decimal places for search-bar calculator results (0–10)                                                            |
+| **UI** | `familyExpansionEnabled` | Groups tiered items (pets, minions, stars, accessory upgrades) into families                                       |
+| **RRV** | `groupTieredItems` | Collapses tiered items (minions, pets, enchantments, upgrade lines) into expandable groups in the item list        |
+| **RRV** | `groupCraftedChains` | Groups items that craft directly into one another as upgrade chains (takes effect after the next data load)        |
+| **RRV** | `shardFusionRecipes` | Shows fusion recipes for attribute shards (data from skyshards.com)                                                |
+| **RRV** | `blockKeybindsWhileTyping` | Try to prevents keybinds from other mods triggering while typing in the RRV search bar (`Escape`/`Tab` still work) |
+| **RRV** | `hideCategoryButtons` | Completely hides the category icon row above the RRV search bar                                                    |
+| **RRV** | `hideCategoryButtonsWhenNotSearching` | Hides category buttons when RRV is in "Only visible when searching" mode and the search bar is empty               |
+| **RRV** | `hideEmptyBookmarkPanel` | Auto-hides the bookmark side panel when no bookmarks exist                                                         |
+| **RRV** | `wideRrvSearchBar` | Expands the RRV search bar (centred mode: up to the configured width; item-list mode: limited by available space)  |
+| **RRV** | `rrvSearchBarWidth` | Minimum width for the search bar when wide mode is enabled                                                         |
+| **RRV** | `rrvItemListWidthPercent` | Adjusts the RRV item-list overlay width (25–100%)                                                                  |
+| **RRV** | `rrvSidePanelWidthPercent` | Adjusts the RRV side-panel overlay width (25–100%)                                                                 |
+| **Data** | `dataRefreshIntervalMinutes` | How often the background data refresh checks for NEU repo updates (15–480 minutes)                                 |
 
 Recipe category visibility is managed natively by RRV through its **Recipe Category Config** screen.
 
 ## Installation
 
-1. Install **Minecraft** with the **Fabric Loader** for 1.21.1.
-2. Download the latest `.jar` from [Modrinth](https://modrinth.com/mod/skyrecipes).
-3. Place **Fabric API** in your `mods` folder. MidnightLib is bundled inside the SkyRecipes jar, so no separate download is needed.
-4. Install **[Reliable Recipe Viewer (RRV)](https://modrinth.com/mod/rrv)** to see the recipes in-game.
-5. Launch the game. On first launch, SkyRecipes will download and compile the NEU repository in the background.
-6. Once the data is ready, press your RRV keybind (default `R` / `U`) on any SkyBlock item.
+1. Install **Minecraft 26.1.x** with the **Fabric Loader**.
+2. Download the latest `.jar` from [Modrinth](https://modrinth.com/mod/enhanced-skyrecipes).
+3. Also find and download the lates **[Fabric API](https://modrinth.com/mod/fabric-api)** and **[Reliable Recipe Viewer (RRV)](https://modrinth.com/mod/rrv)** jar and palce it in your `mods` folder. MidnightLib is bundled inside the SkyRecipes jar, so no separate download is needed.
+4. Launch the game. On first launch, SkyRecipes will download and compile the NEU repository in the background.
+5. Once the data is ready, press your RRV keybind (default `R` / `U`) on any SkyBlock item.
 
-[<img height="40" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/available/modrinth_vector.svg" alt="Download SkyRecipes on Modrinth">](https://modrinth.com/mod/skyrecipes)
+[<img height="40" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/available/modrinth_vector.svg" alt="Download SkyRecipes on Modrinth">](https://modrinth.com/mod/enhanced-skyrecipes)
 
 ## Support & Community
 

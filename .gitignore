@@ -23,6 +23,9 @@ bin/
 # macos
 *.DS_Store
 
+# editor backups
+*~
+
 # fabric
 run/
 
