@@ -80,6 +80,21 @@ public final class SkyblockSearchIndex {
     private final Map<String, String> aliases;
     private final StatParser statParser;
 
+    /**
+     * Small LRU over keyword/prefix resolution. A query is re-resolved in full on
+     * every keystroke, so the unchanged earlier tokens hit this cache and only the
+     * token being edited pays resolution — including the fuzzy fallback scan.
+     * Cached BitSets are shared: callers must treat them as read-only.
+     */
+    private static final int RESOLVE_CACHE_SIZE = 64;
+    private final Map<String, BitSet> resolveCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(RESOLVE_CACHE_SIZE * 2, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, BitSet> eldest) {
+                    return size() > RESOLVE_CACHE_SIZE;
+                }
+            });
+
     @SuppressWarnings("unused")
     public SkyblockSearchIndex(List<ItemStack> items, ItemRegistry itemRegistry,
                                ConstantsRegistry constantsRegistry) {
@@ -123,9 +138,18 @@ public final class SkyblockSearchIndex {
         this.hasNpcShop = new boolean[itemCount];
         this.isBazaar = new boolean[itemCount];
 
+        // Phase 1 (parallel): pure per-item string work — id extraction, color
+        // stripping, lowercasing, stat parsing. StatParser and TextUtil are
+        // stateless and the registries immutable, so this fans out safely.
+        PreparedItem[] prepared = new PreparedItem[itemCount];
+        java.util.stream.IntStream.range(0, itemCount).parallel()
+                .forEach(i -> prepared[i] = prepareItem(this.items.get(i)));
+
+        // Phase 2 (serial): map/BitSet insertions, in the original item order.
         Map<String, Integer> idToIndex = new HashMap<>(itemCount);
         for (int i = 0; i < itemCount; i++) {
-            String itemId = indexItem(i, items.get(i), constantsRegistry);
+            indexItem(i, prepared[i], constantsRegistry);
+            String itemId = prepared[i].itemId();
             if (itemId != null) {
                 idToIndex.putIfAbsent(itemId.toLowerCase(), i);
             }
@@ -216,8 +240,8 @@ public final class SkyblockSearchIndex {
         return false;
     }
 
-    private static String extractRarity(String lastLoreLine) {
-        String clean = TextUtil.stripColorCodes(lastLoreLine);
+    /** Expects an already color-stripped last lore line (see {@link PreparedItem}). */
+    private static String extractRarity(String clean) {
         String[] parts = clean.split("\\s+");
         for (String part : parts) {
             if (part.matches("[A-Z]+")) {
@@ -655,6 +679,17 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolveKeyword(String token) {
+        String cacheKey = "kw:" + token;
+        BitSet cached = resolveCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        BitSet result = resolveKeywordUncached(token);
+        resolveCache.put(cacheKey, result);
+        return result;
+    }
+
+    private BitSet resolveKeywordUncached(String token) {
         // Single-character numeric tokens: exact match only to prevent "1" from
         // matching "10", "11", "12", etc. via prefix expansion.
         if (token.length() == 1 && Character.isDigit(token.charAt(0))) {
@@ -687,7 +722,14 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolvePrefixUnion(String prefix) {
-        return resolvePrefixUnion(prefix, anyTokenIndex);
+        String cacheKey = "pfx:" + prefix;
+        BitSet cached = resolveCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        BitSet result = resolvePrefixUnion(prefix, anyTokenIndex);
+        resolveCache.put(cacheKey, result);
+        return result;
     }
 
     /**
@@ -723,7 +765,13 @@ public final class SkyblockSearchIndex {
     private BitSet fuzzyMatch(String token) {
         BitSet result = new BitSet(itemCount);
         FuzzyTokenMatcher.Scratch scratch = new FuzzyTokenMatcher.Scratch();
+        int tokenLen = token.length();
         for (String candidate : sortedTokens) {
+            // Edit distance is at least the length difference — skip candidates
+            // that can never come under the threshold before entering the DP.
+            if (Math.abs(candidate.length() - tokenLen) > 2) {
+                continue;
+            }
             if (FuzzyTokenMatcher.matches(token, candidate, 2, scratch)) {
                 BitSet bs = anyTokenIndex.get(candidate);
                 if (bs != null) result.or(bs);
@@ -891,6 +939,17 @@ public final class SkyblockSearchIndex {
     }
 
     private BitSet resolveKeywordInName(String token) {
+        String cacheKey = "nm:" + token;
+        BitSet cached = resolveCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+        BitSet result = resolveKeywordInNameUncached(token);
+        resolveCache.put(cacheKey, result);
+        return result;
+    }
+
+    private BitSet resolveKeywordInNameUncached(String token) {
         BitSet exact = nameTokenIndex.get(token);
         BitSet prefix = resolvePrefixUnionInName(token);
         if (exact != null) prefix.or(exact);
@@ -929,18 +988,15 @@ public final class SkyblockSearchIndex {
         int card = bits.cardinality();
         if (card == 0) return;
 
-        int[] indices = new int[card];
-        int idx = 0;
-        for (int i = bits.nextSetBit(0); i >= 0; i = bits.nextSetBit(i + 1)) {
-            indices[idx++] = i;
-        }
-
         int[] values = statValuesPerItem.get(stat.statName());
         boolean desc = stat.op() == SearchQuery.StatClause.Operator.GT
                 || stat.op() == SearchQuery.StatClause.Operator.GTE;
 
         Integer[] boxed = new Integer[card];
-        for (int i = 0; i < card; i++) boxed[i] = indices[i];
+        int idx = 0;
+        for (int i = bits.nextSetBit(0); i >= 0; i = bits.nextSetBit(i + 1)) {
+            boxed[idx++] = i;
+        }
 
         Arrays.sort(boxed, (a, b) -> {
             int va = values != null ? values[a] : Integer.MIN_VALUE;
@@ -957,15 +1013,49 @@ public final class SkyblockSearchIndex {
         }
     }
 
-    /** Returns the item's SkyBlock id (null if none) so the caller can build an id → index map. */
-    @Nullable
-    private String indexItem(int itemIndex, ItemStack stack, ConstantsRegistry constantsRegistry) {
+    /**
+     * Pure per-item precomputation for index building: everything derivable from the
+     * stack and NEU item without touching the shared index maps. Computed in parallel;
+     * consumed by the serial insertion pass. The clean/lower lore arrays also stop each
+     * lore line being color-stripped and lowercased five times over by the stat,
+     * requirement, and flag scanners.
+     */
+    private record PreparedItem(@Nullable NeuItem neuItem, @Nullable String itemId,
+                                String displayName, String[] cleanLore,
+                                String[] cleanLoreLower, List<StatParser.ParsedStat>[] loreStats) {
+    }
+
+    @SuppressWarnings("unchecked")
+    private PreparedItem prepareItem(ItemStack stack) {
         String itemId = SkyblockIdExtractor.extract(stack);
-        NeuItem neuItem = itemId != null ? itemRegistry.getByInternalName(itemId).orElse(null) : null;
+        NeuItem neuItem = itemId != null ? itemRegistry.getOrNull(itemId) : null;
+        String displayName = TextUtil.stripColorCodes(stack.getHoverName().getString());
+
+        String[] cleanLore = null;
+        String[] cleanLoreLower = null;
+        List<StatParser.ParsedStat>[] loreStats = null;
+        List<String> lore = neuItem != null ? neuItem.lore() : null;
+        if (lore != null) {
+            int n = lore.size();
+            cleanLore = new String[n];
+            cleanLoreLower = new String[n];
+            loreStats = new List[n];
+            for (int j = 0; j < n; j++) {
+                String clean = TextUtil.stripColorCodes(lore.get(j));
+                cleanLore[j] = clean;
+                cleanLoreLower[j] = clean.toLowerCase();
+                loreStats[j] = statParser.parseLoreLineStripped(clean);
+            }
+        }
+        return new PreparedItem(neuItem, itemId, displayName, cleanLore, cleanLoreLower, loreStats);
+    }
+
+    private void indexItem(int itemIndex, PreparedItem prep, ConstantsRegistry constantsRegistry) {
+        String itemId = prep.itemId();
         Set<String> itemTokens = itemId != null ? new HashSet<>(32) : null;
 
         // Display name
-        String displayName = TextUtil.stripColorCodes(stack.getHoverName().getString());
+        String displayName = prep.displayName();
         displayNames[itemIndex] = displayName;
 
         // Phrase/regex search text: name + each lore line, lowercased and '\n'-separated so
@@ -979,8 +1069,8 @@ public final class SkyblockSearchIndex {
             if (itemTokens != null) itemTokens.add(token);
         });
 
-        if (neuItem != null) {
-            indexNeuItem(itemIndex, stack, neuItem, itemTokens, constantsRegistry, searchBuf);
+        if (prep.neuItem() != null) {
+            indexNeuItem(itemIndex, prep, itemTokens, constantsRegistry, searchBuf);
         }
 
         String text = searchBuf.toString();
@@ -993,23 +1083,22 @@ public final class SkyblockSearchIndex {
         if (itemId != null && itemTokens != null && !itemTokens.isEmpty()) {
             idToTokens.put(itemId, Set.copyOf(itemTokens));
         }
-        return itemId;
     }
 
-    private void indexNeuItem(int itemIndex, ItemStack stack, NeuItem neuItem,
+    private void indexNeuItem(int itemIndex, PreparedItem prep,
                               Set<String> itemTokens, ConstantsRegistry constantsRegistry,
                               StringBuilder searchBuf) {
         try {
-            indexNeuItemInternal(itemIndex, stack, neuItem, itemTokens, constantsRegistry, searchBuf);
+            indexNeuItemInternal(itemIndex, prep, itemTokens, constantsRegistry, searchBuf);
         } catch (Exception e) {
-            LOGGER.warn("Failed to index item {}", neuItem.internalName(), e);
+            LOGGER.warn("Failed to index item {}", prep.neuItem().internalName(), e);
         }
     }
 
-    @SuppressWarnings("unused")
-    private void indexNeuItemInternal(int itemIndex, ItemStack stack, NeuItem neuItem,
+    private void indexNeuItemInternal(int itemIndex, PreparedItem prep,
                                       Set<String> itemTokens, ConstantsRegistry constantsRegistry,
                                       StringBuilder searchBuf) {
+        NeuItem neuItem = prep.neuItem();
         // Internal name
         if (neuItem.internalName() != null) {
             String lower = neuItem.internalName().toLowerCase();
@@ -1025,24 +1114,25 @@ public final class SkyblockSearchIndex {
             }
         }
 
-        // Lore
-        if (neuItem.lore() != null) {
-            for (String line : neuItem.lore()) {
-                String clean = TextUtil.stripColorCodes(line);
-                searchBuf.append('\n').append(clean.toLowerCase());
+        // Lore (pre-stripped/lowercased/stat-parsed in the parallel phase)
+        String[] cleanLore = prep.cleanLore();
+        if (cleanLore != null) {
+            for (int j = 0; j < cleanLore.length; j++) {
+                String clean = cleanLore[j];
+                searchBuf.append('\n').append(prep.cleanLoreLower()[j]);
                 tokenize(clean, (token) -> {
                     addAnyToken(token, itemIndex);
                     if (itemTokens != null) itemTokens.add(token);
                 });
-                for (StatParser.ParsedStat stat : statParser.parseLoreLineStripped(clean)) {
+                for (StatParser.ParsedStat stat : prep.loreStats()[j]) {
                     indexStat(itemIndex, stat.statName(), stat.value(), itemTokens);
                 }
             }
         }
 
         // Rarity from last lore line
-        if (neuItem.lore() != null && !neuItem.lore().isEmpty()) {
-            String rarity = extractRarity(neuItem.lore().getLast());
+        if (cleanLore != null && cleanLore.length > 0) {
+            String rarity = extractRarity(cleanLore[cleanLore.length - 1]);
             if (rarity != null) {
                 addAnyToken(rarity, itemIndex);
                 if (itemTokens != null) itemTokens.add(rarity);
@@ -1073,7 +1163,7 @@ public final class SkyblockSearchIndex {
                 addAnyToken(btnName, itemIndex);
                 if (itemTokens != null) itemTokens.add(btnName);
             }
-        } else if (neuItem.lore() != null && !neuItem.lore().isEmpty()) {
+        } else if (cleanLore != null && cleanLore.length > 0) {
             // Items with lore but no recognized type go to MISC
             addToken(categoryIndex, SkyblockItemCategory.MISC, itemIndex);
             addAnyToken("misc", itemIndex);
@@ -1124,10 +1214,10 @@ public final class SkyblockSearchIndex {
         }
 
         // Lore fallback for stones missing from constants (e.g. GEOMETRIC_ODDITY)
-        if (!reforgeIndexed && neuItem.lore() != null) {
-            for (String line : neuItem.lore()) {
-                String clean = TextUtil.stripColorCodes(line);
-                String lower = clean.toLowerCase();
+        if (!reforgeIndexed && cleanLore != null) {
+            for (int j = 0; j < cleanLore.length; j++) {
+                String clean = cleanLore[j];
+                String lower = prep.cleanLoreLower()[j];
                 int appliesIdx = lower.indexOf("applies the ");
                 if (appliesIdx >= 0) {
                     int reforgeStart = appliesIdx + 12;
@@ -1147,16 +1237,16 @@ public final class SkyblockSearchIndex {
         }
 
         // Slayer requirement (explicit field + lore fallback)
-        indexSlayerRequirements(itemIndex, neuItem, itemTokens);
+        indexSlayerRequirements(itemIndex, prep, itemTokens);
 
         // Skill requirements from lore
-        indexSkillRequirements(itemIndex, neuItem, itemTokens);
+        indexSkillRequirements(itemIndex, prep, itemTokens);
 
         // Catacombs requirements from lore
-        indexCatacombsRequirements(itemIndex, neuItem, itemTokens);
+        indexCatacombsRequirements(itemIndex, prep, itemTokens);
 
         // Boolean flags
-        indexFlags(itemIndex, neuItem, itemTokens, constantsRegistry);
+        indexFlags(itemIndex, prep, itemTokens, constantsRegistry);
 
         // Craft text
         if (neuItem.craftText() != null && !neuItem.craftText().isEmpty()) {
@@ -1204,10 +1294,10 @@ public final class SkyblockSearchIndex {
         }
     }
 
-    private void indexSkillRequirements(int itemIndex, NeuItem neuItem, Set<String> itemTokens) {
-        if (neuItem.lore() == null || neuItem.lore().isEmpty()) return;
-        for (String line : neuItem.lore()) {
-            String clean = TextUtil.stripColorCodes(line).toLowerCase();
+    private void indexSkillRequirements(int itemIndex, PreparedItem prep, Set<String> itemTokens) {
+        String[] cleanLoreLower = prep.cleanLoreLower();
+        if (cleanLoreLower == null || cleanLoreLower.length == 0) return;
+        for (String clean : cleanLoreLower) {
             if (!clean.contains("requires") || !clean.contains(" skill ")) continue;
             if (clean.contains("catacombs")) continue;
 
@@ -1246,10 +1336,10 @@ public final class SkyblockSearchIndex {
         }
     }
 
-    private void indexCatacombsRequirements(int itemIndex, NeuItem neuItem, Set<String> itemTokens) {
-        if (neuItem.lore() == null || neuItem.lore().isEmpty()) return;
-        for (String line : neuItem.lore()) {
-            String clean = TextUtil.stripColorCodes(line).toLowerCase();
+    private void indexCatacombsRequirements(int itemIndex, PreparedItem prep, Set<String> itemTokens) {
+        String[] cleanLoreLower = prep.cleanLoreLower();
+        if (cleanLoreLower == null || cleanLoreLower.length == 0) return;
+        for (String clean : cleanLoreLower) {
             if (!clean.contains("catacombs")) continue;
 
             // "Requires The Catacombs Floor [ROMAN] Completion."
@@ -1302,16 +1392,17 @@ public final class SkyblockSearchIndex {
         }
     }
 
-    private void indexFlags(int itemIndex, NeuItem neuItem, Set<String> itemTokens,
+    private void indexFlags(int itemIndex, PreparedItem prep, Set<String> itemTokens,
                             ConstantsRegistry constantsRegistry) {
-        if (neuItem.lore() == null) return;
+        NeuItem neuItem = prep.neuItem();
+        String[] cleanLore = prep.cleanLore();
+        if (cleanLore == null) return;
 
         boolean soulbound = false;
         boolean dungeon = false;
         boolean rift = false;
 
-        for (String line : neuItem.lore()) {
-            String clean = TextUtil.stripColorCodes(line);
+        for (String clean : cleanLore) {
             if (clean.contains("* Soulbound *") || clean.contains("* Co-op Soulbound *")) {
                 soulbound = true;
             }
@@ -1324,8 +1415,7 @@ public final class SkyblockSearchIndex {
         }
 
         // Dungeon also from type
-        String lastLore = neuItem.lore().isEmpty() ? "" : neuItem.lore().getLast();
-        String cleanLast = TextUtil.stripColorCodes(lastLore).toUpperCase();
+        String cleanLast = (cleanLore.length == 0 ? "" : cleanLore[cleanLore.length - 1]).toUpperCase();
         if (cleanLast.contains("DUNGEON")) {
             dungeon = true;
         }
@@ -1382,7 +1472,9 @@ public final class SkyblockSearchIndex {
         addToken(anyTokenIndex, token, itemIndex);
     }
 
-    private void indexSlayerRequirements(int itemIndex, NeuItem neuItem, Set<String> itemTokens) {
+    private void indexSlayerRequirements(int itemIndex, PreparedItem prep, Set<String> itemTokens) {
+        NeuItem neuItem = prep.neuItem();
+
         // 1. Explicit slayerReq field
         if (neuItem.slayerReq() != null && !neuItem.slayerReq().isEmpty()) {
             String slayerType = extractSlayerType(neuItem.slayerReq());
@@ -1393,11 +1485,12 @@ public final class SkyblockSearchIndex {
         }
 
         // 2. Lore fallback: "Requires §5Zombie Slayer 5§c." or "§4☠ §cRequires §5Spider Slayer 4§c."
-        if (neuItem.lore() != null) {
-            for (String line : neuItem.lore()) {
-                String clean = TextUtil.stripColorCodes(line);
+        String[] cleanLore = prep.cleanLore();
+        if (cleanLore != null) {
+            for (int j = 0; j < cleanLore.length; j++) {
+                String clean = cleanLore[j];
                 // Match "Requires <Name> Slayer <Level>" or "<Name> Slayer <Level>"
-                int slayerIdx = clean.toLowerCase().indexOf(" slayer ");
+                int slayerIdx = prep.cleanLoreLower()[j].indexOf(" slayer ");
                 if (slayerIdx > 0) {
                     String before = clean.substring(0, slayerIdx).trim();
                     String after = clean.substring(slayerIdx + 8).trim(); // after " slayer "

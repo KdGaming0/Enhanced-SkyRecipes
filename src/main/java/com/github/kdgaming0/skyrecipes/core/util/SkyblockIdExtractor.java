@@ -25,6 +25,27 @@ public final class SkyblockIdExtractor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockIdExtractor.class);
 
+    // CustomData is immutable, so the extracted id can be memoized per component
+    // instance. Identity keying (not equals) keeps hashing O(1) instead of deep
+    // NBT comparisons; ConcurrentHashMap because extraction runs on the render
+    // thread, the pipeline workers, and parallel rebuild streams alike.
+    private static final int ID_CACHE_LIMIT = 8192;
+    private static final String NO_ID = "";
+    private static final java.util.concurrent.ConcurrentHashMap<IdentityKey, String> ID_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>(1024);
+
+    private record IdentityKey(Object ref) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof IdentityKey k && k.ref == ref;
+        }
+
+        @Override
+        public int hashCode() {
+            return System.identityHashCode(ref);
+        }
+    }
+
     private SkyblockIdExtractor() {
     }
 
@@ -44,6 +65,21 @@ public final class SkyblockIdExtractor {
             return null;
         }
 
+        IdentityKey key = new IdentityKey(data);
+        String cached = ID_CACHE.get(key);
+        if (cached != null) {
+            return cached.isEmpty() ? null : cached;
+        }
+
+        String id = extractUncached(data);
+        if (ID_CACHE.size() >= ID_CACHE_LIMIT) {
+            ID_CACHE.clear();
+        }
+        ID_CACHE.put(key, id != null ? id : NO_ID);
+        return id;
+    }
+
+    private static String extractUncached(CustomData data) {
         try {
             // Read-only view of the backing tag; copyTag() would deep-copy the
             // whole NBT tree on every slot every frame.

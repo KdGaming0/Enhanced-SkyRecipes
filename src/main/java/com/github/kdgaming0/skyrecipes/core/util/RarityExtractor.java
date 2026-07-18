@@ -54,7 +54,7 @@ public final class RarityExtractor {
         if (registry != null) {
             String id = SkyblockIdExtractor.extract(stack);
             if (id != null) {
-                NeuItem item = registry.getByInternalName(id).orElse(null);
+                NeuItem item = registry.getOrNull(id);
                 if (item != null) {
                     return extract(item);
                 }

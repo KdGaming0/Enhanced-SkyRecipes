@@ -59,10 +59,14 @@ public final class SearchAutocomplete {
             String aliasKey = alias.getKey();
             String targetId = alias.getValue();
             // Resolve alias to display name for better UX
-            String displayName = itemRegistry.getByInternalName(targetId)
-                    .map(item -> TextUtil.stripColorCodes(item.displayName()))
-                    .filter(name -> !name.isBlank())
-                    .orElse(aliasKey);
+            NeuItem target = itemRegistry.getOrNull(targetId);
+            String displayName = aliasKey;
+            if (target != null) {
+                String stripped = TextUtil.stripColorCodes(target.displayName());
+                if (!stripped.isBlank()) {
+                    displayName = stripped;
+                }
+            }
             if (seen.add(displayName.toLowerCase())) {
                 entries.add(new Entry(displayName, Tier.ALIAS));
             }

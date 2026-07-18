@@ -46,6 +46,15 @@ public final class ItemRegistry {
     }
 
     /**
+     * Allocation-free variant of {@link #getByInternalName} for hot loops
+     * (index building, family resolution, per-frame lookups).
+     */
+    @org.jetbrains.annotations.Nullable
+    public NeuItem getOrNull(String internalName) {
+        return internalName != null ? byInternalName.get(internalName) : null;
+    }
+
+    /**
      * Look up an item by its canonical name, remapping {@code X_ITEM} to {@code X}
      * when they are true duplicates (same itemid + damage).
      */

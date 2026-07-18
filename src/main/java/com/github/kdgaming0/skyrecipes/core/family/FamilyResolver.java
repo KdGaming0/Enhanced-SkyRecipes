@@ -321,7 +321,7 @@ public final class FamilyResolver {
 
     private static SkyblockRarity rarityOf(ItemRegistry items, String id) {
         if (items == null) return null;
-        NeuItem item = items.getByInternalName(id).orElse(null);
+        NeuItem item = items.getOrNull(id);
         if (item == null || item.lore() == null || item.lore().isEmpty()) return null;
         return SkyblockRarity.fromLoreOrNull(item.lore().getLast());
     }
@@ -456,7 +456,7 @@ public final class FamilyResolver {
         String sharedName = null;
         Set<SkyblockRarity> rarities = new HashSet<>();
         for (String m : members) {
-            NeuItem item = items.getByInternalName(m).orElse(null);
+            NeuItem item = items.getOrNull(m);
             if (item == null || item.displayName() == null) return false;
             String name = TextUtil.stripColorCodes(item.displayName()).trim();
             if (sharedName == null) {
@@ -529,8 +529,7 @@ public final class FamilyResolver {
             String base = entry.getValue();
             if (base == null || base.isEmpty() || base.equals(item)) continue;
             if (out.containsKey(item) || out.containsKey(base)) continue;
-            if (items.getByInternalName(item).isEmpty()
-                    || items.getByInternalName(base).isEmpty()) continue;
+            if (!items.contains(item) || !items.contains(base)) continue;
             parentOf.put(item, base);
             childrenOf.computeIfAbsent(base, k -> new ArrayList<>(2)).add(item);
         }
@@ -660,7 +659,7 @@ public final class FamilyResolver {
             String ingredient = ingredientId(cell);
             if (ingredient == null || !ingredient.endsWith(slot) || ingredient.equals(id)) continue;
             if (alreadyRegistered.contains(ingredient)
-                    || items.getByInternalName(ingredient).isEmpty()) continue;
+                    || !items.contains(ingredient)) continue;
             if (found != null && !found.equals(ingredient)) return CONFLICT;
             found = ingredient;
         }
@@ -780,7 +779,7 @@ public final class FamilyResolver {
         for (String cell : crafting.grid().values()) {
             String ingredient = ingredientId(cell);
             if (ingredient == null || ingredient.equals(id) || registered.contains(ingredient)
-                    || items.getByInternalName(ingredient).isEmpty()) continue;
+                    || !items.contains(ingredient)) continue;
             distinct.add(ingredient);
         }
         if (distinct.isEmpty()) return null;
@@ -800,9 +799,12 @@ public final class FamilyResolver {
         String candidate = null;
         for (String ingredient : distinct) {
             SkyblockItemCategory ingredientCategory = categories.computeIfAbsent(
-                    ingredient, ing -> items.getByInternalName(ing)
-                            .map(ItemCategoryResolver::resolve)
-                            .orElse(SkyblockItemCategory.UNKNOWN));
+                    ingredient, ing -> {
+                        NeuItem resolved = items.getOrNull(ing);
+                        return resolved != null
+                                ? ItemCategoryResolver.resolve(resolved)
+                                : SkyblockItemCategory.UNKNOWN;
+                    });
             if (ingredientCategory == category) {
                 if (candidate != null) return null; // two same-category ingredients: ambiguous
                 candidate = ingredient;
@@ -833,7 +835,7 @@ public final class FamilyResolver {
      * tokens miss, compare the two items' display names instead.
      */
     private static boolean hasDisplayContinuity(String parentId, NeuItem child, ItemRegistry items) {
-        NeuItem parent = items.getByInternalName(parentId).orElse(null);
+        NeuItem parent = items.getOrNull(parentId);
         if (parent == null || parent.displayName() == null || child.displayName() == null) {
             return false;
         }

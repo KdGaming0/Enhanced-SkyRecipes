@@ -25,14 +25,6 @@ import java.util.stream.Collectors;
  */
 public final class SkyblockRecipeCache {
 
-    private static final Comparator<ReliableClientRecipe> RECIPE_COMPARATOR = (a, b) -> {
-        int tierA = getResultTier(a);
-        int tierB = getResultTier(b);
-        if (tierA != tierB) {
-            return Integer.compare(tierA, tierB);
-        }
-        return a.getId().toString().compareTo(b.getId().toString());
-    };
     private static volatile Map<String, List<ReliableClientRecipe>> byIngredientId = Map.of();
     private static volatile Map<String, List<ReliableClientRecipe>> byResultId = Map.of();
     /**
@@ -82,15 +74,32 @@ public final class SkyblockRecipeCache {
 
         recipes.parallelStream().forEach(recipe -> indexRecipe(recipe, byIngredient, byResult, idCache));
 
+        // Result tiers drive the bucket sort below. Computing them inside the
+        // comparator would re-extract NBT ids O(n log n) times per bucket and
+        // once more per bucket the recipe appears in — precompute each exactly
+        // once instead, reusing the same per-rebuild id cache.
+        Map<ReliableClientRecipe, Integer> tiers = new IdentityHashMap<>(recipes.size() * 2);
+        for (ReliableClientRecipe recipe : recipes) {
+            tiers.put(recipe, computeResultTier(recipe, idCache));
+        }
+        Comparator<ReliableClientRecipe> comparator = (a, b) -> {
+            int tierA = tiers.getOrDefault(a, 0);
+            int tierB = tiers.getOrDefault(b, 0);
+            if (tierA != tierB) {
+                return Integer.compare(tierA, tierB);
+            }
+            return a.getId().toString().compareTo(b.getId().toString());
+        };
+
         byIngredientId = byIngredient.entrySet().parallelStream()
                 .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey,
-                        e -> sortRecipes(List.copyOf(e.getValue()))
+                        e -> sortRecipes(List.copyOf(e.getValue()), comparator)
                 ));
         byResultId = byResult.entrySet().parallelStream()
                 .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey,
-                        e -> sortRecipes(List.copyOf(e.getValue()))
+                        e -> sortRecipes(List.copyOf(e.getValue()), comparator)
                 ));
         idMatchingRecipes = recipes.stream()
                 .filter(r -> r instanceof SkyblockIdMatchingRecipe)
@@ -141,19 +150,21 @@ public final class SkyblockRecipeCache {
      * Sorts recipes deterministically by result tier ascending, then by recipe ID.
      * This ensures family views display lower tiers before higher tiers.
      */
-    private static List<ReliableClientRecipe> sortRecipes(List<ReliableClientRecipe> recipes) {
+    private static List<ReliableClientRecipe> sortRecipes(List<ReliableClientRecipe> recipes,
+                                                          Comparator<ReliableClientRecipe> comparator) {
         if (recipes.size() <= 1) {
             return recipes;
         }
         List<ReliableClientRecipe> sorted = new ArrayList<>(recipes);
-        sorted.sort(RECIPE_COMPARATOR);
+        sorted.sort(comparator);
         return sorted;
     }
 
-    private static int getResultTier(ReliableClientRecipe recipe) {
+    private static int computeResultTier(ReliableClientRecipe recipe,
+                                         ConcurrentMap<ItemStack, String> idCache) {
         for (SlotContent slot : recipe.getResults()) {
             for (ItemStack stack : slot.getValidContents()) {
-                String id = SkyblockIdExtractor.extractInternalName(stack);
+                String id = extractCached(stack, idCache);
                 if (id != null) {
                     int tier = FamilyResolver.extractTier(id);
                     if (tier > 0) {
@@ -239,8 +250,13 @@ public final class SkyblockRecipeCache {
      * not already present. ~1 set lookup per reforge card — cheap enough per keypress.
      */
     private static void appendIdMatches(String id, List<ReliableClientRecipe> out) {
+        if (idMatchingRecipes.isEmpty()) {
+            return;
+        }
+        Set<ReliableClientRecipe> present = Collections.newSetFromMap(new IdentityHashMap<>());
+        present.addAll(out);
         for (ReliableClientRecipe recipe : idMatchingRecipes) {
-            if (((SkyblockIdMatchingRecipe) recipe).matchesSkyblockId(id) && !out.contains(recipe)) {
+            if (((SkyblockIdMatchingRecipe) recipe).matchesSkyblockId(id) && present.add(recipe)) {
                 out.add(recipe);
             }
         }

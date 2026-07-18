@@ -97,6 +97,33 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
     @Nullable
     private List<String> cachedTableLines;
 
+    // -- Per-frame render caches ----------------------------------------------
+    // renderRecipe runs every frame; wrapping text (binary font.width searches),
+    // building Components, and re-resolving the origin's rarity from NBT/lore are
+    // all frame-invariant, so they are computed once and replayed as prebuilt
+    // lines until the rarity, card width, or origin stack changes.
+
+    /** One prebuilt text draw: component, card-relative position, colour. */
+    private record RenderLine(Component text, int x, int y, int color) {
+    }
+
+    @Nullable
+    private List<RenderLine> cachedSingleLines;
+    @Nullable
+    private SkyblockRarity cachedSingleLinesRarity;
+    private int cachedSingleLinesWidth = -1;
+
+    @Nullable
+    private List<RenderLine> cachedHeaderLines;
+    private int cachedHeaderWidth = -1;
+
+    /** Identity-cached rarity resolution for the clicked stack (null = all-rarities view). */
+    @Nullable
+    private ItemStack lastOrigin;
+    private boolean lastOriginValid;
+    @Nullable
+    private SkyblockRarity lastOriginRarity;
+
     // Scrollable table for the all-rarities view; recreated per placement.
     @Nullable
     private ReforgeRarityTableWidget tableWidget;
@@ -261,7 +288,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
             }
         }
 
-        SkyblockRarity display = resolveDisplayRarity(screen.getMenu().getOrigin());
+        SkyblockRarity display = displayRarityFor(screen.getMenu().getOrigin());
         Font font = Minecraft.getInstance().font;
 
         if (display != null) {
@@ -271,6 +298,23 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
         }
 
         maintainButtons(screen, pos);
+    }
+
+    /**
+     * Identity-cached front for {@link #resolveDisplayRarity}: the origin stack is
+     * fixed while the card is displayed, so the NBT id extraction and lore scan
+     * only run when a different stack (or none) opens the card.
+     */
+    @Nullable
+    private SkyblockRarity displayRarityFor(@Nullable ItemStack origin) {
+        if (lastOriginValid && origin == lastOrigin) {
+            return lastOriginRarity;
+        }
+        SkyblockRarity rarity = resolveDisplayRarity(origin);
+        lastOrigin = origin;
+        lastOriginRarity = rarity;
+        lastOriginValid = true;
+        return rarity;
     }
 
     /**
@@ -292,14 +336,27 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
 
     private void renderSingleRarity(GuiGraphicsExtractor graphics, Font font, RecipePosition pos,
                                     SkyblockRarity rarity) {
+        if (cachedSingleLines == null || cachedSingleLinesRarity != rarity
+                || cachedSingleLinesWidth != pos.width()) {
+            cachedSingleLines = buildSingleRarityLines(font, pos, rarity);
+            cachedSingleLinesRarity = rarity;
+            cachedSingleLinesWidth = pos.width();
+        }
+        for (RenderLine line : cachedSingleLines) {
+            graphics.text(font, line.text(), line.x(), line.y(), line.color(), true);
+        }
+    }
+
+    private List<RenderLine> buildSingleRarityLines(Font font, RecipePosition pos, SkyblockRarity rarity) {
         String rarityName = rarity.name();
+        List<RenderLine> lines = new ArrayList<>();
         int y = NAME_Y;
 
         // Name + rarity — right of the slot/NPC area
         String nameStr = "§e" + reforgeName + " §7- " + RecipeUiHelper.rarityColorCode(rarityName) + rarityName;
         int nameMaxWidth = pos.width() - TEXT_LEFT - 5;
         for (String line : RecipeUiHelper.wrapText(font, nameStr, nameMaxWidth)) {
-            graphics.text(font, Component.literal(line), TEXT_LEFT, y, RecipeUiHelper.TEXT_WHITE, true);
+            lines.add(new RenderLine(Component.literal(line), TEXT_LEFT, y, RecipeUiHelper.TEXT_WHITE));
             y += LINE_HEIGHT;
         }
 
@@ -307,7 +364,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
         String subStr = subtitleFor(rarityName);
         if (!subStr.isEmpty()) {
             for (String line : RecipeUiHelper.wrapText(font, subStr, nameMaxWidth)) {
-                graphics.text(font, Component.literal(line), TEXT_LEFT, y, 0xFFAAAAAA, true);
+                lines.add(new RenderLine(Component.literal(line), TEXT_LEFT, y, 0xFFAAAAAA));
                 y += LINE_HEIGHT;
             }
         }
@@ -320,7 +377,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
         String ability = abilityFor(rarityName);
         if (!ability.isEmpty()) {
             for (String line : RecipeUiHelper.wrapText(font, ability, bodyMaxWidth)) {
-                graphics.text(font, Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE, true);
+                lines.add(new RenderLine(Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE));
                 y += LINE_HEIGHT;
             }
         }
@@ -328,10 +385,11 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
         // Stats
         for (String statStr : statStringsFor(rarityName)) {
             for (String line : RecipeUiHelper.wrapText(font, statStr, bodyMaxWidth)) {
-                graphics.text(font, Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE, true);
+                lines.add(new RenderLine(Component.literal(line), 5, y, RecipeUiHelper.TEXT_WHITE));
                 y += LINE_HEIGHT;
             }
         }
+        return lines;
     }
 
     /**
@@ -339,16 +397,24 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
      * {@link ReforgeRarityTableWidget}, placed in {@link #placeButtons}.
      */
     private void renderAllRarities(GuiGraphicsExtractor graphics, Font font, RecipePosition pos) {
-        int y = NAME_Y;
+        if (cachedHeaderLines == null || cachedHeaderWidth != pos.width()) {
+            List<RenderLine> lines = new ArrayList<>();
+            int y = NAME_Y;
 
-        // Name — right of the slot/NPC area
-        int nameMaxWidth = pos.width() - TEXT_LEFT - 5;
-        for (String line : RecipeUiHelper.wrapText(font, "§e" + reforgeName, nameMaxWidth)) {
-            graphics.text(font, Component.literal(line), TEXT_LEFT, y, RecipeUiHelper.TEXT_WHITE, true);
-            y += LINE_HEIGHT;
+            // Name — right of the slot/NPC area
+            int nameMaxWidth = pos.width() - TEXT_LEFT - 5;
+            for (String line : RecipeUiHelper.wrapText(font, "§e" + reforgeName, nameMaxWidth)) {
+                lines.add(new RenderLine(Component.literal(line), TEXT_LEFT, y, RecipeUiHelper.TEXT_WHITE));
+                y += LINE_HEIGHT;
+            }
+            String subStr = isBlacksmith ? "§7Blacksmith" : "§7Reforge Stone";
+            lines.add(new RenderLine(Component.literal(subStr), TEXT_LEFT, y, 0xFFAAAAAA));
+            cachedHeaderLines = lines;
+            cachedHeaderWidth = pos.width();
         }
-        String subStr = isBlacksmith ? "§7Blacksmith" : "§7Reforge Stone";
-        graphics.text(font, Component.literal(subStr), TEXT_LEFT, y, 0xFFAAAAAA, true);
+        for (RenderLine line : cachedHeaderLines) {
+            graphics.text(font, line.text(), line.x(), line.y(), line.color(), true);
+        }
     }
 
     /** Y (card-relative) where the all-rarities table starts, below the wrapped header. */
@@ -368,7 +434,7 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
     @Nullable
     protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
         AbstractWidget inherited = super.placeButtons(screen, pos);
-        if (resolveDisplayRarity(screen.getMenu().getOrigin()) != null) {
+        if (displayRarityFor(screen.getMenu().getOrigin()) != null) {
             return inherited; // single-rarity view: no table widget
         }
         Font font = Minecraft.getInstance().font;
@@ -389,6 +455,14 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
     public void fadeRecipe() {
         super.fadeRecipe();
         tableWidget = null;
+        // The next display may use a different origin stack or card geometry.
+        cachedSingleLines = null;
+        cachedHeaderLines = null;
+        cachedSingleLinesWidth = -1;
+        cachedHeaderWidth = -1;
+        lastOrigin = null;
+        lastOriginRarity = null;
+        lastOriginValid = false;
     }
 
     private int bodyMinY() {

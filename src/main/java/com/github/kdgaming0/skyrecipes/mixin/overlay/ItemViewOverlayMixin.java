@@ -82,6 +82,15 @@ public class ItemViewOverlayMixin {
     private static final Map<ItemStack, Boolean> liveMatchCache = new IdentityHashMap<>();
     @Unique
     private static final int LIVE_TEXT_CACHE_LIMIT = 4096;
+    // Full per-slot verdict (id extraction + filtered-id lookup + index match + live
+    // match) for the current query. Identity-keyed and render-thread-only like the
+    // caches above; cleared alongside liveMatchCache when the query or index changes.
+    // Container refreshes deliver new ItemStack instances, so stale entries are never
+    // served — they just linger until the cap or the next query change.
+    @Unique
+    private static final Map<ItemStack, Boolean> slotMatchCache = new IdentityHashMap<>();
+    @Unique
+    private static final int SLOT_MATCH_CACHE_LIMIT = 4096;
 
     @Unique
     private static boolean liveStackMatches(ItemStack stack, SearchQuery parsed) {
@@ -118,6 +127,9 @@ public class ItemViewOverlayMixin {
                     break;
                 }
             }
+        }
+        if (liveMatchCache.size() >= LIVE_TEXT_CACHE_LIMIT) {
+            liveMatchCache.clear();
         }
         liveMatchCache.put(stack, matched);
         return matched;
@@ -298,6 +310,7 @@ public class ItemViewOverlayMixin {
             cachedParsedQuery = SearchQueryParser.parse(query);
             cachedIndexIdentity = index;
             liveMatchCache.clear();
+            slotMatchCache.clear();
         }
 
         int left = OverlayManager.INSTANCE.currentInfo().leftPos() - 1;
@@ -316,26 +329,39 @@ public class ItemViewOverlayMixin {
                 continue;
             }
 
-            boolean matched;
             ItemStack slotStack = slot.getItem();
-            String slotId = SkyblockIdExtractor.extract(slotStack);
 
-            if (slotId != null) {
-                // Fast path: exact SkyBlock ID in the filtered item list
-                matched = filteredIds.contains(slotId);
-
-                // Repo-token fallback: covers structured filters/category queries
-                if (!matched && index != null) {
-                    matched = index.itemMatchesInventoryQuery(slotId, cachedParsedQuery);
-                }
+            // The verdict for a (stack instance, query) pair is constant — evaluate
+            // once and serve every later frame from the identity cache.
+            Boolean cachedVerdict = slotMatchCache.get(slotStack);
+            boolean matched;
+            if (cachedVerdict != null) {
+                matched = cachedVerdict;
             } else {
-                matched = filteredVanillaNames.contains(slotStack.getHoverName().getString().toLowerCase());
-            }
+                String slotId = SkyblockIdExtractor.extract(slotStack);
 
-            // Live-stack fallback: applied enchants, enchanted books, reforged names —
-            // anything the repo entry doesn't know about this specific stack.
-            if (!matched) {
-                matched = liveStackMatches(slotStack, cachedParsedQuery);
+                if (slotId != null) {
+                    // Fast path: exact SkyBlock ID in the filtered item list
+                    matched = filteredIds.contains(slotId);
+
+                    // Repo-token fallback: covers structured filters/category queries
+                    if (!matched && index != null) {
+                        matched = index.itemMatchesInventoryQuery(slotId, cachedParsedQuery);
+                    }
+                } else {
+                    matched = filteredVanillaNames.contains(slotStack.getHoverName().getString().toLowerCase());
+                }
+
+                // Live-stack fallback: applied enchants, enchanted books, reforged names —
+                // anything the repo entry doesn't know about this specific stack.
+                if (!matched) {
+                    matched = liveStackMatches(slotStack, cachedParsedQuery);
+                }
+
+                if (slotMatchCache.size() >= SLOT_MATCH_CACHE_LIMIT) {
+                    slotMatchCache.clear();
+                }
+                slotMatchCache.put(slotStack, matched);
             }
 
             if (!matched) {
