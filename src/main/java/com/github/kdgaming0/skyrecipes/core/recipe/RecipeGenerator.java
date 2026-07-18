@@ -49,174 +49,200 @@ public final class RecipeGenerator {
      */
     public RecipeResult generate() {
         NpcInfoRegistry.beginCycle();
-
-        List<ReliableClientRecipe> recipes = new ArrayList<>();
-        RecipeIndex.Builder indexBuilder = new RecipeIndex.Builder();
-        int parseAttempts = 0;
-        int parseFailures = 0;
-        List<String> generatorFailures = new ArrayList<>();
-
         GardenMutationRegistry.load();
 
+        Batch batch = new Batch();
+
         for (NeuItem item : itemRegistry.getAllItems()) {
-            // Crafting recipe
-            if (item.recipe() instanceof NeuRecipe.CraftingRecipe crafting) {
-                parseAttempts++;
-                ReliableClientRecipe recipe = CraftingRecipeParser.parse(item, crafting, itemRegistry);
-                if (recipe != null) {
-                    recipes.add(recipe);
-                    indexRecipe(recipe, item, crafting.grid().values(), indexBuilder);
-                } else {
-                    parseFailures++;
-                }
-            }
-
-            // Attribute shard info recipes (from constants) — shards otherwise have
-            // no recipe or info data at all, so this is their only card
-            AttributeShardData shard = constantsRegistry != null
-                    ? constantsRegistry.getAttributeShard(item.internalName())
-                    : null;
-            if (shard != null) {
-                ReliableClientRecipe shardRecipe = ShardInfoRecipeBuilder.build(item, shard);
-                if (shardRecipe != null) {
-                    recipes.add(shardRecipe);
-                    indexRecipe(shardRecipe, item, List.of(), indexBuilder);
-                }
-            }
-
-            // Wiki info recipes (skip NPCs — they get a unified NPC info card instead;
-            // skip shards — their card above already carries the wiki URLs)
-            String internalName = item.internalName();
-            boolean isNpc = internalName != null && internalName.endsWith("_NPC");
-            if (!isNpc && shard == null && item.infoType() != null && !item.infoType().isEmpty() && item.info() != null && !item.info().isEmpty()) {
-                List<ReliableClientRecipe> wikiRecipes = WikiInfoRecipeBuilder.build(item);
-                for (ReliableClientRecipe recipe : wikiRecipes) {
-                    recipes.add(recipe);
-                    indexRecipe(recipe, item, List.of(), indexBuilder);
-                }
-            }
-
-            // NPC info recipes
-            ReliableClientRecipe npcInfoRecipe = NpcInfoRecipeBuilder.build(item);
-            if (npcInfoRecipe != null) {
-                recipes.add(npcInfoRecipe);
-                indexRecipe(npcInfoRecipe, item, List.of(), indexBuilder);
-            }
-
-            // Other recipe types
-            if (item.recipes() != null) {
-                for (NeuRecipe recipeData : item.recipes()) {
-                    parseAttempts++;
-                    ReliableClientRecipe recipe = switch (recipeData) {
-                        case NeuRecipe.CraftingRecipe crafting ->
-                                CraftingRecipeParser.parse(item, crafting, itemRegistry);
-                        case NeuRecipe.ForgeRecipe forge -> ForgeRecipeParser.parse(item, forge, itemRegistry);
-                        case NeuRecipe.KatGradeRecipe kat -> KatUpgradeRecipeParser.parse(item, kat, itemRegistry);
-                        case NeuRecipe.NpcShopRecipe shop -> NpcShopRecipeParser.parse(item, shop, itemRegistry);
-                        case NeuRecipe.DropsRecipe drops -> DropsRecipeParser.parse(item, drops, itemRegistry);
-                        case NeuRecipe.TradeRecipe trade -> TradeRecipeParser.parse(item, trade, itemRegistry);
-                    };
-
-                    if (recipe != null) {
-                        recipes.add(recipe);
-                        indexRecipe(recipe, item, extractIngredients(recipeData), indexBuilder);
-                    } else {
-                        parseFailures++;
-                    }
-                }
-            }
+            generateCraftingRecipe(item, batch);
+            AttributeShardData shard = generateShardInfoRecipe(item, batch);
+            generateWikiInfoRecipes(item, shard, batch);
+            generateNpcInfoRecipe(item, batch);
+            generateTypedRecipes(item, batch);
         }
 
-        // Essence upgrade recipes (from constants)
         if (constantsRegistry != null) {
-            runGenerator("essence upgrades", generatorFailures, () -> {
-                List<ReliableClientRecipe> essenceRecipes = EssenceUpgradeGenerator.generateAll(constantsRegistry, itemRegistry);
-                for (ReliableClientRecipe recipe : essenceRecipes) {
-                    recipes.add(recipe);
-                    // Index by result item internal name
-                    if (recipe.getId() != null) {
-                        String resultName = recipe.getId().getPath();
-                        int lastSlash = resultName.lastIndexOf('/');
-                        if (lastSlash != -1) {
-                            resultName = resultName.substring(0, lastSlash);
-                            int firstSlash = resultName.indexOf('/');
-                            if (firstSlash != -1) {
-                                resultName = resultName.substring(firstSlash + 1);
-                            }
-                        }
-                        indexBuilder.addResult(resultName, recipe.getId());
-                    }
-                }
-            });
-
-            // Reforge recipes (from constants)
-            runGenerator("reforges", generatorFailures, () -> {
-                List<ReliableClientRecipe> reforgeRecipes = ReforgeRecipeGenerator.generateAll(constantsRegistry, itemRegistry);
-                for (ReliableClientRecipe recipe : reforgeRecipes) {
-                    recipes.add(recipe);
-                    if (recipe instanceof SkyblockReforgeClientRecipe reforge) {
-                        // Index by every item this reforge applies to
-                        for (String resultName : reforge.getResultInternalNames()) {
-                            if (!resultName.isEmpty()) {
-                                indexBuilder.addResult(resultName, recipe.getId());
-                            }
-                        }
-                        // Index stone as ingredient
-                        String stoneName = reforge.getStoneInternalName();
-                        if (!stoneName.isEmpty()) {
-                            indexBuilder.addIngredient(stoneName, recipe.getId());
-                        }
-                    }
-                }
-            });
-
-            // Garden mutation recipes (from built-in resource)
-            runGenerator("garden mutations", generatorFailures, () -> {
-                for (GardenMutation mutation : GardenMutationRegistry.all()) {
-                    Identifier recipeId = IdentifierUtil.skyRecipeId("garden_mutation/", mutation.id());
-                    List<String> wikiUrls = itemRegistry.getByInternalName(mutation.id())
-                            .filter(item -> "WIKI_URL".equals(item.infoType()))
-                            .map(NeuItem::info)
-                            .orElse(List.of());
-                    SkyblockGardenMutationClientRecipe recipe =
-                            new SkyblockGardenMutationClientRecipe(recipeId, mutation, itemRegistry, wikiUrls);
-                    recipes.add(recipe);
-                    indexBuilder.addResult(mutation.id(), recipeId);
-                    // Index ingredients
-                    for (int row = 0; row < mutation.gridSize(); row++) {
-                        for (int col = 0; col < mutation.gridSize(); col++) {
-                            if (mutation.isIngredient(row, col)) {
-                                String ingId = mutation.ingredientIdAt(row, col);
-                                if (!ingId.isEmpty()) {
-                                    indexBuilder.addIngredient(ingId, recipeId);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            // Shard fusion recipes (from the SkyShards dataset, fetched at startup)
-            runGenerator("shard fusions", generatorFailures, () -> {
-                List<ReliableClientRecipe> fusionRecipes = ShardFusionGenerator.generateAll(constantsRegistry, itemRegistry);
-                for (ReliableClientRecipe recipe : fusionRecipes) {
-                    recipes.add(recipe);
-                    if (recipe instanceof SkyblockFusionClientRecipe fusion) {
-                        indexBuilder.addResult(fusion.getOutputInternalName(), recipe.getId());
-                        for (String inputName : fusion.getInputInternalNames()) {
-                            indexBuilder.addIngredient(inputName, recipe.getId());
-                        }
-                    }
-                }
-            });
+            runGenerator("essence upgrades", batch.generatorFailures, () -> generateEssenceUpgrades(batch));
+            runGenerator("reforges", batch.generatorFailures, () -> generateReforges(batch));
+            runGenerator("garden mutations", batch.generatorFailures, () -> generateGardenMutations(batch));
+            runGenerator("shard fusions", batch.generatorFailures, () -> generateShardFusions(batch));
         }
 
-        RecipeIndex index = indexBuilder.build();
+        RecipeIndex index = batch.indexBuilder.build();
         LOGGER.info("Generated {} recipes ({} result entries, {} ingredient entries) — parse: {} ok / {} failed",
-                recipes.size(), index.resultCount(), index.ingredientCount(),
-                parseAttempts - parseFailures, parseFailures);
+                batch.recipes.size(), index.resultCount(), index.ingredientCount(),
+                batch.parseAttempts - batch.parseFailures, batch.parseFailures);
 
-        return new RecipeResult(recipes, index, parseAttempts, parseFailures, List.copyOf(generatorFailures));
+        return new RecipeResult(batch.recipes, index, batch.parseAttempts, batch.parseFailures,
+                List.copyOf(batch.generatorFailures));
+    }
+
+    // ---- Per-item recipe sources ----
+
+    private void generateCraftingRecipe(NeuItem item, Batch batch) {
+        if (item.recipe() instanceof NeuRecipe.CraftingRecipe crafting) {
+            batch.parseAttempts++;
+            ReliableClientRecipe recipe = CraftingRecipeParser.parse(item, crafting, itemRegistry);
+            if (recipe != null) {
+                batch.recipes.add(recipe);
+                indexRecipe(recipe, item, crafting.grid().values(), batch.indexBuilder);
+            } else {
+                batch.parseFailures++;
+            }
+        }
+    }
+
+    /**
+     * Attribute shard info recipes (from constants) — shards otherwise have
+     * no recipe or info data at all, so this is their only card.
+     *
+     * @return the shard data if this item is a shard, for the wiki-card skip below
+     */
+    private AttributeShardData generateShardInfoRecipe(NeuItem item, Batch batch) {
+        AttributeShardData shard = constantsRegistry != null
+                ? constantsRegistry.getAttributeShard(item.internalName())
+                : null;
+        if (shard != null) {
+            ReliableClientRecipe shardRecipe = ShardInfoRecipeBuilder.build(item, shard);
+            if (shardRecipe != null) {
+                batch.recipes.add(shardRecipe);
+                indexRecipe(shardRecipe, item, List.of(), batch.indexBuilder);
+            }
+        }
+        return shard;
+    }
+
+    /**
+     * Wiki info recipes (skip NPCs — they get a unified NPC info card instead;
+     * skip shards — their card above already carries the wiki URLs).
+     */
+    private void generateWikiInfoRecipes(NeuItem item, AttributeShardData shard, Batch batch) {
+        String internalName = item.internalName();
+        boolean isNpc = internalName != null && internalName.endsWith("_NPC");
+        if (!isNpc && shard == null && item.infoType() != null && !item.infoType().isEmpty()
+                && item.info() != null && !item.info().isEmpty()) {
+            List<ReliableClientRecipe> wikiRecipes = WikiInfoRecipeBuilder.build(item);
+            for (ReliableClientRecipe recipe : wikiRecipes) {
+                batch.recipes.add(recipe);
+                indexRecipe(recipe, item, List.of(), batch.indexBuilder);
+            }
+        }
+    }
+
+    private void generateNpcInfoRecipe(NeuItem item, Batch batch) {
+        ReliableClientRecipe npcInfoRecipe = NpcInfoRecipeBuilder.build(item);
+        if (npcInfoRecipe != null) {
+            batch.recipes.add(npcInfoRecipe);
+            indexRecipe(npcInfoRecipe, item, List.of(), batch.indexBuilder);
+        }
+    }
+
+    /** All recipe types carried in the item's "recipes" list. */
+    private void generateTypedRecipes(NeuItem item, Batch batch) {
+        if (item.recipes() == null) {
+            return;
+        }
+        for (NeuRecipe recipeData : item.recipes()) {
+            batch.parseAttempts++;
+            ReliableClientRecipe recipe = switch (recipeData) {
+                case NeuRecipe.CraftingRecipe crafting ->
+                        CraftingRecipeParser.parse(item, crafting, itemRegistry);
+                case NeuRecipe.ForgeRecipe forge -> ForgeRecipeParser.parse(item, forge, itemRegistry);
+                case NeuRecipe.KatGradeRecipe kat -> KatUpgradeRecipeParser.parse(item, kat, itemRegistry);
+                case NeuRecipe.NpcShopRecipe shop -> NpcShopRecipeParser.parse(item, shop, itemRegistry);
+                case NeuRecipe.DropsRecipe drops -> DropsRecipeParser.parse(item, drops, itemRegistry);
+                case NeuRecipe.TradeRecipe trade -> TradeRecipeParser.parse(item, trade, itemRegistry);
+            };
+
+            if (recipe != null) {
+                batch.recipes.add(recipe);
+                indexRecipe(recipe, item, extractIngredients(recipeData), batch.indexBuilder);
+            } else {
+                batch.parseFailures++;
+            }
+        }
+    }
+
+    // ---- Constants-driven categories ----
+
+    private void generateEssenceUpgrades(Batch batch) {
+        List<ReliableClientRecipe> essenceRecipes = EssenceUpgradeGenerator.generateAll(constantsRegistry, itemRegistry);
+        for (ReliableClientRecipe recipe : essenceRecipes) {
+            batch.recipes.add(recipe);
+            // Index by result item internal name
+            if (recipe.getId() != null) {
+                String resultName = recipe.getId().getPath();
+                int lastSlash = resultName.lastIndexOf('/');
+                if (lastSlash != -1) {
+                    resultName = resultName.substring(0, lastSlash);
+                    int firstSlash = resultName.indexOf('/');
+                    if (firstSlash != -1) {
+                        resultName = resultName.substring(firstSlash + 1);
+                    }
+                }
+                batch.indexBuilder.addResult(resultName, recipe.getId());
+            }
+        }
+    }
+
+    private void generateReforges(Batch batch) {
+        List<ReliableClientRecipe> reforgeRecipes = ReforgeRecipeGenerator.generateAll(constantsRegistry, itemRegistry);
+        for (ReliableClientRecipe recipe : reforgeRecipes) {
+            batch.recipes.add(recipe);
+            if (recipe instanceof SkyblockReforgeClientRecipe reforge) {
+                // Index by every item this reforge applies to
+                for (String resultName : reforge.getResultInternalNames()) {
+                    if (!resultName.isEmpty()) {
+                        batch.indexBuilder.addResult(resultName, recipe.getId());
+                    }
+                }
+                // Index stone as ingredient
+                String stoneName = reforge.getStoneInternalName();
+                if (!stoneName.isEmpty()) {
+                    batch.indexBuilder.addIngredient(stoneName, recipe.getId());
+                }
+            }
+        }
+    }
+
+    /** Garden mutation recipes (from built-in resource). */
+    private void generateGardenMutations(Batch batch) {
+        for (GardenMutation mutation : GardenMutationRegistry.all()) {
+            Identifier recipeId = IdentifierUtil.skyRecipeId("garden_mutation/", mutation.id());
+            List<String> wikiUrls = itemRegistry.getByInternalName(mutation.id())
+                    .filter(item -> "WIKI_URL".equals(item.infoType()))
+                    .map(NeuItem::info)
+                    .orElse(List.of());
+            SkyblockGardenMutationClientRecipe recipe =
+                    new SkyblockGardenMutationClientRecipe(recipeId, mutation, itemRegistry, wikiUrls);
+            batch.recipes.add(recipe);
+            batch.indexBuilder.addResult(mutation.id(), recipeId);
+            // Index ingredients
+            for (int row = 0; row < mutation.gridSize(); row++) {
+                for (int col = 0; col < mutation.gridSize(); col++) {
+                    if (mutation.isIngredient(row, col)) {
+                        String ingId = mutation.ingredientIdAt(row, col);
+                        if (!ingId.isEmpty()) {
+                            batch.indexBuilder.addIngredient(ingId, recipeId);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Shard fusion recipes (from the SkyShards dataset, fetched at startup). */
+    private void generateShardFusions(Batch batch) {
+        List<ReliableClientRecipe> fusionRecipes = ShardFusionGenerator.generateAll(constantsRegistry, itemRegistry);
+        for (ReliableClientRecipe recipe : fusionRecipes) {
+            batch.recipes.add(recipe);
+            if (recipe instanceof SkyblockFusionClientRecipe fusion) {
+                batch.indexBuilder.addResult(fusion.getOutputInternalName(), recipe.getId());
+                for (String inputName : fusion.getInputInternalNames()) {
+                    batch.indexBuilder.addIngredient(inputName, recipe.getId());
+                }
+            }
+        }
     }
 
     private void indexRecipe(ReliableClientRecipe recipe, NeuItem item,
@@ -265,6 +291,15 @@ public final class RecipeGenerator {
             case NeuRecipe.DropsRecipe d -> d.drops().stream().map(NeuRecipe.DropsRecipe.Drop::id).toList();
             case NeuRecipe.TradeRecipe t -> t.cost().isEmpty() ? List.of() : List.of(t.cost());
         };
+    }
+
+    /** Mutable accumulator threaded through one generation pass. */
+    private static final class Batch {
+        final List<ReliableClientRecipe> recipes = new ArrayList<>();
+        final RecipeIndex.Builder indexBuilder = new RecipeIndex.Builder();
+        final List<String> generatorFailures = new ArrayList<>();
+        int parseAttempts;
+        int parseFailures;
     }
 
     /**

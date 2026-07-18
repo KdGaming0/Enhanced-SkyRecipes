@@ -1,7 +1,10 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
+import com.github.kdgaming0.skyrecipes.core.data.codec.ConstantsCodec;
+import com.github.kdgaming0.skyrecipes.core.data.codec.ItemCodec;
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.model.*;
+import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.util.AtomicFiles;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;
 import com.github.kdgaming0.skyrecipes.core.util.PathValidator;
@@ -219,11 +222,14 @@ public class BinaryDataCompiler {
             // One packer writes both msgpack sections; consecutive complete
             // values are byte-identical to two separately packed streams.
             MessagePacker packer = MessagePack.newDefaultPacker(counter);
-            packItems(packer, items);
+            ItemCodec.packItems(packer, resolvePetPlaceholders(items));
             packer.flush();
             itemsLength = counter.count();
 
-            packConstants(packer, parents, essenceCosts, bazaarItems, museumCategories, museumChildren, reforges, reforgeStones, knownStats, reforgeNameToStone, mobDefinitions, mobSkins, attributeShards);
+            ConstantsCodec.pack(packer, new ConstantsRegistry(
+                    parents, essenceCosts, bazaarItems, museumCategories,
+                    reforges, reforgeStones, knownStats, reforgeNameToStone,
+                    mobDefinitions, mobSkins, museumChildren, attributeShards));
             packer.flush();
             constantsLength = counter.count() - itemsLength;
 
@@ -1004,478 +1010,33 @@ public class BinaryDataCompiler {
         return result;
     }
 
-    private void packItems(MessagePacker packer, List<NeuItem> items) throws IOException {
-        packer.packArrayHeader(items.size());
+    /**
+     * Resolve pet stat placeholders at compile time so the packed displayName
+     * and lore are final strings.
+     */
+    private List<NeuItem> resolvePetPlaceholders(List<NeuItem> items) {
+        if (petResolver == null || !petResolver.isLoaded()) {
+            return items;
+        }
+        List<NeuItem> resolved = new ArrayList<>(items.size());
         for (NeuItem item : items) {
-            // Resolve pet placeholders at compile time
-            PetStatResolver.ResolvedStrings resolved = petResolver != null && petResolver.isLoaded()
-                    ? petResolver.resolve(item)
-                    : null;
-            String displayName = resolved != null ? resolved.displayName() : item.displayName();
-            List<String> lore = resolved != null ? resolved.lore() : item.lore();
-
-            packer.packMapHeader(18);
-            packer.packString("internalName");
-            packer.packString(item.internalName());
-            packer.packString("itemId");
-            packer.packString(item.itemId());
-            packer.packString("displayName");
-            packer.packString(displayName);
-            packer.packString("nbtTag");
-            packer.packString(item.nbtTag());
-
-            packer.packString("lore");
-            packer.packArrayHeader(lore.size());
-            for (String line : lore) {
-                packer.packString(line);
-            }
-
-            packer.packString("damage");
-            packer.packInt(item.damage());
-            packer.packString("clickCommand");
-            packer.packString(item.clickCommand());
-            packer.packString("craftText");
-            packer.packString(item.craftText());
-            packer.packString("infoType");
-            packer.packString(item.infoType());
-
-            packer.packString("info");
-            packer.packArrayHeader(item.info().size());
-            for (String url : item.info()) {
-                packer.packString(url);
-            }
-
-            packer.packString("recipe");
-            if (item.recipe() instanceof NeuRecipe.CraftingRecipe(
-                    Map<String, String> grid, int count, String overrideOutputId
-            )) {
-                packer.packMapHeader(3 + grid.size());
-                packer.packString("_type");
-                packer.packString("crafting");
-                packer.packString("count");
-                packer.packInt(count);
-                packer.packString("overrideOutputId");
-                packer.packString(overrideOutputId);
-                for (Map.Entry<String, String> slot : grid.entrySet()) {
-                    packer.packString(slot.getKey());
-                    packer.packString(slot.getValue());
-                }
+            PetStatResolver.ResolvedStrings r = petResolver.resolve(item);
+            if (r == null) {
+                resolved.add(item);
             } else {
-                packer.packNil();
-            }
-
-            packer.packString("recipes");
-            if (item.recipes() != null) {
-                packer.packArrayHeader(item.recipes().size());
-                for (NeuRecipe r : item.recipes()) {
-                    packRecipe(packer, r);
-                }
-            } else {
-                packer.packNil();
-            }
-
-            packer.packString("slayerReq");
-            if (item.slayerReq() != null) {
-                packer.packString(item.slayerReq());
-            } else {
-                packer.packNil();
-            }
-
-            packer.packString("vanilla");
-            packer.packBoolean(item.vanilla());
-            packer.packString("island");
-            packer.packString(item.island());
-            packer.packString("x");
-            packer.packInt(item.x());
-            packer.packString("y");
-            packer.packInt(item.y());
-            packer.packString("z");
-            packer.packInt(item.z());
-        }
-    }
-
-    private void packRecipe(MessagePacker packer, NeuRecipe recipe) throws IOException {
-        switch (recipe) {
-            case NeuRecipe.CraftingRecipe c -> {
-                packer.packMapHeader(3 + c.grid().size());
-                packer.packString("_type");
-                packer.packString("crafting");
-                packer.packString("count");
-                packer.packInt(c.count());
-                packer.packString("overrideOutputId");
-                packer.packString(c.overrideOutputId());
-                for (Map.Entry<String, String> slot : c.grid().entrySet()) {
-                    packer.packString(slot.getKey());
-                    packer.packString(slot.getValue());
-                }
-            }
-            case NeuRecipe.ForgeRecipe f -> {
-                packer.packMapHeader(5);
-                packer.packString("_type");
-                packer.packString("forge");
-                packer.packString("count");
-                packer.packInt(f.count());
-                packer.packString("overrideOutputId");
-                packer.packString(f.overrideOutputId());
-                packer.packString("duration");
-                packer.packInt(f.duration());
-                packer.packString("inputs");
-                packer.packArrayHeader(f.inputs().size());
-                for (String input : f.inputs()) {
-                    packer.packString(input);
-                }
-            }
-            case NeuRecipe.KatGradeRecipe k -> {
-                packer.packMapHeader(6);
-                packer.packString("_type");
-                packer.packString("katgrade");
-                packer.packString("coins");
-                packer.packInt(k.coins());
-                packer.packString("time");
-                packer.packInt(k.time());
-                packer.packString("input");
-                packer.packString(k.input());
-                packer.packString("output");
-                packer.packString(k.output());
-                packer.packString("items");
-                packer.packArrayHeader(k.items().size());
-                for (String item : k.items()) {
-                    packer.packString(item);
-                }
-            }
-            case NeuRecipe.NpcShopRecipe n -> {
-                packer.packMapHeader(4);
-                packer.packString("_type");
-                packer.packString("npc_shop");
-                packer.packString("npc");
-                packer.packString(n.npc());
-                packer.packString("result");
-                packer.packString(n.result());
-                packer.packString("cost");
-                packer.packArrayHeader(n.costs().size());
-                for (NeuRecipe.NpcShopRecipe.Cost cost : n.costs()) {
-                    packer.packMapHeader(2);
-                    packer.packString("item");
-                    packer.packString(cost.item());
-                    packer.packString("cost");
-                    packer.packInt(cost.cost());
-                }
-            }
-            case NeuRecipe.DropsRecipe d -> {
-                packer.packMapHeader(4);
-                packer.packString("_type");
-                packer.packString("drops");
-                packer.packString("name");
-                packer.packString(d.name());
-                packer.packString("render");
-                packer.packString(d.render());
-                packer.packString("drops");
-                packer.packArrayHeader(d.drops().size());
-                for (NeuRecipe.DropsRecipe.Drop drop : d.drops()) {
-                    packer.packMapHeader(2);
-                    packer.packString("id");
-                    packer.packString(drop.id());
-                    packer.packString("chance");
-                    packer.packString(drop.chance());
-                }
-            }
-            case NeuRecipe.TradeRecipe t -> {
-                packer.packMapHeader(6);
-                packer.packString("_type");
-                packer.packString("trade");
-                packer.packString("cost");
-                packer.packString(t.cost());
-                packer.packString("result");
-                packer.packString(t.result());
-                packer.packString("count");
-                packer.packInt(t.count());
-                packer.packString("min");
-                packer.packInt(t.min());
-                packer.packString("max");
-                packer.packInt(t.max());
+                resolved.add(new NeuItem(item.internalName(), item.itemId(), r.displayName(),
+                        item.nbtTag(), r.lore(), item.damage(), item.clickCommand(), item.craftText(),
+                        item.infoType(), item.info(), item.recipe(), item.recipes(), item.slayerReq(),
+                        item.vanilla(), item.island(), item.x(), item.y(), item.z()));
             }
         }
-    }
-
-    private void packConstants(MessagePacker packer,
-                               Map<String, List<String>> parents,
-                               Map<String, EssenceUpgradeData> essenceCosts,
-                               Set<String> bazaarItems,
-                               Map<String, String> museumCategories,
-                               Map<String, String> museumChildren,
-                               Map<String, ReforgeData> reforges,
-                               Map<String, ReforgeStoneData> reforgeStones,
-                               Set<String> knownStats,
-                               Map<String, String> reforgeNameToStone,
-                               Map<String, MobRenderDefinition> mobDefinitions,
-                               Map<String, byte[]> mobSkins,
-                               Map<String, AttributeShardData> attributeShards) throws IOException {
-        packer.packMapHeader(12);
-
-        packer.packString("parents");
-        packer.packMapHeader(parents.size());
-        for (Map.Entry<String, List<String>> e : parents.entrySet()) {
-            packer.packString(e.getKey());
-            packer.packArrayHeader(e.getValue().size());
-            for (String child : e.getValue()) {
-                packer.packString(child);
-            }
-        }
-
-        packer.packString("essenceCosts");
-        packer.packMapHeader(essenceCosts.size());
-        for (Map.Entry<String, EssenceUpgradeData> e : essenceCosts.entrySet()) {
-            packer.packString(e.getKey());
-            EssenceUpgradeData data = e.getValue();
-            int mapSize = 1 + data.costsPerStar().size();
-            if (!data.extraItemsPerStar().isEmpty()) mapSize++;
-            packer.packMapHeader(mapSize);
-            packer.packString("type");
-            packer.packString(data.essenceType());
-            for (Map.Entry<Integer, Integer> ce : data.costsPerStar().entrySet()) {
-                packer.packString(String.valueOf(ce.getKey()));
-                packer.packInt(ce.getValue());
-            }
-            if (!data.extraItemsPerStar().isEmpty()) {
-                packer.packString("items");
-                packer.packMapHeader(data.extraItemsPerStar().size());
-                for (Map.Entry<Integer, List<String>> ie : data.extraItemsPerStar().entrySet()) {
-                    packer.packString(String.valueOf(ie.getKey()));
-                    packer.packArrayHeader(ie.getValue().size());
-                    for (String req : ie.getValue()) {
-                        packer.packString(req);
-                    }
-                }
-            }
-        }
-
-        packer.packString("bazaarItems");
-        packer.packArrayHeader(bazaarItems.size());
-        for (String item : bazaarItems) {
-            packer.packString(item);
-        }
-
-        packer.packString("museum");
-        packer.packMapHeader(museumCategories.size());
-        for (Map.Entry<String, String> e : museumCategories.entrySet()) {
-            packer.packString(e.getKey());
-            packer.packString(e.getValue());
-        }
-
-        packer.packString("museumChildren");
-        packer.packMapHeader(museumChildren.size());
-        for (Map.Entry<String, String> e : museumChildren.entrySet()) {
-            packer.packString(e.getKey());
-            packer.packString(e.getValue());
-        }
-
-        packer.packString("reforges");
-        packer.packMapHeader(reforges.size());
-        for (Map.Entry<String, ReforgeData> e : reforges.entrySet()) {
-            packer.packString(e.getKey());
-            ReforgeData d = e.getValue();
-            int mapSize = 3;
-            if (!d.statsPerRarity().isEmpty()) mapSize++;
-            if (!d.reforgeAbility().isEmpty()) mapSize++;
-            if (!d.reforgeCosts().isEmpty()) mapSize++;
-            packer.packMapHeader(mapSize);
-            packer.packString("reforgeName");
-            packer.packString(d.reforgeName());
-            packer.packString("itemTypes");
-            packer.packString(d.itemTypes());
-            packer.packString("requiredRarities");
-            packer.packArrayHeader(d.requiredRarities().size());
-            for (String r : d.requiredRarities()) packer.packString(r);
-            if (!d.statsPerRarity().isEmpty()) {
-                packer.packString("reforgeStats");
-                packer.packMapHeader(d.statsPerRarity().size());
-                for (Map.Entry<String, Map<String, Number>> se : d.statsPerRarity().entrySet()) {
-                    packer.packString(se.getKey());
-                    packer.packMapHeader(se.getValue().size());
-                    for (Map.Entry<String, Number> stat : se.getValue().entrySet()) {
-                        packer.packString(stat.getKey());
-                        packer.packDouble(stat.getValue().doubleValue());
-                    }
-                }
-            }
-            if (!d.reforgeAbility().isEmpty()) {
-                packer.packString("reforgeAbility");
-                packer.packMapHeader(d.reforgeAbility().size());
-                for (Map.Entry<String, String> ae : d.reforgeAbility().entrySet()) {
-                    packer.packString(ae.getKey());
-                    packer.packString(ae.getValue());
-                }
-            }
-            if (!d.reforgeCosts().isEmpty()) {
-                packer.packString("reforgeCosts");
-                packer.packMapHeader(d.reforgeCosts().size());
-                for (Map.Entry<String, Number> ce : d.reforgeCosts().entrySet()) {
-                    packer.packString(ce.getKey());
-                    packer.packInt(ce.getValue().intValue());
-                }
-            }
-        }
-
-        packer.packString("reforgeStones");
-        packer.packMapHeader(reforgeStones.size());
-        for (Map.Entry<String, ReforgeStoneData> e : reforgeStones.entrySet()) {
-            packer.packString(e.getKey());
-            ReforgeStoneData d = e.getValue();
-            int mapSize = 5;
-            if (!d.reforgeAbility().isEmpty()) mapSize++;
-            if (!d.reforgeCosts().isEmpty()) mapSize++;
-            if (!d.reforgeStats().isEmpty()) mapSize++;
-            packer.packMapHeader(mapSize);
-            packer.packString("internalName");
-            packer.packString(d.internalName());
-            packer.packString("reforgeName");
-            packer.packString(d.reforgeName());
-            packer.packString("reforgeType");
-            packer.packString(d.reforgeType());
-            packer.packString("itemTypes");
-            packer.packString(d.itemTypes());
-            packer.packString("requiredRarities");
-            packer.packArrayHeader(d.requiredRarities().size());
-            for (String r : d.requiredRarities()) packer.packString(r);
-            if (!d.reforgeAbility().isEmpty()) {
-                packer.packString("reforgeAbility");
-                packer.packMapHeader(d.reforgeAbility().size());
-                for (Map.Entry<String, String> ae : d.reforgeAbility().entrySet()) {
-                    packer.packString(ae.getKey());
-                    packer.packString(ae.getValue());
-                }
-            }
-            if (!d.reforgeCosts().isEmpty()) {
-                packer.packString("reforgeCosts");
-                packer.packMapHeader(d.reforgeCosts().size());
-                for (Map.Entry<String, Number> ce : d.reforgeCosts().entrySet()) {
-                    packer.packString(ce.getKey());
-                    packer.packInt(ce.getValue().intValue());
-                }
-            }
-            if (!d.reforgeStats().isEmpty()) {
-                packer.packString("reforgeStats");
-                packer.packMapHeader(d.reforgeStats().size());
-                for (Map.Entry<String, Map<String, Number>> se : d.reforgeStats().entrySet()) {
-                    packer.packString(se.getKey());
-                    packer.packMapHeader(se.getValue().size());
-                    for (Map.Entry<String, Number> stat : se.getValue().entrySet()) {
-                        packer.packString(stat.getKey());
-                        packer.packDouble(stat.getValue().doubleValue());
-                    }
-                }
-            }
-        }
-
-        packer.packString("knownStats");
-        packer.packArrayHeader(knownStats.size());
-        for (String stat : knownStats) {
-            packer.packString(stat);
-        }
-
-        packer.packString("reforgeNameToStone");
-        packer.packMapHeader(reforgeNameToStone.size());
-        for (Map.Entry<String, String> e : reforgeNameToStone.entrySet()) {
-            packer.packString(e.getKey());
-            packer.packString(e.getValue());
-        }
-
-        packer.packString("mobDefinitions");
-        packer.packMapHeader(mobDefinitions.size());
-        for (Map.Entry<String, MobRenderDefinition> e : mobDefinitions.entrySet()) {
-            packer.packString(e.getKey());
-            MobRenderDefinition d = e.getValue();
-            int mapSize = 1;
-            if (d.horseKind() != null) mapSize++;
-            if (d.skinPath() != null) mapSize++;
-            if (d.helmetItemId() != null) mapSize++;
-            if (d.rider() != null) mapSize++;
-            packer.packMapHeader(mapSize);
-            packer.packString("entityKind");
-            packer.packString(d.entityKind());
-            if (d.horseKind() != null) {
-                packer.packString("horseKind");
-                packer.packString(d.horseKind());
-            }
-            if (d.skinPath() != null) {
-                packer.packString("skinPath");
-                packer.packString(d.skinPath());
-            }
-            if (d.helmetItemId() != null) {
-                packer.packString("helmetItemId");
-                packer.packString(d.helmetItemId());
-            }
-            if (d.rider() != null) {
-                packer.packString("rider");
-                packMobRenderDefinition(packer, d.rider());
-            }
-        }
-
-        packer.packString("mobSkins");
-        packer.packMapHeader(mobSkins.size());
-        for (Map.Entry<String, byte[]> e : mobSkins.entrySet()) {
-            packer.packString(e.getKey());
-            packer.packBinaryHeader(e.getValue().length);
-            packer.addPayload(e.getValue());
-        }
-
-        packer.packString("attributeShards");
-        packer.packMapHeader(attributeShards.size());
-        for (Map.Entry<String, AttributeShardData> e : attributeShards.entrySet()) {
-            packer.packString(e.getKey());
-            AttributeShardData d = e.getValue();
-            packer.packMapHeader(7);
-            packer.packString("shardName");
-            packer.packString(d.shardName());
-            packer.packString("abilityName");
-            packer.packString(d.abilityName());
-            packer.packString("rarity");
-            packer.packString(d.rarity());
-            packer.packString("alignment");
-            packer.packString(d.alignment());
-            packer.packString("family");
-            packer.packArrayHeader(d.family().size());
-            for (String f : d.family()) packer.packString(f);
-            packer.packString("shardId");
-            packer.packString(d.shardId());
-            packer.packString("bazaarName");
-            packer.packString(d.bazaarName());
-        }
-    }
-
-    private void packMobRenderDefinition(MessagePacker packer, MobRenderDefinition d) throws IOException {
-        int mapSize = 1;
-        if (d.horseKind() != null) mapSize++;
-        if (d.skinPath() != null) mapSize++;
-        if (d.helmetItemId() != null) mapSize++;
-        if (d.rider() != null) mapSize++;
-        packer.packMapHeader(mapSize);
-        packer.packString("entityKind");
-        packer.packString(d.entityKind());
-        if (d.horseKind() != null) {
-            packer.packString("horseKind");
-            packer.packString(d.horseKind());
-        }
-        if (d.skinPath() != null) {
-            packer.packString("skinPath");
-            packer.packString(d.skinPath());
-        }
-        if (d.helmetItemId() != null) {
-            packer.packString("helmetItemId");
-            packer.packString(d.helmetItemId());
-        }
-        if (d.rider() != null) {
-            packer.packString("rider");
-            packMobRenderDefinition(packer, d.rider());
-        }
+        return resolved;
     }
 
     /**
      * Outcome of {@link #downloadNeuRepo}: distinguishes fresh data, usable cache, and hard failure.
      */
     public enum DownloadResult {DOWNLOADED, CACHE_HIT, FAILED_NO_CACHE}
-
-    // ---- MessagePack serialization (unchanged) ----
 
     /**
      * Progress callback for long-running compiles.
