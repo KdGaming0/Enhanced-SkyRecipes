@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe;
 
 import cc.cassian.rrv.api.recipe.ReliableClientRecipeType;
+import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -76,5 +77,23 @@ public abstract class AbstractSkyblockRecipeType implements ReliableClientRecipe
     @Override
     public final int getPriority() {
         return priority;
+    }
+
+    /**
+     * Places a {@code rows × cols} block of item slots, numbered row-major starting
+     * at {@code firstSlot}. Cell {@code (row, col)} is positioned at
+     * {@code (originX + col * spacing, originY + row * spacing)}.
+     *
+     * <p>Shared by the grid-style layouts (Kat/Essence material grids, mob-drops,
+     * garden-mutation, NPC-shop) so the identical nested loop isn't re-hand-rolled.</p>
+     */
+    protected static void placeGrid(RecipeViewMenu.SlotDefinition slotDefinition, int firstSlot,
+                                    int rows, int cols, int originX, int originY, int spacing) {
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                slotDefinition.addItemSlot(firstSlot + row * cols + col,
+                        originX + col * spacing, originY + row * spacing);
+            }
+        }
     }
 }

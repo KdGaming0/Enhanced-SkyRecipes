@@ -2,7 +2,7 @@ package com.github.kdgaming0.skyrecipes.rrv.recipe.type;
 
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockRecipeType;
-import net.minecraft.resources.Identifier;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -31,23 +31,15 @@ public class SkyblockEssenceUpgradeRecipeType extends AbstractSkyblockRecipeType
 
     private SkyblockEssenceUpgradeRecipeType() {
         super("essence_upgrade", "Essence Upgrade", 152, 64,
-                Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/essence_upgrade.png"),
+                IdentifierUtil.skyRecipes("textures/gui/type/essence_upgrade.png"),
                 8, new ItemStack(Items.NETHER_STAR), 5);
     }
 
     @Override
     public void placeSlots(RecipeViewMenu.SlotDefinition slotDefinition) {
         slotDefinition.addItemSlot(0, INPUT_X, INPUT_Y);
-
-        for (int row = 0; row < 2; row++) {
-            for (int col = 0; col < MATERIAL_COLS; col++) {
-                int slotId = 1 + row * MATERIAL_COLS + col;
-                int x = MATERIAL_ORIGIN_X + col * MATERIAL_SPACING;
-                int y = MATERIAL_ORIGIN_Y + row * MATERIAL_SPACING;
-                slotDefinition.addItemSlot(slotId, x, y);
-            }
-        }
-
+        placeGrid(slotDefinition, 1, 2, MATERIAL_COLS,
+                MATERIAL_ORIGIN_X, MATERIAL_ORIGIN_Y, MATERIAL_SPACING);
         slotDefinition.addItemSlot(7, OUTPUT_X, OUTPUT_Y);
     }
 }

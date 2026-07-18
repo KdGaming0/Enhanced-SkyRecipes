@@ -2,7 +2,7 @@ package com.github.kdgaming0.skyrecipes.rrv.recipe.type;
 
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockRecipeType;
-import net.minecraft.resources.Identifier;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -23,7 +23,7 @@ public class SkyblockFusionRecipeType extends AbstractSkyblockRecipeType {
 
     private SkyblockFusionRecipeType() {
         super("fusion", "Shard Fusion", 152, 80,
-                Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/fusion.png"),
+                IdentifierUtil.skyRecipes("textures/gui/type/fusion.png"),
                 1, new ItemStack(Items.AMETHYST_SHARD), 6);
     }
 

@@ -49,7 +49,7 @@ public final class EssenceUpgradeGenerator {
         ItemStack stack = new ItemStack(Items.GOLD_NUGGET, 1);
         String compact = RecipeUiHelper.formatCompactNumber(amount);
         stack.set(DataComponents.CUSTOM_NAME, Component.literal(compact + " Coins"));
-        String exact = String.format("%,d", amount);
+        String exact = RecipeUiHelper.formatExact(amount);
         stack.set(DataComponents.LORE, new ItemLore(List.of(
                 Component.literal("§e" + exact + " Coins")
         )));

@@ -1,16 +1,17 @@
 package com.github.kdgaming0.skyrecipes.core.hypixel;
 
+import com.github.kdgaming0.skyrecipes.core.util.AtomicFiles;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 /**
  * Reads and writes the Hypixel items snapshot to disk.
@@ -57,13 +58,11 @@ public final class HypixelItemsCache {
      */
     public static void save(Path cacheFile, HypixelItemsSnapshot data) {
         try {
-            Files.createDirectories(cacheFile.getParent());
-            Path temp = cacheFile.resolveSibling(cacheFile.getFileName() + ".tmp");
-            try (Writer writer = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
-                GSON.toJson(data, writer);
-            }
-            Files.move(temp, cacheFile, StandardCopyOption.REPLACE_EXISTING,
-                    StandardCopyOption.ATOMIC_MOVE);
+            AtomicFiles.write(cacheFile, out -> {
+                try (Writer writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
+                    GSON.toJson(data, writer);
+                }
+            });
         } catch (Exception e) {
             LOGGER.warn("Failed to save Hypixel items cache", e);
         }

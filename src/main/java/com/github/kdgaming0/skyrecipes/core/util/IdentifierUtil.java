@@ -47,4 +47,15 @@ public final class IdentifierUtil {
     public static Identifier skyRecipeId(String prefix, String name) {
         return Identifier.fromNamespaceAndPath("skyrecipes", prefix + sanitizePath(name));
     }
+
+    /**
+     * Create a {@code skyrecipes:}-namespaced identifier for an already-valid path
+     * (e.g. a bundled texture path). No sanitisation is applied.
+     *
+     * @param path a path that is already valid for an {@link Identifier}
+     * @return a {@code skyrecipes:path} identifier
+     */
+    public static Identifier skyRecipes(String path) {
+        return Identifier.fromNamespaceAndPath("skyrecipes", path);
+    }
 }

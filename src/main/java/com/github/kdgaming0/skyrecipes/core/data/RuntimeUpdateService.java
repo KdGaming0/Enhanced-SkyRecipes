@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.core.data;
 
+import com.github.kdgaming0.skyrecipes.core.util.AtomicFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -508,12 +509,7 @@ public class RuntimeUpdateService {
         Path finalMeta = layout.binaryMetaFile();
 
         try {
-            try {
-                Files.move(newMpk, finalMpk, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                LOGGER.warn("Atomic move failed, falling back to regular replace", e);
-                Files.move(newMpk, finalMpk, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.move(newMpk, finalMpk);
         } catch (IOException e) {
             LOGGER.error("Swap of new binary failed", e);
             return false;

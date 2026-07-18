@@ -277,7 +277,7 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         stack.set(DataComponents.CUSTOM_NAME, Component.literal("Coins"));
 
         // Show exact amount in lore so hover tooltip is useful
-        String exact = String.format("%,d", discounted);
+        String exact = RecipeUiHelper.formatExact(discounted);
         stack.set(DataComponents.LORE, new ItemLore(List.of(
                 Component.literal("§e" + exact + " Coins")
         )));

@@ -2,7 +2,7 @@ package com.github.kdgaming0.skyrecipes.rrv.recipe.type;
 
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockRecipeType;
-import net.minecraft.resources.Identifier;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -18,7 +18,7 @@ public final class SkyblockDropsRecipeType extends AbstractSkyblockRecipeType {
 
     private SkyblockDropsRecipeType() {
         super("drops", "SkyBlock Mob Drops", 168, 151,
-                Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/mob_drops.png"),
+                IdentifierUtil.skyRecipes("textures/gui/type/mob_drops.png"),
                 54, new ItemStack(Items.ZOMBIE_HEAD), 2);
     }
 
@@ -26,10 +26,6 @@ public final class SkyblockDropsRecipeType extends AbstractSkyblockRecipeType {
     public void placeSlots(RecipeViewMenu.SlotDefinition slotDefinition) {
         slotDefinition.setHighlightWithoutContents(false);
 
-        for (int row = 0; row < 6; row++) {
-            for (int i = 0; i < 9; i++) {
-                slotDefinition.addItemSlot(row * 9 + i, i * 18 + 4, 62 + row * 18);
-            }
-        }
+        placeGrid(slotDefinition, 0, 6, 9, 4, 62, 18);
     }
 }

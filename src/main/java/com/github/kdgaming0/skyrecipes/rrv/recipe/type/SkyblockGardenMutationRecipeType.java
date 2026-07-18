@@ -2,7 +2,7 @@ package com.github.kdgaming0.skyrecipes.rrv.recipe.type;
 
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockRecipeType;
-import net.minecraft.resources.Identifier;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -25,7 +25,7 @@ public class SkyblockGardenMutationRecipeType extends AbstractSkyblockRecipeType
 
     private SkyblockGardenMutationRecipeType() {
         super("garden_mutation", "Garden Mutation", 146, 156,
-                Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/garden_mutation.png"),
+                IdentifierUtil.skyRecipes("textures/gui/type/garden_mutation.png"),
                 37, new ItemStack(Items.WHEAT_SEEDS), 5);
     }
 
@@ -35,13 +35,7 @@ public class SkyblockGardenMutationRecipeType extends AbstractSkyblockRecipeType
         slotDefinition.addItemSlot(0, SURFACE_SLOT_X, SURFACE_SLOT_Y);
 
         // Slots 1–36: 6×6 grid
-        int slotId = 1;
-        for (int row = 0; row < GRID_SIZE; row++) {
-            for (int col = 0; col < GRID_SIZE; col++) {
-                int x = GRID_ORIGIN_X + col * SLOT_SIZE;
-                int y = GRID_ORIGIN_Y + row * SLOT_SIZE;
-                slotDefinition.addItemSlot(slotId++, x, y);
-            }
-        }
+        placeGrid(slotDefinition, 1, GRID_SIZE, GRID_SIZE,
+                GRID_ORIGIN_X, GRID_ORIGIN_Y, SLOT_SIZE);
     }
 }

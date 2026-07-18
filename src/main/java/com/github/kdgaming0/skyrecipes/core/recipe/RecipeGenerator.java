@@ -129,7 +129,7 @@ public final class RecipeGenerator {
 
         // Essence upgrade recipes (from constants)
         if (constantsRegistry != null) {
-            try {
+            runGenerator("essence upgrades", generatorFailures, () -> {
                 List<ReliableClientRecipe> essenceRecipes = EssenceUpgradeGenerator.generateAll(constantsRegistry, itemRegistry);
                 for (ReliableClientRecipe recipe : essenceRecipes) {
                     recipes.add(recipe);
@@ -147,13 +147,10 @@ public final class RecipeGenerator {
                         indexBuilder.addResult(resultName, recipe.getId());
                     }
                 }
-            } catch (Exception e) {
-                LOGGER.error("Failed to generate essence upgrade recipes", e);
-                generatorFailures.add("essence upgrades");
-            }
+            });
 
             // Reforge recipes (from constants)
-            try {
+            runGenerator("reforges", generatorFailures, () -> {
                 List<ReliableClientRecipe> reforgeRecipes = ReforgeRecipeGenerator.generateAll(constantsRegistry, itemRegistry);
                 for (ReliableClientRecipe recipe : reforgeRecipes) {
                     recipes.add(recipe);
@@ -171,13 +168,10 @@ public final class RecipeGenerator {
                         }
                     }
                 }
-            } catch (Exception e) {
-                LOGGER.error("Failed to generate reforge recipes", e);
-                generatorFailures.add("reforges");
-            }
+            });
 
             // Garden mutation recipes (from built-in resource)
-            try {
+            runGenerator("garden mutations", generatorFailures, () -> {
                 for (GardenMutation mutation : GardenMutationRegistry.all()) {
                     Identifier recipeId = IdentifierUtil.skyRecipeId("garden_mutation/", mutation.id());
                     List<String> wikiUrls = itemRegistry.getByInternalName(mutation.id())
@@ -200,13 +194,10 @@ public final class RecipeGenerator {
                         }
                     }
                 }
-            } catch (Exception e) {
-                LOGGER.error("Failed to generate garden mutation recipes", e);
-                generatorFailures.add("garden mutations");
-            }
+            });
 
             // Shard fusion recipes (from the SkyShards dataset, fetched at startup)
-            try {
+            runGenerator("shard fusions", generatorFailures, () -> {
                 List<ReliableClientRecipe> fusionRecipes = ShardFusionGenerator.generateAll(constantsRegistry, itemRegistry);
                 for (ReliableClientRecipe recipe : fusionRecipes) {
                     recipes.add(recipe);
@@ -217,10 +208,7 @@ public final class RecipeGenerator {
                         }
                     }
                 }
-            } catch (Exception e) {
-                LOGGER.error("Failed to generate shard fusion recipes", e);
-                generatorFailures.add("shard fusions");
-            }
+            });
         }
 
         RecipeIndex index = indexBuilder.build();
@@ -251,6 +239,20 @@ public final class RecipeGenerator {
             if (!name.isEmpty()) {
                 indexBuilder.addIngredient(name, recipeId);
             }
+        }
+    }
+
+    /**
+     * Runs a category generator, logging and recording a failure entry if it throws.
+     * A whole category throwing is degraded-but-survivable, so it must never abort the
+     * per-item generation loop.
+     */
+    private static void runGenerator(String label, List<String> failures, Runnable body) {
+        try {
+            body.run();
+        } catch (Exception e) {
+            LOGGER.error("Failed to generate {} recipes", label, e);
+            failures.add(label);
         }
     }
 

@@ -12,6 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
@@ -20,7 +21,7 @@ import java.util.List;
 
 public class SkyblockForgeClientRecipe extends AbstractSkyblockClientRecipe {
 
-    private static final Identifier FLAME_TICKER_ID = Identifier.fromNamespaceAndPath("skyrecipes", "forge_flame");
+    private static final Identifier FLAME_TICKER_ID = IdentifierUtil.skyRecipes("forge_flame");
     private static final Identifier RRV_WIDGETS = Identifier.fromNamespaceAndPath("rrv", "textures/gui/rrv_widgets.png");
     private static final int FLAME_X = 81;
     private static final int FLAME_Y = 14;

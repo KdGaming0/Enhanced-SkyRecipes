@@ -7,6 +7,7 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockInfoRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
@@ -85,7 +86,7 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private static String stripFormatting(String raw) {
-        String clean = raw.replaceAll("§[0-9a-fk-orA-FK-OR]", "");
+        String clean = TextUtil.stripColorCodes(raw);
         if (clean.endsWith(" (NPC)")) {
             clean = clean.substring(0, clean.length() - 6);
         }

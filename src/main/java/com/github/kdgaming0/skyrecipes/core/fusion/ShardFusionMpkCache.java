@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.core.fusion;
 
+import com.github.kdgaming0.skyrecipes.core.util.AtomicFiles;
 import org.jetbrains.annotations.Nullable;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessagePacker;
@@ -8,10 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -91,18 +90,11 @@ public final class ShardFusionMpkCache {
      */
     public static void save(Path cacheFile, ShardFusionData data, String etag) {
         try {
-            Files.createDirectories(cacheFile.getParent());
-            Path temp = cacheFile.resolveSibling(cacheFile.getFileName() + ".tmp");
-            try (OutputStream out = Files.newOutputStream(temp);
-                 MessagePacker packer = MessagePack.newDefaultPacker(out)) {
-                pack(packer, data, etag);
-            }
-            try {
-                Files.move(temp, cacheFile, StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE);
-            } catch (IOException e) {
-                Files.move(temp, cacheFile, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.write(cacheFile, out -> {
+                try (MessagePacker packer = MessagePack.newDefaultPacker(out)) {
+                    pack(packer, data, etag);
+                }
+            });
         } catch (Exception e) {
             LOGGER.warn("Failed to save shard fusion cache", e);
         }

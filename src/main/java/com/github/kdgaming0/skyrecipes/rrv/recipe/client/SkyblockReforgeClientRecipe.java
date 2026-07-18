@@ -7,6 +7,7 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.SkyblockRarity;
 import com.github.kdgaming0.skyrecipes.core.render.mob.MobPreviewRenderer;
 import com.github.kdgaming0.skyrecipes.core.render.mob.PlayerSkinRenderer;
+import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.core.util.RarityExtractor;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
@@ -53,9 +54,9 @@ public class SkyblockReforgeClientRecipe extends AbstractSkyblockClientRecipe
         implements SkyblockIdMatchingRecipe {
 
     private static final Identifier TEXTURE_ITEM =
-            Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/reforge_item.png");
+            IdentifierUtil.skyRecipes("textures/gui/type/reforge_item.png");
     private static final Identifier TEXTURE_NPC =
-            Identifier.fromNamespaceAndPath("skyrecipes", "textures/gui/type/reforge_npc.png");
+            IdentifierUtil.skyRecipes("textures/gui/type/reforge_npc.png");
 
     // Blacksmith NPC render area: 24×36 at (5,5)
     private static final int NPC_X = 4;

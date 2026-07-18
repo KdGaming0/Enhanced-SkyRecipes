@@ -55,6 +55,14 @@ public final class RecipeUiHelper {
     }
 
     /**
+     * Formats a number with thousands separators, e.g. {@code 1234567 → "1,234,567"}.
+     * Used for the exact-amount lore shown alongside {@link #formatCompactNumber(long)}.
+     */
+    public static String formatExact(long value) {
+        return String.format("%,d", value);
+    }
+
+    /**
      * Formats a duration in seconds into a human-readable string.
      *
      * @param totalSeconds total duration in seconds

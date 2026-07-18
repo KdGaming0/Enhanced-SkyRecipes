@@ -2,6 +2,7 @@ package com.github.kdgaming0.skyrecipes.core.data;
 
 import com.github.kdgaming0.skyrecipes.core.mob.MobRenderDefinition;
 import com.github.kdgaming0.skyrecipes.core.model.*;
+import com.github.kdgaming0.skyrecipes.core.util.AtomicFiles;
 import com.github.kdgaming0.skyrecipes.core.util.JsonUtil;
 import com.github.kdgaming0.skyrecipes.core.util.PathValidator;
 import com.github.kdgaming0.skyrecipes.core.util.PetStatResolver;
@@ -398,12 +399,7 @@ public class BinaryDataCompiler {
             }
             verifyRepoZip(tmp);
 
-            try {
-                Files.move(tmp, zipFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException atomicEx) {
-                Files.move(tmp, zipFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.move(tmp, zipFile);
             return getEtag;
         } catch (IOException e) {
             try {

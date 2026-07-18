@@ -1,5 +1,6 @@
 package com.github.kdgaming0.skyrecipes.core.hypixel;
 
+import com.github.kdgaming0.skyrecipes.core.util.HttpFetch;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import org.jetbrains.annotations.Nullable;
@@ -9,12 +10,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.*;
 
 /**
@@ -27,7 +25,6 @@ public final class HypixelItemsFetcher {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HypixelItemsFetcher.class);
     private static final String ENDPOINT = "https://api.hypixel.net/v2/resources/skyblock/items";
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
     private HypixelItemsFetcher() {
     }
@@ -40,17 +37,10 @@ public final class HypixelItemsFetcher {
     @Nullable
     public static HypixelItemsSnapshot fetch(HttpClient http) {
         try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(ENDPOINT))
-                    .header("User-Agent", "SkyRecipes")
-                    .timeout(REQUEST_TIMEOUT)
-                    .GET()
-                    .build();
-
-            HttpResponse<InputStream> response = http.send(request,
+            HttpResponse<InputStream> response = http.send(HttpFetch.get(ENDPOINT, null).build(),
                     HttpResponse.BodyHandlers.ofInputStream());
 
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            if (!HttpFetch.isOk(response.statusCode())) {
                 LOGGER.warn("Hypixel items API returned HTTP {}", response.statusCode());
                 return null;
             }
