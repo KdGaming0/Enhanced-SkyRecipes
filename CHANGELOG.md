@@ -1,3 +1,9 @@
+# 0.4.1
+
+## 🐛 Fixes
+
+- Enchanted items now show their enchantment glint.
+
 # 0.4.0
 
 ## ✨ New

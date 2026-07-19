@@ -248,6 +248,7 @@ public final class ItemStackBuilder {
             String normalizedNbt = preprocessNeuSnbt(nbtString);
             CompoundTag tag = TagParser.parseCompoundFully(normalizedNbt);
             applyItemModel(stack, tag, item);
+            applyGlint(stack, tag);
             Optional<CompoundTag> extraOpt = tag.getCompound("ExtraAttributes");
             if (extraOpt.isPresent()) {
                 CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
@@ -278,6 +279,12 @@ public final class ItemStackBuilder {
             return;
         }
         stack.set(DataComponents.ITEM_MODEL, modelId);
+    }
+
+    private static void applyGlint(ItemStack stack, CompoundTag tag) {
+        if (tag.contains("ench")) {
+            stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
+        }
     }
 
     private static void applyComponents(ItemStack stack, CompoundTag tag, NeuItem item) {
@@ -367,7 +374,7 @@ public final class ItemStackBuilder {
             applyHideFlags(stack, hideFlagsOpt.get());
         }
 
-        // Enchantments — deferred to later milestone due to modern registry complexity
+        applyGlint(stack, tag);
 
         // Also store the full raw NBT in custom_data as a fallback
         // This ensures SkyBlock mods can still read the original NBT
