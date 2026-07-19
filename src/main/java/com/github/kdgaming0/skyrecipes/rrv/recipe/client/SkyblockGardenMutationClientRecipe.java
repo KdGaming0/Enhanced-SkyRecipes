@@ -48,9 +48,10 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
 
     private static final int NAME_X = 26;
     private static final int NAME_Y = 8;
-    private static final int WATER_DROPLET_X = 128;
-    private static final int WATER_DROPLET_Y = 10;
-    private static final int WATER_DROPLET_SIZE = 4;
+    private static final int WATER_ICON_X = 122;
+    private static final int WATER_ICON_Y = 4;
+    private static final int WATER_ICON_SIZE = 16;
+    private static final String WATER_ICON_ITEM = "HYDRO_CAN_ULTRA_3000";
 
     private static final int INFO_TEXT_Y = 136;
 
@@ -82,11 +83,13 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     private List<Component> cachedTooltip;
     @Nullable
     private Component cachedName;
+    private final ItemStack waterIconStack;
 
     public SkyblockGardenMutationClientRecipe(Identifier id, GardenMutation mutation,
                                               ItemRegistry itemRegistry, List<String> wikiUrls) {
         super(id, wikiUrls);
         this.mutation = mutation;
+        this.waterIconStack = resolveWaterIconStack(mutation, itemRegistry);
         this.surfaceStack = resolveSurfaceStack(mutation.surface());
         GridData data = buildGrid(mutation, itemRegistry);
         this.gridSlots = data.slots;
@@ -145,6 +148,14 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         return itemRegistry.getByInternalName(internalName)
                 .map(item -> ItemStackBuilder.build(item, 1))
                 .orElse(ItemStack.EMPTY);
+    }
+
+    private static ItemStack resolveWaterIconStack(GardenMutation mutation, ItemRegistry itemRegistry) {
+        if (!mutation.needsWater()) {
+            return ItemStack.EMPTY;
+        }
+        NeuItem item = itemRegistry.getOrNull(WATER_ICON_ITEM);
+        return item != null ? ItemStackBuilder.build(item, 1) : new ItemStack(Items.WATER_BUCKET);
     }
 
     private static ItemStack resolveSurfaceStack(String surface) {
@@ -349,16 +360,12 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         Component name = getNameComponent();
         graphics.text(font, name, NAME_X, NAME_Y, RecipeUiHelper.TEXT_WHITE, true);
 
-        // Water droplet indicator + tooltip
+        // Watering can indicator + tooltip
         if (mutation.needsWater()) {
-            int dropX = WATER_DROPLET_X;
-            int dropY = WATER_DROPLET_Y;
-            int dropS = WATER_DROPLET_SIZE;
-            graphics.fill(dropX, dropY, dropX + dropS, dropY + dropS, 0xFF00FFFF);
-            graphics.fill(dropX + 1, dropY + 1, dropX + 2, dropY + 2, RecipeUiHelper.TEXT_WHITE);
+            graphics.item(waterIconStack, WATER_ICON_X, WATER_ICON_Y);
 
-            if (mouseX >= dropX - 2 && mouseX < dropX + dropS + 2
-                    && mouseY >= dropY - 2 && mouseY < dropY + dropS + 2) {
+            if (mouseX >= WATER_ICON_X && mouseX < WATER_ICON_X + WATER_ICON_SIZE
+                    && mouseY >= WATER_ICON_Y && mouseY < WATER_ICON_Y + WATER_ICON_SIZE) {
                 graphics.setComponentTooltipForNextFrame(font,
                         List.of(Component.literal("§bRequires Water")),
                         pos.left() + mouseX, pos.top() + mouseY);

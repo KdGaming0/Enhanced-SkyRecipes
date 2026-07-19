@@ -24,6 +24,7 @@
 - The Reforge tab now only appears on items that can actually be reforged — accessories, hatcessories, carnival masks, and timecharms no longer show it.
 - SkyBlock items no longer get pulled into Reliable Recipe Viewer's built-in vanilla groups.
 - Performance: the item list loads faster, item search is more responsive, and there are smaller optimizations across the board.
+- Garden mutation recipes that require water now show the HydroCan™ watering can as the water indicator instead of a small blue square.
 
 ## 🐛 Fixes
 
