@@ -35,7 +35,10 @@
     "rrv.fix.QuickNavRecipeViewMixin",
     "rrv.fix.RecipeViewMenuFixesMixin",
     "rrv.fix.RrvScreenNullItemGuardMixin",
+    "skyblocker.AccessoriesHelperWidgetMixin",
+    "skyblocker.AccessoriesTabButtonMixin",
     "skyblocker.GardenPlotsWidgetMixin",
+    "skyblocker.HelperWidgetLookupMixin",
     "skyblocker.ItemViewOverlayLookupMixin",
     "skyblocker.MuseumManagerMixin"
   ],

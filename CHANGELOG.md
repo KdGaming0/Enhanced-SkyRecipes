@@ -16,6 +16,8 @@
 
 ### Other additions
 - Skyblocker's item lookup keybinds now work on items in the Reliable Recipe Viewer item list. Hovering an item there and pressing the Item Price Lookup keybind shows the item on the Bazaar/Auction House — previously these keybinds did nothing in the item list.
+- The recipe and usage keybinds (R/U by default) now work on items in Skyblocker's accessory bag helper, just like in the museum helper. Left-click still opens the wiki via Skyblocker.
+- The Reliable Recipe Viewer item list now wraps around Skyblocker's accessory bag helper and its tab button instead of overlapping them.
 
 ## 🔧 Improvements
 
