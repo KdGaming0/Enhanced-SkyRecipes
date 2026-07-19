@@ -1,6 +1,6 @@
 plugins {
     id("dev.kikugie.stonecutter")
-    id("me.modmuss50.mod-publish-plugin") version "1.0.+" apply false
+    id("me.modmuss50.mod-publish-plugin") version "2.1.+" apply false
 }
 
 stonecutter active "26.1"
@@ -29,8 +29,8 @@ tasks.register("publishToAllPlatforms") {
 
 gradle.projectsEvaluated {
     releaseVersions.zipWithNext().forEach { (prev, next) ->
-        project(":$next").tasks.named("publishMods") {
-            mustRunAfter(":$prev:publishMods")
+        project(":$next").tasks.matching { it.name == "publishMods" }.configureEach {
+            mustRunAfter(project(":$prev").tasks.matching { it.name == "publishMods" })
         }
     }
 }
