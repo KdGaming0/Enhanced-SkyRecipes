@@ -6,6 +6,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -16,6 +17,23 @@ import java.util.Set;
  * a {@link ClassNotFoundException} during Mixin transformation.</p>
  */
 public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
+
+    /**
+     * Optional-mod classes that a mixin references in its own body, keyed by mixin.
+     *
+     * <p>{@link #targetClassExists(String)} only vets the <em>target</em>, which is enough
+     * for mixins that target a companion mod directly. Mixins that target a vanilla class
+     * but call into Skyblocker or RRV need their references vetted explicitly, otherwise a
+     * rename upstream turns into a {@link NoClassDefFoundError} at apply time.</p>
+     */
+    private static final Map<String, List<String>> REQUIRED_CLASSES = Map.of(
+            "com.github.kdgaming0.skyrecipes.mixin.skyblocker.RecipeSlotRarityBackgroundMixin",
+            List.of(
+                    "de.hysky.skyblocker.skyblock.item.background.ItemBackgroundManager",
+                    "de.hysky.skyblocker.utils.Utils",
+                    "cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen"
+            )
+    );
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -31,7 +49,21 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.contains(".mixin.skyblocker.")) {
             return FabricLoader.getInstance().isModLoaded("skyblocker")
-                    && targetClassExists(targetClassName);
+                    && targetClassExists(targetClassName)
+                    && requiredClassesExist(mixinClassName);
+        }
+        return true;
+    }
+
+    /**
+     * Checks the optional-mod classes a mixin references in its body, for mixins whose
+     * target alone does not prove those references still resolve.
+     */
+    private static boolean requiredClassesExist(String mixinClassName) {
+        for (String required : REQUIRED_CLASSES.getOrDefault(mixinClassName, List.of())) {
+            if (!targetClassExists(required)) {
+                return false;
+            }
         }
         return true;
     }

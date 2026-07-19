@@ -3,6 +3,7 @@
 ## 🐛 Fixes
 
 - Enchanted items now show their enchantment glint.
+- Skyblocker's item backgrounds now appear behind items in the recipe viewer.
 
 # 0.4.0
 

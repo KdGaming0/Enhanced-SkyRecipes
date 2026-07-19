@@ -41,7 +41,8 @@
     "skyblocker.GardenPlotsWidgetMixin",
     "skyblocker.HelperWidgetLookupMixin",
     "skyblocker.ItemViewOverlayLookupMixin",
-    "skyblocker.MuseumManagerMixin"
+    "skyblocker.MuseumManagerMixin",
+    "skyblocker.RecipeSlotRarityBackgroundMixin"
   ],
   "injectors": {
     "defaultRequire": 1
