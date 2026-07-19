@@ -10,6 +10,7 @@ import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockInfoRecipeType;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.ClientCommandSender;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -101,21 +102,7 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         if (font.width(component) <= TEXT_MAX_WIDTH) {
             return component;
         }
-        String ellipsis = "…";
-        int avail = TEXT_MAX_WIDTH - font.width(Component.literal(ellipsis));
-        String raw = component.getString();
-        int lo = 0, hi = raw.length();
-        while (lo < hi) {
-            int mid = (lo + hi + 1) / 2;
-            String sub = raw.substring(0, mid);
-            Component test = LegacyStringParser.parse(sub);
-            if (font.width(test) <= avail) {
-                lo = mid;
-            } else {
-                hi = mid - 1;
-            }
-        }
-        return LegacyStringParser.parse(raw.substring(0, lo) + "§r" + ellipsis);
+        return RecipeUiHelper.ellipsize(font, component.getString(), TEXT_MAX_WIDTH, true);
     }
 
     /**
@@ -247,10 +234,7 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private void sendBazaarCommand() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && mc.getConnection() != null) {
-            mc.getConnection().sendCommand("bz " + bazaarSearch);
-        }
+        ClientCommandSender.send("bz " + bazaarSearch);
     }
 
     @SuppressWarnings({"NullableProblems", "ConstantValue"})
@@ -276,9 +260,6 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private void sendNavigateCommand() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && mc.getConnection() != null) {
-            mc.getConnection().sendCommand("shnav " + stripFormatting(npcDisplayName));
-        }
+        ClientCommandSender.send("shnav " + stripFormatting(npcDisplayName));
     }
 }

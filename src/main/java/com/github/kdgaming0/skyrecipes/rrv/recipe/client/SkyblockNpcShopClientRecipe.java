@@ -147,15 +147,10 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
             Component text = costLabels[i];
             if (text == null) continue;
 
-            int textWidth = font.width(text);
-
             int slotX = COST_GRID_ORIGIN_X + (i % 4) * COST_SLOT_SPACING;
             int slotY = COST_GRID_ORIGIN_Y + (i / 4) * COST_SLOT_SPACING;
 
-            int x = slotX + 17 - textWidth;
-            int y = slotY + 9;
-
-            graphics.text(font, text, x, y, RecipeUiHelper.TEXT_WHITE, true);
+            RecipeUiHelper.drawSlotCount(graphics, font, text, slotX, slotY);
         }
     }
 

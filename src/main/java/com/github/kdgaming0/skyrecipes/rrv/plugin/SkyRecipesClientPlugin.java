@@ -47,6 +47,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -840,17 +841,28 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      * from fresh values when possible. Proceeds with fallback values after
      * {@link #HYPIXEL_WAIT_SECONDS} — never blocks the pipeline indefinitely.
      */
-    private void awaitHypixelFetch() {
-        CompletableFuture<?> fetch = hypixelFetch;
-        if (fetch == null) return;
+    /**
+     * Waits up to {@code seconds} for {@code future}, logging {@code notReadyMsg}
+     * at debug when it does not complete in time.
+     *
+     * @return {@code false} when the wait was interrupted (interrupt flag restored)
+     */
+    private static boolean awaitQuietly(@Nullable CompletableFuture<?> future, long seconds, String notReadyMsg) {
+        if (future == null) return true;
         try {
-            fetch.get(HYPIXEL_WAIT_SECONDS, TimeUnit.SECONDS);
+            future.get(seconds, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         } catch (Exception e) {
-            LOGGER.debug("Hypixel stats not ready after {} s — proceeding with fallback values",
-                    HYPIXEL_WAIT_SECONDS);
+            LOGGER.debug(notReadyMsg, e);
         }
+        return true;
+    }
+
+    private void awaitHypixelFetch() {
+        awaitQuietly(hypixelFetch, HYPIXEL_WAIT_SECONDS,
+                "Hypixel stats not ready after " + HYPIXEL_WAIT_SECONDS + " s — proceeding with fallback values");
     }
 
     /**
@@ -861,28 +873,12 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      * without fusion recipes.
      */
     private void awaitShardFusionFetch() {
-        CompletableFuture<?> cacheLoad = shardFusionCacheLoad;
-        if (cacheLoad == null) return;
-        try {
-            cacheLoad.get(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
-        } catch (Exception e) {
-            LOGGER.debug("Shard fusion cache load not ready", e);
-        }
+        if (!awaitQuietly(shardFusionCacheLoad, 5, "Shard fusion cache load not ready")) return;
         if (ShardFusionRegistry.get() != null) return;
 
-        CompletableFuture<?> fetch = shardFusionFetch;
-        if (fetch == null) return;
-        try {
-            fetch.get(SHARD_FUSION_WAIT_SECONDS, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            LOGGER.debug("Shard fusion data not ready after {} s — generating without fusion recipes",
-                    SHARD_FUSION_WAIT_SECONDS);
-        }
+        awaitQuietly(shardFusionFetch, SHARD_FUSION_WAIT_SECONDS,
+                "Shard fusion data not ready after " + SHARD_FUSION_WAIT_SECONDS
+                        + " s — generating without fusion recipes");
     }
 
     private RecipeResult generateRecipes() {

@@ -20,6 +20,7 @@
 ## 🔧 Improvements
 
 - Pressing `Tab` in the search bar now completes the suggested item name instead of jumping to the next field.
+- Search filters can now target an exact requirement level with a second colon: `slayer:wolf:3` shows items requiring exactly Wolf Slayer 3, and `slayer:wolf:<=3`, `slayer:wolf:>3` etc. filter by level range. The same works for skills, e.g. `skill:combat:20`.
 - The Reforge tab now only appears on items that can actually be reforged — accessories, hatcessories, carnival masks, and timecharms no longer show it.
 - SkyBlock items no longer get pulled into Reliable Recipe Viewer's built-in vanilla groups.
 - Performance: the item list loads faster, item search is more responsive, and there are smaller optimizations across the board.

@@ -7,6 +7,7 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockCraftingRecipeType;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.ClientCommandSender;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -53,10 +54,7 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private static void sendViewRecipeCommand(String itemId) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && mc.getConnection() != null) {
-            mc.getConnection().sendCommand("viewrecipe " + itemId);
-        }
+        ClientCommandSender.send("viewrecipe " + itemId);
     }
 
     @Override

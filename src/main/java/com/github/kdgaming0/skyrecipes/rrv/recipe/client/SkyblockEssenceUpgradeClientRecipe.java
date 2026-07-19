@@ -90,14 +90,6 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         }
     }
 
-    private static void drawCompact(net.minecraft.client.gui.Font font, GuiGraphicsExtractor graphics,
-                                    Component cmp, int slotX, int slotY) {
-        int textWidth = font.width(cmp);
-        int x = slotX + 17 - textWidth;
-        int y = slotY + 9;
-        graphics.text(font, cmp, x, y, RecipeUiHelper.TEXT_WHITE, true);
-    }
-
     @Override
     public ReliableClientRecipeType getType() {
         return SkyblockEssenceUpgradeRecipeType.INSTANCE;
@@ -159,17 +151,8 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
             int headerWidth = font.width(header);
             if (headerWidth > pos.width() - 8) {
                 int avail = pos.width() - 8 - font.width(Component.literal(stars + "…"));
-                String raw = displayName;
-                int lo = 0, hi = raw.length();
-                while (lo < hi) {
-                    int mid = (lo + hi + 1) / 2;
-                    if (font.width(Component.literal(raw.substring(0, mid))) <= avail) {
-                        lo = mid;
-                    } else {
-                        hi = mid - 1;
-                    }
-                }
-                header = Component.literal(raw.substring(0, lo) + "§r…" + stars);
+                int fit = RecipeUiHelper.fitLength(font, displayName, avail);
+                header = Component.literal(displayName.substring(0, fit) + "§r…" + stars);
                 headerWidth = font.width(header);
             }
             cachedHeader = header;
@@ -206,13 +189,13 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
 
         // Coin (slot 1 in grid, top-left)
         if (coinLabel != null && gridIdx < GRID_X.length) {
-            drawCompact(font, graphics, coinLabel, GRID_X[gridIdx], GRID_Y[gridIdx]);
+            RecipeUiHelper.drawSlotCount(graphics, font, coinLabel, GRID_X[gridIdx], GRID_Y[gridIdx]);
             gridIdx++;
         }
 
         // Essence (next slot in grid)
         if (essenceLabel != null && gridIdx < GRID_X.length) {
-            drawCompact(font, graphics, essenceLabel, GRID_X[gridIdx], GRID_Y[gridIdx]);
+            RecipeUiHelper.drawSlotCount(graphics, font, essenceLabel, GRID_X[gridIdx], GRID_Y[gridIdx]);
         }
         gridIdx++;
 
@@ -220,7 +203,7 @@ public class SkyblockEssenceUpgradeClientRecipe extends AbstractSkyblockClientRe
         int startIdx = coinAmount > 0 ? 1 : 0;
         for (int i = startIdx; i < extraLabels.length && gridIdx < GRID_X.length; i++) {
             if (extraLabels[i] != null) {
-                drawCompact(font, graphics, extraLabels[i], GRID_X[gridIdx], GRID_Y[gridIdx]);
+                RecipeUiHelper.drawSlotCount(graphics, font, extraLabels[i], GRID_X[gridIdx], GRID_Y[gridIdx]);
             }
             gridIdx++;
         }

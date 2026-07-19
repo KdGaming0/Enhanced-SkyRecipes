@@ -39,6 +39,28 @@ public final class SkyblockIdExtractor {
     }
 
     /**
+     * Extracts the numeric tier suffix after the last {@code ';'} in an internal
+     * name ({@code "LION;4"} → 4), used by pet ids for the rarity index and by
+     * kat-upgrade recipes for the tier.
+     *
+     * @return the suffix value, or {@code -1} when absent or non-numeric
+     */
+    public static int petTierSuffix(String internalName) {
+        if (internalName == null || internalName.isEmpty()) {
+            return -1;
+        }
+        int semi = internalName.lastIndexOf(';');
+        if (semi < 0 || semi == internalName.length() - 1) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(internalName.substring(semi + 1));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /**
      * Extract the SkyBlock internal name from the given stack.
      *
      * @return the SkyBlock ID (e.g. {@code "ASPECT_OF_THE_END"}), or {@code null} if the stack

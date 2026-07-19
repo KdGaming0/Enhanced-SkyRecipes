@@ -86,6 +86,7 @@ dependencies {
     implementation("org.msgpack:msgpack-core:0.9.12")
     include("org.msgpack:msgpack-core:0.9.12")
 
+    modRuntimeOnly("maven.modrinth:resourcepackcached:${property("deps.rpc_version")}")
     modRuntimeOnly("me.djtheredstoner:DevAuth-fabric:1.2.2")
     modRuntimeOnly("maven.modrinth:modmenu:${property("deps.modmenu_version")}")
 }

@@ -10,6 +10,7 @@ import com.github.kdgaming0.skyrecipes.core.fusion.ShardFusionData;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockFusionRecipeType;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.ClientCommandSender;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -203,11 +204,9 @@ public class SkyblockFusionClientRecipe extends AbstractSkyblockClientRecipe {
         // drawn here so it appears above the slot's item sprite.
         int qty = ShardFusionData.pairQty(pairs[page]);
         if (qty > 1) {
-            var font = Minecraft.getInstance().font;
-            String text = String.valueOf(qty);
-            int x = SkyblockFusionRecipeType.OUTPUT_SLOT_X + 17 - font.width(text);
-            int y = SkyblockFusionRecipeType.OUTPUT_SLOT_Y + 9;
-            graphics.text(font, Component.literal(text), x, y, RecipeUiHelper.TEXT_WHITE, true);
+            RecipeUiHelper.drawSlotCount(graphics, Minecraft.getInstance().font,
+                    Component.literal(String.valueOf(qty)),
+                    SkyblockFusionRecipeType.OUTPUT_SLOT_X, SkyblockFusionRecipeType.OUTPUT_SLOT_Y);
         }
     }
 
@@ -319,9 +318,6 @@ public class SkyblockFusionClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private void sendBazaarCommand() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && mc.getConnection() != null) {
-            mc.getConnection().sendCommand("bz " + bazaarSearch);
-        }
+        ClientCommandSender.send("bz " + bazaarSearch);
     }
 }

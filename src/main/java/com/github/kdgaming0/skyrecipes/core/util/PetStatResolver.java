@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.util;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.model.SkyblockRarity;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.slf4j.Logger;
@@ -47,13 +48,11 @@ public final class PetStatResolver {
     private static final int DISPLAY_LEVEL = 100;
 
     /**
-     * Maps pet rarity suffix (from internalName) to the rarity name used in petnums.json.
-     * Pet internalNames use the format {@code "LION;4"} where the number after the semicolon
-     * is the rarity index: 0=COMMON, 1=UNCOMMON, 2=RARE, 3=EPIC, 4=LEGENDARY, 5=MYTHIC.
+     * Highest rarity index that appears in petnums.json. Pet internalNames use
+     * the format {@code "LION;4"} where the suffix is the {@link SkyblockRarity}
+     * ordinal: 0=COMMON … 5=MYTHIC.
      */
-    private static final String[] RARITY_SUFFIX_TO_NAME = {
-            "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY", "MYTHIC"
-    };
+    private static final int MAX_PET_RARITY_INDEX = SkyblockRarity.MYTHIC.ordinal();
 
     private final Map<String, Map<String, LevelStats>> petStats;
 
@@ -103,26 +102,13 @@ public final class PetStatResolver {
     }
 
     private static PetIdentity parsePetIdentity(String internalName) {
-        int semi = internalName.lastIndexOf(';');
-        if (semi < 0 || semi == internalName.length() - 1) {
+        int suffixIndex = SkyblockIdExtractor.petTierSuffix(internalName);
+        if (suffixIndex < 0 || suffixIndex > MAX_PET_RARITY_INDEX) {
             return null;
         }
 
-        String petName = internalName.substring(0, semi);
-        String suffixStr = internalName.substring(semi + 1);
-
-        int suffixIndex;
-        try {
-            suffixIndex = Integer.parseInt(suffixStr);
-        } catch (NumberFormatException e) {
-            return null;
-        }
-
-        if (suffixIndex < 0 || suffixIndex >= RARITY_SUFFIX_TO_NAME.length) {
-            return null;
-        }
-
-        return new PetIdentity(petName, RARITY_SUFFIX_TO_NAME[suffixIndex]);
+        String petName = internalName.substring(0, internalName.lastIndexOf(';'));
+        return new PetIdentity(petName, SkyblockRarity.values()[suffixIndex].name());
     }
 
     private static String resolveLine(String line, LevelStats stats) {

@@ -1,6 +1,7 @@
 package com.github.kdgaming0.skyrecipes.core.recipe.util;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.model.SkyblockRarity;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 
 import java.util.*;
@@ -72,10 +73,7 @@ public final class ReforgeTypeResolver {
      * Reverse index: reforge type → lore types. Built once for O(1) lookups.
      */
     private static final Map<String, List<String>> REFORGE_TYPE_TO_LORE_TYPES = buildReverseIndex();
-    private static final Set<String> RARITY_WORDS = Set.of(
-            "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY",
-            "MYTHIC", "SPECIAL", "ULTIMATE", "DIVINE", "ADMIN", "VERY"
-    );
+    private static final Set<String> RARITY_WORDS = SkyblockRarity.RARITY_WORDS;
 
     private ReforgeTypeResolver() {
     }

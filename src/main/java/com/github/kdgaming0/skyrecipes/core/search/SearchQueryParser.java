@@ -20,7 +20,8 @@ import java.util.regex.PatternSyntaxException;
  *   <li>Keywords: {@code farming pets} -> AND of {@code farming} and {@code pet}.</li>
  *   <li>Stat thresholds: {@code mining_speed>50}, {@code health<=100}, {@code damage=50}.</li>
  *   <li>Filters: {@code rarity:legendary}, {@code type:sword}, {@code slayer:zombie>3}.
- *       Also {@code skill:combat>20}, {@code cata>=5}.</li>
+ *       Also {@code skill:combat>20}, {@code cata>=5}, and the colon level form
+ *       {@code slayer:wolf:3} (exact) / {@code slayer:wolf:<3} / {@code skill:combat:>=20}.</li>
  *   <li>Category path: {@code %ARMOR/HELMET}, {@code %PET}.</li>
  *   <li>Boolean flags: {@code soulbound}, {@code dungeon}, {@code rift}, {@code bazaar},
  *       {@code craftable}, {@code forgeable}, {@code npc}, {@code vanilla}.</li>
@@ -333,6 +334,17 @@ public final class SearchQueryParser {
                 return null;
             }
 
+            // type:level form for level-indexed filters: "slayer:wolf:3",
+            // "slayer:wolf:<3", "skill:combat:>=20".
+            if ("slayer".equals(canonicalKey) || "skill".equals(canonicalKey)) {
+                int secondColon = rest.indexOf(':');
+                if (secondColon > 0) {
+                    return parseTypeLevelFilter(canonicalKey,
+                            rest.substring(0, secondColon),
+                            rest.substring(secondColon + 1));
+                }
+            }
+
             OpParse op = parseOperatorSuffix(rest);
             if (op != null) {
                 String normValue = normalizeFilterValue(canonicalKey, op.stringValue);
@@ -352,6 +364,48 @@ public final class SearchQueryParser {
         }
 
         return null;
+    }
+
+    /**
+     * Parses the level spec of a {@code key:type:level} filter, e.g. the {@code 3},
+     * {@code <3} or {@code >=3} in {@code slayer:wolf:3}. A bare number means an exact
+     * level match. A half-typed spec ({@code slayer:wolf:} or {@code slayer:wolf:<})
+     * degrades to the type-only filter so the item list doesn't blank while typing.
+     */
+    private static SearchQuery.FilterClause parseTypeLevelFilter(String key, String type,
+                                                                 String levelSpec) {
+        String normType = normalizeFilterValue(key, type);
+
+        SearchQuery.FilterClause.Operator op = SearchQuery.FilterClause.Operator.EQ;
+        int numStart = 0;
+        if (!levelSpec.isEmpty()) {
+            char c = levelSpec.charAt(0);
+            if (c == '>' || c == '<' || c == '=') {
+                numStart = 1;
+                boolean hasEq = c != '=' && levelSpec.length() > 1 && levelSpec.charAt(1) == '=';
+                if (hasEq) numStart = 2;
+                op = switch (c) {
+                    case '>' -> hasEq
+                            ? SearchQuery.FilterClause.Operator.GTE
+                            : SearchQuery.FilterClause.Operator.GT;
+                    case '<' -> hasEq
+                            ? SearchQuery.FilterClause.Operator.LTE
+                            : SearchQuery.FilterClause.Operator.LT;
+                    default -> SearchQuery.FilterClause.Operator.EQ;
+                };
+            }
+        }
+
+        String numStr = levelSpec.substring(numStart);
+        if (!numStr.isEmpty()) {
+            try {
+                int level = Integer.parseInt(numStr);
+                return SearchQuery.FilterClause.of(key, op, normType, level);
+            } catch (NumberFormatException ignored) {
+                // Fall through to the type-only filter.
+            }
+        }
+        return SearchQuery.FilterClause.of(key, normType);
     }
 
     @Nullable

@@ -2,6 +2,7 @@ package com.github.kdgaming0.skyrecipes.core.render.item;
 
 import com.github.kdgaming0.skyrecipes.core.hypixel.HypixelItemsRegistry;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
+import com.github.kdgaming0.skyrecipes.core.search.StatParser;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import net.minecraft.core.component.DataComponents;
@@ -218,7 +219,7 @@ public final class StarredItemBuilder {
             String prefix = clean.substring(0, colonIdx).trim();
             for (String label : STAT_LABELS) {
                 if (prefix.endsWith(label)) {
-                    int value = extractLeadingInt(clean.substring(colonIdx + 1));
+                    int value = StatParser.extractLeadingInt(clean.substring(colonIdx + 1));
                     if (value != Integer.MIN_VALUE) {
                         result.put(label, scale(value, star));
                     }
@@ -305,20 +306,4 @@ public final class StarredItemBuilder {
         return (int) Math.round(base * multiplier);
     }
 
-    private static int extractLeadingInt(String s) {
-        int i = 0;
-        while (i < s.length() && (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == ' ')) {
-            i++;
-        }
-        int start = i;
-        while (i < s.length() && Character.isDigit(s.charAt(i))) {
-            i++;
-        }
-        if (start == i) return Integer.MIN_VALUE;
-        try {
-            return Integer.parseInt(s.substring(start, i));
-        } catch (NumberFormatException e) {
-            return Integer.MIN_VALUE;
-        }
-    }
 }

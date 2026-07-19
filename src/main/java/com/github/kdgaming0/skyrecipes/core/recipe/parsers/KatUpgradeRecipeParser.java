@@ -10,7 +10,6 @@ import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockKatUpgradeClientRecipe;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,11 +31,11 @@ public final class KatUpgradeRecipeParser {
 
             // Resolve input pet
             NeuItem inputItem = itemRegistry.getByInternalName(recipe.input()).orElse(null);
-            ItemStack inputStack = inputItem != null ? ItemStackBuilder.build(inputItem) : new ItemStack(Items.BARRIER);
+            ItemStack inputStack = ParserUtil.buildOrBarrier(inputItem, 1);
 
             // Resolve output pet
             NeuItem outputItem = itemRegistry.getByInternalName(recipe.output()).orElse(null);
-            ItemStack outputStack = outputItem != null ? ItemStackBuilder.build(outputItem) : new ItemStack(Items.BARRIER);
+            ItemStack outputStack = ParserUtil.buildOrBarrier(outputItem, 1);
 
             // Parse additional item requirements
             List<ItemStack> itemCosts = new ArrayList<>();

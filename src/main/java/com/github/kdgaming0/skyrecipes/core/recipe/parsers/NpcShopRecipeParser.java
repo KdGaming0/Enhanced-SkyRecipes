@@ -36,9 +36,7 @@ public final class NpcShopRecipeParser {
                 resultRef = new SlotRefParser.IngredientRef(recipe.result(), 1);
             }
             NeuItem resultItem = SlotRefParser.resolve(resultRef, itemRegistry);
-            ItemStack resultStack = resultItem != null
-                    ? ItemStackBuilder.build(resultItem, resultRef.count())
-                    : new ItemStack(Items.BARRIER, resultRef.count());
+            ItemStack resultStack = ParserUtil.buildOrBarrier(resultItem, resultRef.count());
 
             // Parse costs — NEU uses two formats:
             // 1. Array of strings: ["SKYBLOCK_COIN:8"]
@@ -77,9 +75,7 @@ public final class NpcShopRecipeParser {
                     }
                     NeuItem costItem = SlotRefParser.resolve(ref, itemRegistry);
                     int displayCount = ref.count() >= 1000 ? 1 : ref.count();
-                    ItemStack costStack = costItem != null
-                            ? ItemStackBuilder.build(costItem, displayCount)
-                            : new ItemStack(Items.BARRIER, displayCount);
+                    ItemStack costStack = ParserUtil.buildOrBarrier(costItem, displayCount);
                     costs.add(new SkyblockNpcShopClientRecipe.ShopCost(costStack, itemName, amount, false));
                 }
             }

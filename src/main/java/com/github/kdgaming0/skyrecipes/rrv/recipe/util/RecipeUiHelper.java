@@ -1,8 +1,11 @@
 package com.github.kdgaming0.skyrecipes.rrv.recipe.util;
 
+import com.github.kdgaming0.skyrecipes.core.model.SkyblockRarity;
+import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
 import java.math.BigDecimal;
@@ -97,21 +100,45 @@ public final class RecipeUiHelper {
      * @return the colour code (e.g. "§6"), or "§7" if unknown
      */
     public static String rarityColorCode(String rarity) {
-        if (rarity == null) {
-            return "§7";
+        SkyblockRarity parsed = SkyblockRarity.fromName(rarity);
+        return parsed != null ? parsed.colorCode() : "§7";
+    }
+
+    /**
+     * Draws a compact count label right-aligned in the lower-right corner of an
+     * 18px slot, above the item sprite. Call from {@code renderOverlay}.
+     */
+    public static void drawSlotCount(GuiGraphicsExtractor graphics, Font font,
+                                     Component label, int slotX, int slotY) {
+        int x = slotX + 17 - font.width(label);
+        int y = slotY + 9;
+        graphics.text(font, label, x, y, TEXT_WHITE, true);
+    }
+
+    /**
+     * Truncates {@code text} to fit {@code maxWidth} pixels, appending a
+     * trailing ellipsis when cut. With {@code legacyCodes} the text is parsed
+     * as §-formatted and the ellipsis is reset to unformatted ("§r…").
+     */
+    public static Component ellipsize(Font font, String text, int maxWidth, boolean legacyCodes) {
+        Component full = legacyCodes ? LegacyStringParser.parse(text) : Component.literal(text);
+        if (font.width(full) <= maxWidth) {
+            return full;
         }
-        return switch (rarity.toUpperCase()) {
-            case "COMMON" -> "§f";
-            case "UNCOMMON" -> "§a";
-            case "RARE" -> "§9";
-            case "EPIC" -> "§5";
-            case "LEGENDARY" -> "§6";
-            case "MYTHIC" -> "§d";
-            case "DIVINE" -> "§b";
-            case "SPECIAL", "VERY_SPECIAL" -> "§c";
-            case "ULTIMATE", "ADMIN" -> "§4";
-            default -> "§7";
-        };
+        int avail = maxWidth - font.width("…");
+        int lo = 0, hi = text.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) / 2;
+            String sub = text.substring(0, mid);
+            Component test = legacyCodes ? LegacyStringParser.parse(sub) : Component.literal(sub);
+            if (font.width(test) <= avail) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        String head = text.substring(0, lo);
+        return legacyCodes ? LegacyStringParser.parse(head + "§r…") : Component.literal(head + "…");
     }
 
     /**
@@ -293,9 +320,10 @@ public final class RecipeUiHelper {
     }
 
     /**
-     * Binary-search the number of leading characters of {@code text} that fit.
+     * Binary-search the number of leading characters of {@code text} that fit
+     * within {@code maxWidth} pixels.
      */
-    private static int fitLength(Font font, String text, int maxWidth) {
+    public static int fitLength(Font font, String text, int maxWidth) {
         if (font.width(text) <= maxWidth) {
             return text.length();
         }

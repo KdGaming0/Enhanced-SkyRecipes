@@ -8,6 +8,7 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
+import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockKatUpgradeRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
@@ -85,8 +86,6 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
     private ItemStack coinStack;
     /** Compact coin count, rebuilt only on slider change (BigDecimal math is too costly per frame). */
     private Component coinLabel;
-    /** Pixel width of {@link #coinLabel}; recomputed lazily after each slider change. */
-    private int coinLabelWidth = -1;
     /** Duration line and width; timeSeconds is fixed, so both are frame-invariant. */
     @Nullable
     private Component cachedDuration;
@@ -121,16 +120,8 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
 
     private static int extractTier(NeuItem neuItem) {
         if (neuItem == null) return 0;
-        String internalName = neuItem.internalName();
-        if (internalName == null || internalName.isEmpty()) return 0;
-        int semi = internalName.lastIndexOf(';');
-        if (semi < 0 || semi == internalName.length() - 1) return 0;
-        try {
-            int tier = Integer.parseInt(internalName.substring(semi + 1));
-            return Math.clamp(tier, 0, RARITY_OFFSETS.length - 1);
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+        int tier = SkyblockIdExtractor.petTierSuffix(neuItem.internalName());
+        return tier < 0 ? 0 : Math.min(tier, RARITY_OFFSETS.length - 1);
     }
 
     @Override
@@ -200,15 +191,8 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
     @Override
     public void renderOverlay(RecipeViewScreen screen, RecipePosition pos,
                               GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTicks) {
-        var font = Minecraft.getInstance().font;
-
-        if (coinLabelWidth < 0) {
-            coinLabelWidth = font.width(coinLabel);
-        }
-        int countX = COIN_SLOT_X + 17 - coinLabelWidth;
-        int countY = COIN_SLOT_Y + 9;
-
-        graphics.text(font, coinLabel, countX, countY, RecipeUiHelper.TEXT_WHITE, true);
+        RecipeUiHelper.drawSlotCount(graphics, Minecraft.getInstance().font,
+                coinLabel, COIN_SLOT_X, COIN_SLOT_Y);
     }
 
     @Override
@@ -247,7 +231,6 @@ public class SkyblockKatUpgradeClientRecipe extends AbstractSkyblockClientRecipe
         }
         coinStack = buildCoinStack(petLevel);
         coinLabel = buildCoinLabel(petLevel);
-        coinLabelWidth = -1;
     }
 
     private ItemStack rebuildStack(NeuItem neuItem, int level) {

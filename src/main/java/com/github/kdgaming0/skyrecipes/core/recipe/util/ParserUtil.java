@@ -2,6 +2,10 @@ package com.github.kdgaming0.skyrecipes.core.recipe.util;
 
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
+import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +58,20 @@ public final class ParserUtil {
             return registry.getByInternalName(overrideOutputId).orElse(defaultItem);
         }
         return defaultItem;
+    }
+
+    /**
+     * Builds a display stack for a resolved item, or a barrier placeholder when
+     * the item is unknown, so recipe layouts stay intact.
+     *
+     * @param item  the resolved NeuItem, or {@code null} when unknown
+     * @param count stack count for both the real stack and the placeholder
+     * @return the built stack, never {@code null}
+     */
+    public static ItemStack buildOrBarrier(@Nullable NeuItem item, int count) {
+        return item != null
+                ? ItemStackBuilder.build(item, count)
+                : new ItemStack(Items.BARRIER, count);
     }
 
     /**

@@ -233,10 +233,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
 
     // ── rendering ─────────────────────────────────────────────────────────────
 
-    private static String rarityColorCode(String rarity) {
-        return RecipeUiHelper.rarityColorCode(rarity);
-    }
-
     @Nullable
     private static SolidBorder computeBaseItemBorder(GardenMutation mutation) {
         int offset = (GRID_SIZE - mutation.gridSize()) / 2;
@@ -412,7 +408,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         if (cachedName != null) {
             return cachedName;
         }
-        String color = rarityColorCode(mutation.rarity());
+        String color = RecipeUiHelper.rarityColorCode(mutation.rarity());
         cachedName = Component.literal(color + mutation.name());
         return cachedName;
     }

@@ -104,18 +104,7 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private static Component ellipsize(String text, int maxWidth) {
-        var font = Minecraft.getInstance().font;
-        if (font.width(text) <= maxWidth) {
-            return Component.literal(text);
-        }
-        String ellipsis = "…";
-        int avail = maxWidth - font.width(ellipsis);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            if (font.width(sb.toString() + text.charAt(i)) > avail) break;
-            sb.append(text.charAt(i));
-        }
-        return Component.literal(sb + ellipsis);
+        return RecipeUiHelper.ellipsize(Minecraft.getInstance().font, text, maxWidth, false);
     }
 
     @Nullable

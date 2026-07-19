@@ -6,6 +6,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * SkyBlock item rarity tiers, in ascending tier order.
@@ -24,6 +27,14 @@ public enum SkyblockRarity {
     ADMIN;
 
     /**
+     * Individual words appearing in rarity display names ("VERY", "SPECIAL", …),
+     * for tokenized lore scans that need to skip rarity prefixes.
+     */
+    public static final Set<String> RARITY_WORDS = Arrays.stream(values())
+            .flatMap(r -> Arrays.stream(r.name().split("_")))
+            .collect(Collectors.toUnmodifiableSet());
+
+    /**
      * Longest display name first, so "UNCOMMON" wins over "COMMON" and
      * "VERY SPECIAL" over "SPECIAL" when both are substrings of the line.
      */
@@ -36,6 +47,42 @@ public enum SkyblockRarity {
 
     SkyblockRarity() {
         this.displayName = name().replace('_', ' ');
+    }
+
+    /**
+     * Section-format colour code for this rarity, e.g. {@code LEGENDARY → "§6"}.
+     */
+    public String colorCode() {
+        return switch (this) {
+            case COMMON -> "§f";
+            case UNCOMMON -> "§a";
+            case RARE -> "§9";
+            case EPIC -> "§5";
+            case LEGENDARY -> "§6";
+            case MYTHIC -> "§d";
+            case DIVINE -> "§b";
+            case SPECIAL, VERY_SPECIAL -> "§c";
+            case ULTIMATE, ADMIN -> "§4";
+        };
+    }
+
+    /**
+     * Parses a rarity from its name, accepting either underscore or space
+     * separators ("VERY_SPECIAL" / "Very Special").
+     *
+     * @return the rarity, or {@code null} if the name matches no tier
+     */
+    public static @Nullable SkyblockRarity fromName(@Nullable String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        String normalized = name.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+        for (SkyblockRarity r : values()) {
+            if (r.name().equals(normalized)) {
+                return r;
+            }
+        }
+        return null;
     }
 
     /**

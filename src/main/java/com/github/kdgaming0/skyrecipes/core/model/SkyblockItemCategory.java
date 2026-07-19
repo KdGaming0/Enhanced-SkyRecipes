@@ -50,10 +50,7 @@ public enum SkyblockItemCategory {
             ARMOR, WEAPON, TOOL, ACCESSORY, PET, ENCHANTED_BOOK, MINION, EQUIPMENT, MATERIAL
     );
 
-    private static final Set<String> RARITY_WORDS = Set.of(
-            "COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY",
-            "MYTHIC", "SPECIAL", "ULTIMATE", "DIVINE", "ADMIN", "VERY"
-    );
+    private static final Set<String> RARITY_WORDS = SkyblockRarity.RARITY_WORDS;
 
     /**
      * Derives category from the last lore line which typically contains

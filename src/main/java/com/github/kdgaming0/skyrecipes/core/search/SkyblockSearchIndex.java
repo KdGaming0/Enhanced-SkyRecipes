@@ -298,23 +298,6 @@ public final class SkyblockSearchIndex {
         return sb.toString();
     }
 
-    private static int extractLeadingInt(String s) {
-        int i = 0;
-        while (i < s.length() && (s.charAt(i) == '+' || s.charAt(i) == '-' || s.charAt(i) == ' ')) {
-            i++;
-        }
-        int start = i;
-        while (i < s.length() && Character.isDigit(s.charAt(i))) {
-            i++;
-        }
-        if (start == i) return Integer.MIN_VALUE;
-        try {
-            return Integer.parseInt(s.substring(start, i));
-        } catch (NumberFormatException e) {
-            return Integer.MIN_VALUE;
-        }
-    }
-
     /**
      * Extracts leading Roman numeral from a string, or null if none.
      */
@@ -884,33 +867,46 @@ public final class SkyblockSearchIndex {
      * level index ({@code type -> level -> items}), e.g. slayer or skill requirements.
      *
      * <p>With an explicit type and a comparison operator, applies the threshold to that
-     * type's levels. With a type but no operator (or EQ), returns all items requiring that
-     * type. With no type, aggregates across every type.</p>
+     * type's levels; EQ with a level (e.g. {@code slayer:wolf:3}) matches that exact
+     * level. With a type but no level (how a bare {@code slayer:wolf} arrives: EQ with
+     * intValue 0), returns all items requiring that type. With no type, aggregates
+     * across every type.</p>
      */
     private BitSet resolveTypedLevelFilter(SearchQuery.FilterClause filter,
                                            Map<String, BitSet> typeIndexMap,
                                            Map<String, TreeMap<Integer, BitSet>> levelIndexMap) {
         String type = filter.stringValue();
         SearchQuery.FilterClause.Operator op = filter.op();
+        boolean typeOnly = op == null
+                || (op == SearchQuery.FilterClause.Operator.EQ && filter.intValue() <= 0);
 
         if (type != null && !type.isEmpty()) {
-            if (op == null || op == SearchQuery.FilterClause.Operator.EQ) {
+            if (typeOnly) {
                 BitSet exact = typeIndexMap.get(type);
                 return exact != null ? (BitSet) exact.clone() : new BitSet();
             }
             TreeMap<Integer, BitSet> levelMap = levelIndexMap.get(type);
             if (levelMap == null || levelMap.isEmpty()) return new BitSet();
+            if (op == SearchQuery.FilterClause.Operator.EQ) {
+                BitSet exact = levelMap.get(filter.intValue());
+                return exact != null ? (BitSet) exact.clone() : new BitSet();
+            }
             return resolveThreshold(levelMap, op, filter.intValue());
         }
 
-        if (op == null || op == SearchQuery.FilterClause.Operator.EQ) {
+        if (typeOnly) {
             BitSet result = new BitSet();
             for (BitSet bs : typeIndexMap.values()) result.or(bs);
             return result;
         }
         BitSet result = new BitSet();
         for (TreeMap<Integer, BitSet> levelMap : levelIndexMap.values()) {
-            result.or(resolveThreshold(levelMap, op, filter.intValue()));
+            if (op == SearchQuery.FilterClause.Operator.EQ) {
+                BitSet exact = levelMap.get(filter.intValue());
+                if (exact != null) result.or(exact);
+            } else {
+                result.or(resolveThreshold(levelMap, op, filter.intValue()));
+            }
         }
         return result;
     }
@@ -1553,7 +1549,7 @@ public final class SkyblockSearchIndex {
                     String slayerType = (lastSpace >= 0 ? before.substring(lastSpace + 1) : before).toLowerCase();
 
                     // Extract level (leading digits or Roman numerals after "Slayer")
-                    int level = extractLeadingInt(after);
+                    int level = StatParser.extractLeadingInt(after);
                     if (level <= 0) {
                         String roman = extractLeadingRoman(after);
                         if (roman != null) {
@@ -1576,7 +1572,7 @@ public final class SkyblockSearchIndex {
                 String after = clean.substring(slayerIdx + 8).trim();
                 int lastSpace = before.lastIndexOf(' ');
                 String slayerType = (lastSpace >= 0 ? before.substring(lastSpace + 1) : before).toLowerCase();
-                int level = extractLeadingInt(after);
+                int level = StatParser.extractLeadingInt(after);
                 if (level > 0 && !slayerType.isEmpty()) {
                     indexSlayer(itemIndex, slayerType, level, itemTokens);
                 }

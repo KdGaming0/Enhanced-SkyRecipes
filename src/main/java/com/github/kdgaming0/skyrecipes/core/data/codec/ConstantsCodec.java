@@ -186,34 +186,76 @@ public final class ConstantsCodec {
 
     // ---- reforges ----
 
+    /**
+     * Fields shared between {@code ReforgeData} and {@code ReforgeStoneData};
+     * used by both unpackers so the key handling exists once.
+     */
+    private static final class ReforgeFields {
+        String reforgeName = "";
+        String itemTypes = "";
+        List<String> requiredRarities = new ArrayList<>();
+        Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
+        Map<String, String> ability = new LinkedHashMap<>();
+        Map<String, Number> costs = new LinkedHashMap<>();
+
+        /** @return {@code true} when {@code key} was one of the shared fields */
+        boolean read(String key, MessageUnpacker unpacker) throws IOException {
+            switch (key) {
+                case "reforgeName" -> reforgeName = unpacker.unpackString();
+                case "itemTypes" -> itemTypes = unpacker.unpackString();
+                case "requiredRarities" -> requiredRarities = CodecUtil.unpackStringList(unpacker);
+                case "reforgeStats" -> stats = CodecUtil.unpackStringNumberMapMap(unpacker);
+                case "reforgeAbility" -> ability = CodecUtil.unpackStringStringMap(unpacker);
+                case "reforgeCosts" -> costs = CodecUtil.unpackStringNumberMap(unpacker);
+                default -> {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    private static int optionalReforgeFieldCount(Map<String, String> ability,
+                                                 Map<String, Number> costs,
+                                                 Map<String, Map<String, Number>> stats) {
+        int n = 0;
+        if (!stats.isEmpty()) n++;
+        if (!ability.isEmpty()) n++;
+        if (!costs.isEmpty()) n++;
+        return n;
+    }
+
+    private static void packOptionalReforgeFields(MessagePacker packer,
+                                                  Map<String, String> ability,
+                                                  Map<String, Number> costs,
+                                                  Map<String, Map<String, Number>> stats) throws IOException {
+        if (!stats.isEmpty()) {
+            packer.packString("reforgeStats");
+            packStatsPerRarity(packer, stats);
+        }
+        if (!ability.isEmpty()) {
+            packer.packString("reforgeAbility");
+            CodecUtil.packStringStringMap(packer, ability);
+        }
+        if (!costs.isEmpty()) {
+            packer.packString("reforgeCosts");
+            packCosts(packer, costs);
+        }
+    }
+
     private static void packReforges(MessagePacker packer, Map<String, ReforgeData> reforges) throws IOException {
         packer.packMapHeader(reforges.size());
         for (Map.Entry<String, ReforgeData> e : reforges.entrySet()) {
             packer.packString(e.getKey());
             ReforgeData d = e.getValue();
-            int mapSize = 3;
-            if (!d.statsPerRarity().isEmpty()) mapSize++;
-            if (!d.reforgeAbility().isEmpty()) mapSize++;
-            if (!d.reforgeCosts().isEmpty()) mapSize++;
-            packer.packMapHeader(mapSize);
+            packer.packMapHeader(3 + optionalReforgeFieldCount(d.reforgeAbility(), d.reforgeCosts(), d.statsPerRarity()));
             packer.packString("reforgeName");
             packer.packString(d.reforgeName());
             packer.packString("itemTypes");
             packer.packString(d.itemTypes());
             packer.packString("requiredRarities");
             CodecUtil.packStringCollection(packer, d.requiredRarities());
-            if (!d.statsPerRarity().isEmpty()) {
-                packer.packString("reforgeStats");
-                packStatsPerRarity(packer, d.statsPerRarity());
-            }
-            if (!d.reforgeAbility().isEmpty()) {
-                packer.packString("reforgeAbility");
-                CodecUtil.packStringStringMap(packer, d.reforgeAbility());
-            }
-            if (!d.reforgeCosts().isEmpty()) {
-                packer.packString("reforgeCosts");
-                packCosts(packer, d.reforgeCosts());
-            }
+            packOptionalReforgeFields(packer, d.reforgeAbility(), d.reforgeCosts(), d.statsPerRarity());
         }
     }
 
@@ -222,25 +264,14 @@ public final class ConstantsCodec {
         for (int i = 0; i < size; i++) {
             String name = unpacker.unpackString();
             int mapSize = unpacker.unpackMapHeader();
-            String reforgeName = "";
-            String itemTypes = "";
-            List<String> requiredRarities = new ArrayList<>();
-            Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
-            Map<String, String> ability = new LinkedHashMap<>();
-            Map<String, Number> costs = new LinkedHashMap<>();
+            ReforgeFields f = new ReforgeFields();
             for (int k = 0; k < mapSize; k++) {
                 String key = unpacker.unpackString();
-                switch (key) {
-                    case "reforgeName" -> reforgeName = unpacker.unpackString();
-                    case "itemTypes" -> itemTypes = unpacker.unpackString();
-                    case "requiredRarities" -> requiredRarities = CodecUtil.unpackStringList(unpacker);
-                    case "reforgeStats" -> stats = CodecUtil.unpackStringNumberMapMap(unpacker);
-                    case "reforgeAbility" -> ability = CodecUtil.unpackStringStringMap(unpacker);
-                    case "reforgeCosts" -> costs = CodecUtil.unpackStringNumberMap(unpacker);
-                    default -> unpacker.skipValue();
+                if (!f.read(key, unpacker)) {
+                    unpacker.skipValue();
                 }
             }
-            out.put(name, new ReforgeData(reforgeName, itemTypes, requiredRarities, stats, ability, costs));
+            out.put(name, new ReforgeData(f.reforgeName, f.itemTypes, f.requiredRarities, f.stats, f.ability, f.costs));
         }
     }
 
@@ -251,11 +282,7 @@ public final class ConstantsCodec {
         for (Map.Entry<String, ReforgeStoneData> e : reforgeStones.entrySet()) {
             packer.packString(e.getKey());
             ReforgeStoneData d = e.getValue();
-            int mapSize = 5;
-            if (!d.reforgeAbility().isEmpty()) mapSize++;
-            if (!d.reforgeCosts().isEmpty()) mapSize++;
-            if (!d.reforgeStats().isEmpty()) mapSize++;
-            packer.packMapHeader(mapSize);
+            packer.packMapHeader(5 + optionalReforgeFieldCount(d.reforgeAbility(), d.reforgeCosts(), d.reforgeStats()));
             packer.packString("internalName");
             packer.packString(d.internalName());
             packer.packString("reforgeName");
@@ -266,18 +293,7 @@ public final class ConstantsCodec {
             packer.packString(d.itemTypes());
             packer.packString("requiredRarities");
             CodecUtil.packStringCollection(packer, d.requiredRarities());
-            if (!d.reforgeAbility().isEmpty()) {
-                packer.packString("reforgeAbility");
-                CodecUtil.packStringStringMap(packer, d.reforgeAbility());
-            }
-            if (!d.reforgeCosts().isEmpty()) {
-                packer.packString("reforgeCosts");
-                packCosts(packer, d.reforgeCosts());
-            }
-            if (!d.reforgeStats().isEmpty()) {
-                packer.packString("reforgeStats");
-                packStatsPerRarity(packer, d.reforgeStats());
-            }
+            packOptionalReforgeFields(packer, d.reforgeAbility(), d.reforgeCosts(), d.reforgeStats());
         }
     }
 
@@ -287,29 +303,22 @@ public final class ConstantsCodec {
             String name = unpacker.unpackString();
             int mapSize = unpacker.unpackMapHeader();
             String internalName = "";
-            String reforgeName = "";
             String reforgeType = "";
-            String itemTypes = "";
-            List<String> requiredRarities = new ArrayList<>();
-            Map<String, String> ability = new LinkedHashMap<>();
-            Map<String, Number> costs = new LinkedHashMap<>();
-            Map<String, Map<String, Number>> stats = new LinkedHashMap<>();
+            ReforgeFields f = new ReforgeFields();
             for (int k = 0; k < mapSize; k++) {
                 String key = unpacker.unpackString();
                 switch (key) {
                     case "internalName" -> internalName = unpacker.unpackString();
-                    case "reforgeName" -> reforgeName = unpacker.unpackString();
                     case "reforgeType" -> reforgeType = unpacker.unpackString();
-                    case "itemTypes" -> itemTypes = unpacker.unpackString();
-                    case "requiredRarities" -> requiredRarities = CodecUtil.unpackStringList(unpacker);
-                    case "reforgeAbility" -> ability = CodecUtil.unpackStringStringMap(unpacker);
-                    case "reforgeCosts" -> costs = CodecUtil.unpackStringNumberMap(unpacker);
-                    case "reforgeStats" -> stats = CodecUtil.unpackStringNumberMapMap(unpacker);
-                    default -> unpacker.skipValue();
+                    default -> {
+                        if (!f.read(key, unpacker)) {
+                            unpacker.skipValue();
+                        }
+                    }
                 }
             }
             out.put(name, new ReforgeStoneData(
-                    internalName, reforgeName, reforgeType, itemTypes, requiredRarities, ability, costs, stats
+                    internalName, f.reforgeName, reforgeType, f.itemTypes, f.requiredRarities, f.ability, f.costs, f.stats
             ));
         }
     }
