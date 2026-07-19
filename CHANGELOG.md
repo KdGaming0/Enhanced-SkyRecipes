@@ -28,6 +28,10 @@
 - Performance: the item list loads faster, item search is more responsive, and there are smaller optimizations across the board.
 - Garden mutation recipes that require water now show the HydroCan™ watering can as the water indicator instead of a small blue square.
 
+### Craftables side panel
+- The Craftables side panel now works with SkyBlock items: it lists everything you can craft or forge from the items currently in your inventory.
+- By default an item only shows up when you have the full required amounts of every ingredient. A new **Craftables: Require Full Amounts** setting lets you switch to showing items as soon as you have at least one of each ingredient.
+
 ## 🐛 Fixes
 
 - Fixed the wiki button sometimes not appearing when reopening a recipe by clicking an item in the item list. The button now shows reliably every time.

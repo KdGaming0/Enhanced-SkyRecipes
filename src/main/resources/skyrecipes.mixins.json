@@ -28,6 +28,7 @@
     "rrv.ItemViewOverlayWidthMixin",
     "rrv.RecipeViewScreenMixin",
     "rrv.SearchBarWidthMixin",
+    "rrv.SidePanelOverlayCraftablesMixin",
     "rrv.SidePanelOverlayMixin",
     "rrv.SidePanelOverlayWidthMixin",
     "rrv.fix.AbstractContainerMenuFixesMixin",

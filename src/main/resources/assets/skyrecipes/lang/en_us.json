@@ -22,6 +22,9 @@
   "skyrecipes.midnightconfig.hideEmptyBookmarkPanel": "Hide Empty Bookmark Panel",
   "skyrecipes.midnightconfig.hideEmptyBookmarkPanel.tooltip": "Auto-hides the bookmark side-panel when no bookmarks exist.",
 
+  "skyrecipes.midnightconfig.craftablesCountAware": "Craftables: Require Full Amounts",
+  "skyrecipes.midnightconfig.craftablesCountAware.tooltip": "When the side panel is set to Craftables, only show SkyBlock items whose full ingredient amounts are in your inventory. Disable to list an item as craftable when you have at least one of each ingredient, like RRV does for vanilla recipes.",
+
   "skyrecipes.midnightconfig.wideRrvSearchBar": "Wide Search Bar",
   "skyrecipes.midnightconfig.wideRrvSearchBar.tooltip": "Expands the RRV search bar. In centred mode it widens up to the configured width but never shrinks below RRV's default. In item-list mode it is limited by the available item-list space.",
 

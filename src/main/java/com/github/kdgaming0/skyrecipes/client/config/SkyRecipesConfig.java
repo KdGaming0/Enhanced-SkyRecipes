@@ -49,6 +49,9 @@ public class SkyRecipesConfig extends MidnightConfig {
     public static boolean hideEmptyBookmarkPanel = true;
 
     @Entry(category = "rrv")
+    public static boolean craftablesCountAware = true;
+
+    @Entry(category = "rrv")
     public static boolean wideRrvSearchBar = true;
 
     @Entry(category = "rrv")

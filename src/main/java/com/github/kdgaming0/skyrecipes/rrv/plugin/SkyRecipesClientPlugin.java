@@ -26,6 +26,7 @@ import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.render.mob.MobSkinRegistry;
+import com.github.kdgaming0.skyrecipes.rrv.overlay.SkyblockCraftablesIndex;
 import com.github.kdgaming0.skyrecipes.core.search.SearchAliases;
 import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
 import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
@@ -612,6 +613,7 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             );
             SkyblockRecipeCache.setFamilyResolver(resolver);
             SkyblockRecipeCache.rebuild(recipeResult.recipes());
+            SkyblockCraftablesIndex.rebuild(recipeResult.recipes());
             SkyblockStackGroups.rebuild(resolver, SkyRecipes.getItemRegistry());
             PipelineStatus.recordStageDuration("prep", System.currentTimeMillis() - start);
             return resolver;
