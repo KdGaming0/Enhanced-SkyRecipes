@@ -48,6 +48,9 @@ public final class SkyblockStackGroups {
     /** NEU pet display-name prefix: "[Lvl {LVL}] Armadillo". */
     private static final Pattern PET_LEVEL_PREFIX = Pattern.compile("^\\[Lvl[^]]*]\\s*");
     private static final Pattern INVALID_PATH_CHARS = Pattern.compile("[^a-z0-9/._-]");
+    private static final String ENCHANTED_BOOK_ITEM_ID = "minecraft:enchanted_book";
+    /** Lore header above the enchant name on anvil-combinable books. */
+    private static final String COMBINABLE_HEADER = "Combinable in Anvil";
 
     private record Snapshot(List<SkyblockFamilyStackGroup> groups,
                             Map<String, SkyblockFamilyStackGroup> byMemberId,
@@ -179,6 +182,14 @@ public final class SkyblockStackGroups {
     }
 
     private static Component groupNameFor(FamilyInfo family, ItemRegistry items) {
+        NeuItem first = items.getByInternalName(family.members().iterator().next()).orElse(null);
+        if (first != null && ENCHANTED_BOOK_ITEM_ID.equals(first.itemId())) {
+            String enchant = enchantmentName(first);
+            if (enchant != null) {
+                return Component.literal(enchant);
+            }
+        }
+
         if (family.type() == FamilyType.ACCESSORY_CHAIN) {
             // The family id is the chain's root for explicit families (SPEED_RELIC) or
             // "<base>_ACCESSORY" for implicit ones — reduce both to the plain base.
@@ -196,10 +207,7 @@ public final class SkyblockStackGroups {
         }
 
         String firstMember = family.members().iterator().next();
-        String display = items.getByInternalName(firstMember)
-                .map(NeuItem::displayName)
-                .map(TextUtil::stripColorCodes)
-                .orElse("");
+        String display = first != null ? TextUtil.stripColorCodes(first.displayName()) : "";
         if (display.isEmpty()) {
             return Component.literal(prettify(family.familyId()));
         }
@@ -220,6 +228,29 @@ public final class SkyblockStackGroups {
             display = TRAILING_TIER.matcher(display).replaceFirst("");
         }
         return Component.literal(display);
+    }
+
+    /**
+     * The enchant's own name, or null when the lore doesn't carry one.
+     *
+     * <p>Every enchantment book in the NEU repo shares the display name "Enchanted Book",
+     * so the name has to come from the lore — the first non-blank line that isn't the
+     * "Combinable in Anvil" header ("§9Sharpness V", "§d§lOne For All I"), minus its tier.
+     * The family id is not a usable fallback: it is often stale or simply different
+     * (AIMING → "Dragon Tracer", ULTIMATE_REITERATE → "Duplex"). Requiring a trailing tier
+     * keeps an unexpected lore shape from producing a junk name — the caller falls back to
+     * its normal naming instead.</p>
+     */
+    private static String enchantmentName(NeuItem item) {
+        List<String> lore = item.lore();
+        if (lore == null) return null;
+        for (String line : lore) {
+            String text = TextUtil.stripColorCodes(line).trim();
+            if (text.isEmpty() || COMBINABLE_HEADER.equals(text)) continue;
+            String name = TRAILING_TIER.matcher(text).replaceFirst("").trim();
+            return name.isEmpty() || name.equals(text) ? null : name;
+        }
+        return null;
     }
 
     /**

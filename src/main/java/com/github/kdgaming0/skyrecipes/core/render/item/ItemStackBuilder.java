@@ -3,6 +3,7 @@ package com.github.kdgaming0.skyrecipes.core.render.item;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyItemIdMapper;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
+import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.mojang.authlib.GameProfile;
@@ -47,6 +48,9 @@ public final class ItemStackBuilder {
      * a null read simply falls back to the uncached path.
      */
     private static volatile ConcurrentHashMap<String, CycleEntry> cycleCache = null;
+
+    /** Expanded NEU ids already reported by {@link #hypixelBaseId}, so each warns once. */
+    private static final Set<String> UNMAPPED_SEMICOLON_IDS = ConcurrentHashMap.newKeySet();
 
     /**
      * Keeps the source item alongside its template: a task invalidated by a data
@@ -251,14 +255,66 @@ public final class ItemStackBuilder {
             applyGlint(stack, tag);
             Optional<CompoundTag> extraOpt = tag.getCompound("ExtraAttributes");
             if (extraOpt.isPresent()) {
-                CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
-                    existing.merge(extraOpt.get());
-                });
+                applyExtraAttributes(stack, extraOpt.get(), item);
             }
         } catch (Exception e) {
             LOGGER.debug("Failed to parse minimal NBT for vanilla item {}: {}",
                     item.internalName(), e.getMessage());
         }
+    }
+
+    /**
+     * Copies NEU's {@code ExtraAttributes} into {@code CUSTOM_DATA}, rewriting NEU-style
+     * internal names into the base id the Hypixel server actually sends.
+     *
+     * <p>NEU keys pets, enchanted books, runes, potions and attribute shards by an expanded
+     * internal name and puts that name straight into {@code id} ({@code WOLF;4},
+     * {@code ULTIMATE_WISE;5}). A live server stack instead carries a shared base id
+     * ({@code PET}, {@code ENCHANTED_BOOK}, …) with the detail in a side field, which NEU
+     * supplies too. Emitting the server's shape means every mod that already understands
+     * real SkyBlock items understands ours — Skyblocker's price and value tooltips, for one,
+     * key entirely off the id it derives from that shape.</p>
+     *
+     * <p>The rewrite is only reversible through {@link SkyblockIdExtractor#INTERNAL_NAME_KEY},
+     * written alongside, because a few NEU items carry side fields that contradict their own
+     * internal name.</p>
+     */
+    private static void applyExtraAttributes(ItemStack stack, CompoundTag extra, NeuItem item) {
+        String baseId = hypixelBaseId(extra, item);
+        CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
+            existing.merge(extra);
+            if (baseId != null) {
+                existing.putString("id", baseId);
+                existing.putString(SkyblockIdExtractor.INTERNAL_NAME_KEY, item.internalName());
+            }
+        });
+    }
+
+    /**
+     * The base id Hypixel sends for this item, or {@code null} to keep NEU's id as-is.
+     *
+     * <p>Gated on the semicolon that marks an expanded NEU name: ordinary items carry side
+     * fields too (any enchanted sword has {@code enchantments}) and must not be rewritten.</p>
+     */
+    private static String hypixelBaseId(CompoundTag extra, NeuItem item) {
+        String id = extra.getStringOr("id", "");
+        if (!id.contains(";")) {
+            return null;
+        }
+        if (extra.contains("petInfo")) return "PET";
+        if (extra.contains("enchantments")) return "ENCHANTED_BOOK";
+        if (extra.contains("runes")) return "RUNE";
+        if (extra.contains("attributes")) return "ATTRIBUTE_SHARD";
+        if (extra.contains("potion")) return "POTION";
+
+        // No NEU item is shaped like this today. If the repo ever adds a kind we do not
+        // know, the id stays in NEU's form and other mods see an id Hypixel never sends —
+        // so say so once rather than let it pass silently.
+        if (UNMAPPED_SEMICOLON_IDS.add(id)) {
+            LOGGER.warn("NEU item {} has an expanded id '{}' with no recognised side field; "
+                    + "leaving it unmapped", item.internalName(), id);
+        }
+        return null;
     }
 
     /**
@@ -356,10 +412,7 @@ public final class ItemStackBuilder {
         // ExtraAttributes -> CUSTOM_DATA
         Optional<CompoundTag> extraOpt = tag.getCompound("ExtraAttributes");
         if (extraOpt.isPresent()) {
-            CompoundTag extra = extraOpt.get();
-            CustomData.update(DataComponents.CUSTOM_DATA, stack, existing -> {
-                existing.merge(extra);
-            });
+            applyExtraAttributes(stack, extraOpt.get(), item);
         }
 
         // Unbreakable

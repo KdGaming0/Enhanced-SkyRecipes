@@ -163,10 +163,12 @@ public class ItemViewOverlayMixin {
                         sb.append(key.replace('_', ' ')).append('\n');
                     }
                 }
-                String id = extra.getStringOr("id", "");
-                if (!id.isEmpty()) {
-                    sb.append(id.replace('_', ' ').replace(';', ' ')).append('\n');
-                }
+            }
+            // Through the extractor, not the raw tag: an id like PET or ENCHANTED_BOOK is
+            // useless to search, and the expanded name is what the user types.
+            String skyblockId = SkyblockIdExtractor.extract(stack);
+            if (skyblockId != null) {
+                sb.append(skyblockId.replace('_', ' ').replace(';', ' ')).append('\n');
             }
             var stored = tag.getListOrEmpty("StoredEnchantments");
             for (int i = 0; i < stored.size(); i++) {

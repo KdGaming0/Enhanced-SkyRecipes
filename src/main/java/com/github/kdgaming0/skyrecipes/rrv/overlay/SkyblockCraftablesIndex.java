@@ -158,7 +158,7 @@ public final class SkyblockCraftablesIndex {
      * stacks can still satisfy base-material ingredients.
      */
     private static String keyFor(ItemStack stack) {
-        String id = SkyblockIdExtractor.extractInternalName(stack);
+        String id = SkyblockIdExtractor.extract(stack);
         if (id != null) {
             return id;
         }

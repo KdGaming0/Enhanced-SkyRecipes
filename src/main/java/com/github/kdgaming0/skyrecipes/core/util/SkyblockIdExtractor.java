@@ -15,15 +15,34 @@ import org.slf4j.LoggerFactory;
 import java.util.Locale;
 
 /**
- * Extracts the SkyBlock internal name ({@code ExtraAttributes.id}) from an {@link ItemStack}.
+ * Extracts the NEU internal name of a SkyBlock {@link ItemStack}.
  *
- * <p>SkyBlock items (both NEU-generated and server-sent Hypixel items) store their
- * canonical ID inside the {@code CUSTOM_DATA} component under {@code ExtraAttributes.id}.
- * Vanilla items have no {@code CUSTOM_DATA} and return {@code null}.</p>
+ * <p>SkyBlock items (both SkyRecipes-built and server-sent Hypixel items) store their
+ * canonical ID inside the {@code CUSTOM_DATA} component under {@code id}. Vanilla items
+ * have no {@code CUSTOM_DATA} and return {@code null}.</p>
+ *
+ * <p>Enchanted books, pets, runes, potions and attribute shards all report a single base
+ * id ({@code ENCHANTED_BOOK}, {@code PET}, …) with the distinguishing detail held in a
+ * side field ({@code enchantments}, {@code petInfo}, {@code runes}, {@code potion},
+ * {@code attributes}). NEU keys those items by an expanded internal name instead
+ * ({@code GROWTH;1}, {@code ENDER_DRAGON;4}), and so does every index in this mod, so
+ * this class always resolves back to that expanded form — see {@link #extract}.</p>
  */
 public final class SkyblockIdExtractor {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockIdExtractor.class);
+
+    /**
+     * Custom-data key holding the exact NEU internal name of a SkyRecipes-built stack.
+     *
+     * <p>{@link com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder} writes it
+     * whenever it rewrites a NEU internal name into the base id Hypixel sends, so the exact
+     * name survives a rewrite that is not always reversible: a handful of NEU items carry an
+     * {@code nbttag} that contradicts their own {@code internalname} (for example
+     * {@code POTION_DUNGEON;3} is tagged {@code potion:"regeneration"}), and reconstructing
+     * those from the side fields would silently alias them onto a different real item.</p>
+     */
+    public static final String INTERNAL_NAME_KEY = "skyrecipes:internal_name";
 
     // CustomData is immutable, so the extracted id can be memoized per component
     // instance. Guava's weakKeys() compares keys by identity — O(1) hashing with no
@@ -61,10 +80,16 @@ public final class SkyblockIdExtractor {
     }
 
     /**
-     * Extract the SkyBlock internal name from the given stack.
+     * Extract the NEU internal name from the given stack, reconstructing it for items that
+     * report a shared base id.
      *
-     * @return the SkyBlock ID (e.g. {@code "ASPECT_OF_THE_END"}), or {@code null} if the stack
-     * is empty, has no {@code CUSTOM_DATA}, or lacks an {@code ExtraAttributes.id} field.
+     * <p>Resolved in three steps: the {@link #INTERNAL_NAME_KEY} written by our own stack
+     * builder, then a plain {@code id} that is already an internal name, then — for live
+     * Hypixel stacks, which carry no key of ours — reconstruction from the side fields.</p>
+     *
+     * @return the internal name (e.g. {@code "ASPECT_OF_THE_END"}, {@code "ENDER_DRAGON;4"}),
+     * or {@code null} if the stack is empty, has no {@code CUSTOM_DATA}, or lacks an
+     * {@code id} field.
      */
     public static String extract(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
@@ -92,20 +117,27 @@ public final class SkyblockIdExtractor {
             // whole NBT tree on every slot every frame.
             CompoundTag tag = ((CustomDataAccessor) (Object) data).skyrecipes$getTag();
 
-            // Primary: ExtraAttributes.id (present on all NEU-built and Hypixel-server stacks)
-            CompoundTag extra = tag.getCompound("ExtraAttributes").orElse(null);
-            if (extra != null) {
-                String id = extra.getStringOr("id", "");
-                if (!id.isEmpty()) {
-                    return id;
-                }
+            // Authoritative for our own stacks, and exact even where reconstruction is not.
+            String own = tag.getStringOr(INTERNAL_NAME_KEY, "");
+            if (!own.isEmpty()) {
+                return own;
             }
 
-            // Fallback: direct id key in custom_data (future-proofing)
-            String id = tag.getStringOr("id", "");
-            if (!id.isEmpty()) {
+            // Some NEU nbttags nest these fields under ExtraAttributes; our builder and the
+            // live Hypixel server both flatten them to the top level. Support both.
+            CompoundTag source = tag.getCompound("ExtraAttributes").orElse(tag);
+            String id = source.getStringOr("id", "");
+            if (id.isEmpty() && source != tag) {
+                id = tag.getStringOr("id", "");
+            }
+            if (id.isEmpty()) {
+                return null;
+            }
+            if (!isSharedBaseId(id)) {
                 return id;
             }
+            String reconstructed = reconstructInternalName(id, source);
+            return reconstructed != null ? reconstructed : id;
         } catch (Exception e) {
             LOGGER.debug("Failed to extract SkyBlock ID from stack", e);
         }
@@ -114,51 +146,12 @@ public final class SkyblockIdExtractor {
     }
 
     /**
-     * Extract the <b>NEU internal name</b> from the given stack, reconstructing it for
-     * items that share a generic {@code ExtraAttributes.id} on the live Hypixel server.
-     *
-     * <p>Enchanted books, pets, runes and potions all report a single base id
-     * ({@code ENCHANTED_BOOK}, {@code PET}, {@code RUNE}, {@code POTION}) on real inventory
-     * stacks, with the distinguishing detail held in a side field ({@code enchantments},
-     * {@code petInfo}, {@code runes}, {@code potion}/{@code potion_level}). NEU keys these
-     * items by their expanded internal name (e.g. {@code GROWTH;1}, {@code ENDER_DRAGON;4}),
-     * so a raw {@link #extract(ItemStack)} of the base id never matches the recipe index.
-     * This method rebuilds that internal name so R/U lookups resolve.</p>
-     *
-     * <p>For every other item this returns exactly what {@link #extract(ItemStack)} returns.
-     * Applied on both the index and lookup sides of {@code SkyblockRecipeCache}, so the two
-     * always agree regardless of which id form a given NEU {@code nbttag} happens to use.</p>
-     *
-     * @return the NEU internal name, or {@code null} if the stack carries no SkyBlock id
+     * Base ids the Hypixel server reuses across a whole family of items, where the
+     * distinguishing detail lives in a side field rather than in {@code id}.
      */
-    public static String extractInternalName(ItemStack stack) {
-        String id = extract(stack);
-        if (id == null) {
-            return null;
-        }
-        if (!isSharedBaseId(id)) {
-            return id;
-        }
-        try {
-            CustomData data = stack.get(DataComponents.CUSTOM_DATA);
-            if (data == null) {
-                return id;
-            }
-            CompoundTag tag = ((CustomDataAccessor) (Object) data).skyrecipes$getTag();
-            // NEU-built stacks nest these fields under ExtraAttributes; live Hypixel
-            // items flatten them to the top level of custom_data. Support both.
-            CompoundTag source = tag.getCompound("ExtraAttributes").orElse(tag);
-            String reconstructed = reconstructInternalName(id, source);
-            return reconstructed != null ? reconstructed : id;
-        } catch (Exception e) {
-            LOGGER.debug("Failed to reconstruct internal name for base id '{}'", id, e);
-            return id;
-        }
-    }
-
     private static boolean isSharedBaseId(String id) {
         return switch (id) {
-            case "ENCHANTED_BOOK", "PET", "RUNE", "POTION" -> true;
+            case "ENCHANTED_BOOK", "PET", "RUNE", "POTION", "ATTRIBUTE_SHARD" -> true;
             default -> false;
         };
     }
@@ -168,6 +161,10 @@ public final class SkyblockIdExtractor {
             case "ENCHANTED_BOOK" -> singleEntry(extra, "enchantments", "");
             case "RUNE" -> singleEntry(extra, "runes", "_RUNE");
             case "PET" -> petInternalName(extra);
+            case "ATTRIBUTE_SHARD" -> {
+                String attribute = singleEntry(extra, "attributes", "");
+                yield attribute != null ? "ATTRIBUTE_SHARD_" + attribute : null;
+            }
             case "POTION" -> {
                 String potion = extra.getStringOr("potion", "");
                 if (potion.isEmpty()) {

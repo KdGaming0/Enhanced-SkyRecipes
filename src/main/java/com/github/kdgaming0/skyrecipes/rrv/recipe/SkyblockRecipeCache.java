@@ -52,7 +52,7 @@ public final class SkyblockRecipeCache {
      * volatile maps ensure visibility to the render thread that services R/U key lookups.</p>
      *
      * <p>The build is parallelized across recipes and uses a shared per-rebuild cache for
-     * {@link SkyblockIdExtractor#extractInternalName(ItemStack)} to avoid re-parsing NBT for
+     * {@link SkyblockIdExtractor#extract(ItemStack)} to avoid re-parsing NBT for
      * stacks that appear in multiple recipes.</p>
      *
      * @param recipes the full list of SkyRecipes client recipes (already config-filtered)
@@ -138,7 +138,7 @@ public final class SkyblockRecipeCache {
             return cached;
         }
         // ConcurrentHashMap does not allow null values; only store non-null IDs.
-        String id = SkyblockIdExtractor.extractInternalName(stack);
+        String id = SkyblockIdExtractor.extract(stack);
         if (id != null) {
             String existing = idCache.putIfAbsent(stack, id);
             return existing != null ? existing : id;
@@ -183,7 +183,7 @@ public final class SkyblockRecipeCache {
      * a SkyBlock item (caller should fall back to RRV's native lookup).
      */
     public static List<ReliableClientRecipe> getRecipesForIngredient(ItemStack stack) {
-        String id = SkyblockIdExtractor.extractInternalName(stack);
+        String id = SkyblockIdExtractor.extract(stack);
         if (id == null) {
             return null;
         }
@@ -204,7 +204,7 @@ public final class SkyblockRecipeCache {
      * a SkyBlock item (caller should fall back to RRV's native lookup).
      */
     public static List<ReliableClientRecipe> getRecipesForResult(ItemStack stack) {
-        String id = SkyblockIdExtractor.extractInternalName(stack);
+        String id = SkyblockIdExtractor.extract(stack);
         if (id == null) {
             return null;
         }
@@ -265,7 +265,7 @@ public final class SkyblockRecipeCache {
     private static boolean recipeContainsResultId(ReliableClientRecipe recipe, String targetId) {
         for (SlotContent slot : recipe.getResults()) {
             for (ItemStack candidate : slot.getValidContents()) {
-                if (targetId.equals(SkyblockIdExtractor.extractInternalName(candidate))) {
+                if (targetId.equals(SkyblockIdExtractor.extract(candidate))) {
                     return true;
                 }
             }

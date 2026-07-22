@@ -1,3 +1,15 @@
+# 0.4.2
+
+## 🐛 Fixes
+
+- Enchantment groups in the item list now show the enchantment's name — Sharpness, Bane of Arthropods, One For All — instead of every one of them being labelled "Enchanted Book".
+- Pets, enchanted books, runes and potions in the item list now show their price line from Skyblocker, like every other item already did.
+- Fixed a crash when hovering pets, runes or enchanted books in the item list while Skyblocker's NEU repository had failed to download.
+
+## 🔧 Improvements
+
+- SkyBlock items in the item list now carry the same item data the Hypixel server sends, so other SkyBlock mods read them correctly instead of treating them as unknown items.
+
 # 0.4.1
 
 ## 🐛 Fixes
