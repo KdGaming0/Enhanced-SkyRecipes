@@ -128,6 +128,9 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
         if (contents.isEmpty()) {
             return null;
         }
-        return SkyblockIdExtractor.extract(contents.getFirst());
+        // /viewrecipe wants the Hypixel base id, not NEU's ;tier-suffixed internal name
+        // (e.g. ULTIMATE_CROP_FEVER;1 -> ULTIMATE_CROP_FEVER, ATTRIBUTE_SHARD_FIG_COLLECTOR;1
+        // -> SPARROW_SHARD). Plain ids pass through.
+        return SkyblockIdExtractor.toViewRecipeId(contents.getFirst());
     }
 }

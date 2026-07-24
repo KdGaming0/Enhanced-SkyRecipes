@@ -80,6 +80,56 @@ public final class SkyblockIdExtractor {
     }
 
     /**
+     * Convert a NEU internal name into the id Hypixel's {@code /viewrecipe} command expects.
+     *
+     * <p>NEU disambiguates enchant books, pets, potions, runes and attribute shards with a
+     * {@code ;tier} suffix ({@code ULTIMATE_CROP_FEVER;1}, {@code CHICKEN;0}). That suffix is a
+     * NEU convention only — Hypixel keys {@code /viewrecipe} by the base id and never accepts a
+     * {@code ';'}, so the suffix must be dropped ({@code ULTIMATE_CROP_FEVER}). Plain item names
+     * carry no {@code ';'} and pass through unchanged, so {@code ENCHANTED_COAL} stays as-is.</p>
+     *
+     * <p>Attribute (Hunting) shards are the exception that needs the stack, not just its id: NEU
+     * names them after the <em>bonus</em> they grant ({@code ATTRIBUTE_SHARD_FIG_COLLECTOR}), but
+     * Hypixel keys the recipe by the shard creature's own id ({@code SPARROW_SHARD}), which only
+     * survives in the display name ("Sparrow Shard"). So for those we derive the id from the
+     * display name instead.</p>
+     *
+     * @return the {@code /viewrecipe} argument, or {@code null} if the stack has no SkyBlock id
+     */
+    public static String toViewRecipeId(ItemStack stack) {
+        String internalName = extract(stack);
+        if (internalName == null) {
+            return null;
+        }
+        if (internalName.startsWith(ATTRIBUTE_SHARD_PREFIX)) {
+            String shardId = shardIdFromDisplayName(stack);
+            if (shardId != null) {
+                return shardId;
+            }
+        }
+        int semi = internalName.indexOf(';');
+        return semi < 0 ? internalName : internalName.substring(0, semi);
+    }
+
+    private static final String ATTRIBUTE_SHARD_PREFIX = "ATTRIBUTE_SHARD_";
+
+    /**
+     * Build a shard's {@code <CREATURE>_SHARD} id from its display name ("Sparrow Shard" →
+     * {@code SPARROW_SHARD}), or {@code null} when the stack has no custom name to read.
+     */
+    private static String shardIdFromDisplayName(ItemStack stack) {
+        var name = stack.get(DataComponents.CUSTOM_NAME);
+        if (name == null) {
+            return null;
+        }
+        String plain = name.getString().trim();
+        if (plain.isEmpty()) {
+            return null;
+        }
+        return plain.toUpperCase(Locale.ROOT).replace(' ', '_');
+    }
+
+    /**
      * Extract the NEU internal name from the given stack, reconstructing it for items that
      * report a shared base id.
      *

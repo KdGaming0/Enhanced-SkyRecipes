@@ -2,7 +2,7 @@
 mod.id = "skyrecipes"
 mod.name = "SkyRecipes"
 mod.group = "com.github.kdgaming0"
-mod.version = "0.4.2"
+mod.version = "0.4.3"
 
 deps.fabric_loader = "0.19.3"
 loomx.loom_version = "1.17-SNAPSHOT"
