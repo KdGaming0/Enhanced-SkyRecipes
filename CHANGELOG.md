@@ -1,6 +1,10 @@
 # 0.4.3
 
-## 🐛 Fixes
+## ✨ New
+
+- Minecraft 26.2 support
+
+## Fixes
 
 - The craft button on a recipe now works for enchanted books, craftable pets and attribute shards. Clicking it previously showed an "Invalid recipe" error for these items, it now opens the correct recipe.
 

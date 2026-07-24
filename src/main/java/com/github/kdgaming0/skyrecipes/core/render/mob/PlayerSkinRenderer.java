@@ -4,7 +4,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.model.geom.ModelLayers;
+//? if >=26.2 {
+/*import net.minecraft.client.model.Model;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+*///?} else {
 import net.minecraft.client.model.player.PlayerModel;
+ 
+//?}
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -13,7 +19,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Renders a player skin texture into a screen rectangle.
  *
- * <p>Owns the cached {@link PlayerModel} and the standard skin-rendering constants
+ * <p>Owns the cached player model and the standard skin-rendering constants
  * so callers only need to supply a texture, bounds, and rotation angle.</p>
  */
 public final class PlayerSkinRenderer {
@@ -23,7 +29,12 @@ public final class PlayerSkinRenderer {
     private static final float PIVOT_Y = -1.0625f;
 
     @Nullable
+            //? if >=26.2 {
+    /*private static Model.Simple cachedPlayerModel;
+    *///?} else {
     private static PlayerModel cachedPlayerModel;
+     
+    //?}
     @Nullable
     private static EntityModelSet cachedModelSource;
     private static boolean playerModelLookupFailed;
@@ -47,7 +58,12 @@ public final class PlayerSkinRenderer {
                               int x, int y, int width, int height, float rotationY) {
         if (texture == null) return;
 
+        //? if >=26.2 {
+        /*Model.Simple model = getPlayerModel();
+        *///?} else {
         PlayerModel model = getPlayerModel();
+         
+        //?}
         if (model == null) return;
 
         float scale = 0.97f * height / 2.125f;
@@ -56,7 +72,12 @@ public final class PlayerSkinRenderer {
     }
 
     @Nullable
-    public static PlayerModel getPlayerModel() {
+            //? if >=26.2 {
+    /*public static Model.Simple getPlayerModel() {
+        *///?} else {
+        public static PlayerModel getPlayerModel() {
+         
+        //?}
         EntityModelSet models = Minecraft.getInstance().getEntityModels();
         // A resource reload replaces the EntityModelSet instance — rebake against the new one.
         if (models != cachedModelSource) {
@@ -68,7 +89,12 @@ public final class PlayerSkinRenderer {
         if (playerModelLookupFailed) return null;
 
         try {
+            //? if >=26.2 {
+            /*cachedPlayerModel = new Model.Simple(models.bakeLayer(ModelLayers.PLAYER), RenderTypes::entityTranslucent);
+            *///?} else {
             cachedPlayerModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
+             
+            //?}
             return cachedPlayerModel;
         } catch (Exception e) {
             playerModelLookupFailed = true;

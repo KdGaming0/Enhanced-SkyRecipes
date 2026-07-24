@@ -29,7 +29,7 @@ public class SkyRecipes implements ClientModInitializer {
 
     public static final String MOD_ID = "skyrecipes";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-    public static final String VERSION = /*$ mod_version*/ "0.3.0";
+    public static final String VERSION = /*$ mod_version*/ "0.4.3";
     public static final String MINECRAFT = /*$ minecraft*/ "26.1.2";
 
     private static final List<Consumer<DataLoadResult>> dataReadyListeners = new CopyOnWriteArrayList<>();

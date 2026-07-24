@@ -4,6 +4,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+//? if >= 26.2
+//import net.minecraft.network.chat.TextColor;
 
 /**
  * Parses Minecraft legacy formatting codes (§) into modern {@link Component} objects.
@@ -44,6 +46,7 @@ public final class LegacyStringParser {
                 if (formatting == ChatFormatting.RESET) {
                     currentStyle = Style.EMPTY;
                 } else if (formatting != null) {
+                    //$ legacy_color_check
                     if (formatting.isColor()) {
                         // Color resets previous color but keeps formatting
                         currentStyle = currentStyle
