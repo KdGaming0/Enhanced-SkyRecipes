@@ -3,6 +3,9 @@
 ## Fixes
 - Pressing the recipe or usage key on a shard now shows its fusions everywhere shards appear — the Hunting Box, the Attribute Menu, the Fusion Box, Shard Fusion and Confirm Fusion, and the Bazaar. Previously these menus showed unrelated player head recipes. Shards in those menus also highlight correctly when you search for them.
 
+## Improvements
+- Small optimizations to the item list.
+
 # 0.4.3
 
 ## ✨ New

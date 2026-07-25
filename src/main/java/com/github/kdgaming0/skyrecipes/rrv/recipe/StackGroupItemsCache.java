@@ -67,6 +67,9 @@ public final class StackGroupItemsCache {
     public static void invalidate() {
         generation++;
         groupItems.clear();
+        // Group contents feed applyGrouping's representative stacks, so its memo is stale too.
+        // Covers the RRV-rebuild invalidation site, which does not go through reload().
+        GroupingResultCache.invalidate();
     }
 
     /**

@@ -4,17 +4,25 @@ import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.recipe.stackgroup.StackGroupManager;
 import cc.cassian.rrv.common.recipe.stackgroup.data.AbstractStackGroup;
 import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
+import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
+import com.github.kdgaming0.skyrecipes.mixin.accessor.StackGroupManagerAccessor;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.GroupingResultCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockFamilyStackGroup;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
+import net.minecraft.client.Minecraft;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -95,6 +103,92 @@ public class StackGroupManagerMixin {
         SkyblockStackGroups.injectInto();
         StackGroupItemsCache.invalidate();
         StackGroupItemsCache.prewarm();
+    }
+
+    /**
+     * {@code toggleGroup} is the only mutator of {@code expandedGroups}, which
+     * {@code applyGrouping} reads through {@code isEffectivelyExpanded} — so expanding or
+     * collapsing a group has to drop the memoized grouping or the list would not visibly
+     * change until the next query edit.
+     */
+    @Inject(method = "toggleGroup", at = @At("RETURN"))
+    private static void skyrecipes$invalidateGroupingOnToggle(Identifier groupId, CallbackInfo ci) {
+        GroupingResultCache.invalidate();
+    }
+
+    /**
+     * Serves the memoized grouping when RRV re-runs the pass with an identical input.
+     *
+     * <p>See {@link GroupingResultCache} for why this repeats so often (RRV's
+     * {@code updateQuery} has no unchanged-query early-out) and why the memo is safe.
+     * Deliberately narrow: only the render thread participates, and only while stack
+     * grouping is on — with grouping off RRV returns the input list <em>by identity</em> and
+     * the caller mutates it in place, which a copy would silently break.</p>
+     */
+    @Inject(
+            method = "applyGrouping(Ljava/util/List;Z)Ljava/util/List;",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private static void skyrecipes$serveCachedGrouping(List<ItemStack> items, boolean searchExpandActive,
+                                                       CallbackInfoReturnable<List<ItemStack>> cir) {
+        if (!skyrecipes$groupingMemoApplies(items)) {
+            return;
+        }
+        List<ItemStack> cached = GroupingResultCache.get(items, searchExpandActive);
+        if (cached != null) {
+            // Replay the field write the skipped method body would have done first.
+            StackGroupManagerAccessor.skyrecipes$setSearchExpandActive(searchExpandActive);
+            cir.setReturnValue(cached);
+        }
+    }
+
+    /** Stores a freshly computed grouping. Unreachable when the inject above cancels. */
+    @Inject(
+            method = "applyGrouping(Ljava/util/List;Z)Ljava/util/List;",
+            at = @At("RETURN")
+    )
+    private static void skyrecipes$storeGrouping(List<ItemStack> items, boolean searchExpandActive,
+                                                 CallbackInfoReturnable<List<ItemStack>> cir) {
+        List<ItemStack> grouped = cir.getReturnValue();
+        // grouped == items means RRV took an early return and handed the input straight back;
+        // memoizing that would replace an aliased list with a copy. Only real groupings.
+        if (grouped != null && grouped != items && skyrecipes$groupingMemoApplies(items)) {
+            GroupingResultCache.put(items, searchExpandActive, grouped);
+        }
+    }
+
+    @Unique
+    private static boolean skyrecipes$groupingMemoApplies(List<ItemStack> items) {
+        return items != null
+                && !items.isEmpty()
+                && Configs.STACK_GROUPS.areStackGroupsEnabled()
+                && Minecraft.getInstance().isSameThread();
+    }
+
+    /**
+     * Drops the deep NBT copy from {@code applyGrouping}'s two "is this already a group
+     * representative?" guards.
+     *
+     * <p>Both call sites do {@code data.copyTag().contains("rrv_stack_group_id")} — a full
+     * {@code CompoundTag.copy()} of the whole tree, per item, twice per pass, to read one key.
+     * The backing tag is only read, so the non-copying view is exact. Spark measured the copies
+     * at roughly a third of the whole grouping pass.</p>
+     *
+     * <p>{@code require = 0}: if a future RRV drops or moves these calls the optimization
+     * silently falls out and the original copies run, instead of failing the class
+     * transformation and taking every stack group with it.</p>
+     */
+    @Redirect(
+            method = "applyGrouping(Ljava/util/List;Z)Ljava/util/List;",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/world/item/component/CustomData;copyTag()Lnet/minecraft/nbt/CompoundTag;"
+            ),
+            require = 0
+    )
+    private static CompoundTag skyrecipes$readGroupIdTagWithoutCopy(CustomData data) {
+        return ((CustomDataAccessor) (Object) data).skyrecipes$getTag();
     }
 
     /**

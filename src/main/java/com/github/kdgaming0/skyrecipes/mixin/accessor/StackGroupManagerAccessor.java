@@ -4,6 +4,7 @@ import cc.cassian.rrv.common.recipe.stackgroup.StackGroupManager;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 import java.util.List;
@@ -20,6 +21,17 @@ public interface StackGroupManagerAccessor {
 
     @Invoker("sortByGroupOrder")
     static void skyrecipes$sortByGroupOrder(List<ItemStack> items, Identifier groupId) {
+        throw new AssertionError();
+    }
+
+    /**
+     * {@code applyGrouping} publishes its {@code searchExpandActive} argument to this field
+     * before doing anything else, and RRV reads it back through {@code isSearchExpandActive()}
+     * / {@code isEffectivelyExpanded()} while rendering. Serving a memoized grouping skips the
+     * method body, so the write has to be replayed by hand.
+     */
+    @Accessor("searchExpandActive")
+    static void skyrecipes$setSearchExpandActive(boolean searchExpandActive) {
         throw new AssertionError();
     }
 }
