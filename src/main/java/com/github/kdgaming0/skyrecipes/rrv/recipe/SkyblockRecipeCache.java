@@ -183,7 +183,7 @@ public final class SkyblockRecipeCache {
      * a SkyBlock item (caller should fall back to RRV's native lookup).
      */
     public static List<ReliableClientRecipe> getRecipesForIngredient(ItemStack stack) {
-        String id = SkyblockIdExtractor.extract(stack);
+        String id = lookupId(stack);
         if (id == null) {
             return null;
         }
@@ -204,7 +204,7 @@ public final class SkyblockRecipeCache {
      * a SkyBlock item (caller should fall back to RRV's native lookup).
      */
     public static List<ReliableClientRecipe> getRecipesForResult(ItemStack stack) {
-        String id = SkyblockIdExtractor.extract(stack);
+        String id = lookupId(stack);
         if (id == null) {
             return null;
         }
@@ -243,6 +243,21 @@ public final class SkyblockRecipeCache {
         // After move-to-front so the clicked item's own recipe stays the default tab.
         appendIdMatches(id, result);
         return result;
+    }
+
+    /**
+     * The SkyBlock id a clicked stack looks up under.
+     *
+     * <p>Lookup-time only — the {@link #rebuild(List)} path must keep using
+     * {@link SkyblockIdExtractor} directly, because it runs on pipeline workers where no screen
+     * exists and every stack it indexes carries a real id anyway.</p>
+     *
+     * @return the extracted id, the shard-menu fallback for the display-only stacks Hypixel sends
+     * in the shard GUIs, or {@code null} for a vanilla item
+     */
+    private static String lookupId(ItemStack stack) {
+        String id = SkyblockIdExtractor.extract(stack);
+        return id != null ? id : ShardGuiResolver.resolveCurrent(stack);
     }
 
     /**

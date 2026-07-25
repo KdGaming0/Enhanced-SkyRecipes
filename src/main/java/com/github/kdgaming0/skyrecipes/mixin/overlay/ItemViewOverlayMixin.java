@@ -10,6 +10,7 @@ import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.ShardGuiResolver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -333,6 +334,11 @@ public class ItemViewOverlayMixin {
                 matched = cachedVerdict;
             } else {
                 String slotId = SkyblockIdExtractor.extract(slotStack);
+                if (slotId == null) {
+                    // Shards in the Hunting Box / Attribute Menu / fusion GUIs are display-only
+                    // stacks with no id; recover it so they match like any other SkyBlock item.
+                    slotId = ShardGuiResolver.resolve(slotStack, screen);
+                }
 
                 if (slotId != null) {
                     // Fast path: exact SkyBlock ID in the filtered item list
