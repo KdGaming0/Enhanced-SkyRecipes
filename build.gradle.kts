@@ -159,7 +159,13 @@ tasks {
 
 if (sc.current.version in compatibleVersions) {
     val changelogFile = rootProject.file("CHANGELOG.md")
-    val publishChangelog = if (changelogFile.exists()) changelogFile.readText() else "No changelog provided."
+    val releaseSectionRegex = Regex("""(?ms)^#\s+\d[^\n]*.*?(?=^#\s+\d|\z)""")
+
+    val publishChangelog = changelogFile.takeIf(File::exists)
+        ?.readText()
+        ?.let { releaseSectionRegex.find(it)?.value?.trim() }
+        ?.takeIf(String::isNotBlank)
+        ?: "No changelog provided."
 
     publishMods {
         file.set(loomx.modJar.flatMap { it.archiveFile })

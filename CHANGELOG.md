@@ -1,3 +1,9 @@
+# 0.4.5
+
+## Fixes
+- Beginner sacks and large Enchanted sacks now group together with the Small, Medium, and Large sacks instead of being displayed separately.
+- Bronze and Silver Trophy Fishing and Trophy Frog sacks now group together too.
+
 # 0.4.4
 
 ## Fixes
@@ -14,15 +20,15 @@
 
 ## Fixes
 
-- The craft button on a recipe now works for enchanted books, craftable pets and attribute shards. Clicking it previously showed an "Invalid recipe" error for these items, it now opens the correct recipe.
+- The craft button on a recipe now works for enchanted books, craftable pets, and attribute shards. Clicking it previously showed an "Invalid recipe" error for these items, it now opens the correct recipe.
 
 # 0.4.2
 
 ## 🐛 Fixes
 
 - Enchantment groups in the item list now show the enchantment's name — Sharpness, Bane of Arthropods, One For All — instead of every one of them being labelled "Enchanted Book".
-- Pets, enchanted books, runes and potions in the item list now show their price line from Skyblocker, like every other item already did.
-- Fixed a crash when hovering pets, runes or enchanted books in the item list while Skyblocker's NEU repository had failed to download.
+- Pets, enchanted books, runes, and potions in the item list now show their price line from Skyblocker, like every other item already did.
+- Fixed a crash when hovering pets, runes, or enchanted books in the item list while Skyblocker's NEU repository had failed to download.
 
 ## 🔧 Improvements
 

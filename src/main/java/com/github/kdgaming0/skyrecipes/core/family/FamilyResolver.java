@@ -90,13 +90,37 @@ public final class FamilyResolver {
             "INFERNAL", 4
     );
 
-    /** Trophy fish medal ladder: BLOBFISH_BRONZE → SILVER → GOLD → DIAMOND. */
+    /**
+     * Trophy medal ladder: BRONZE → SILVER → GOLD → DIAMOND. Trails the name on trophy fish
+     * (BLOBFISH_BRONZE) and leads it on trophy sacks (BRONZE_TROPHY_FISHING_SACK). Only the
+     * first two rungs exist as sacks today; the rest join automatically if NEU adds them.
+     */
     private static final Map<String, Integer> TROPHY_TIER_MAP = Map.of(
             "BRONZE", 1,
             "SILVER", 2,
             "GOLD", 3,
             "DIAMOND", 4
     );
+
+    /**
+     * Sack size ladder: BEGINNER → SMALL → MEDIUM → LARGE → LARGE_ENCHANTED. EXTRA_LARGE
+     * shares the top rank; no line carries both it and LARGE_ENCHANTED.
+     */
+    private static final Map<String, Integer> SACK_TIER_MAP = Map.of(
+            "BEGINNER", 1,
+            "SMALL", 2,
+            "MEDIUM", 3,
+            "LARGE", 4,
+            "LARGE_ENCHANTED", 5,
+            "EXTRA_LARGE", 5
+    );
+
+    /** {@link #SACK_TIER_MAP} keys longest-first, so LARGE_ENCHANTED_ wins over LARGE_. */
+    private static final List<String> SACK_TIER_PREFIXES = SACK_TIER_MAP.keySet().stream()
+            .sorted(Comparator.comparingInt(String::length).reversed())
+            .toList();
+
+    private static final String SACK_SUFFIX = "_SACK";
 
     /** In display order — also the sort order of armor-set members. */
     private static final String[] ARMOR_SLOT_SUFFIXES = {"_HELMET", "_CHESTPLATE", "_LEGGINGS", "_BOOTS"};
@@ -153,7 +177,8 @@ public final class FamilyResolver {
      * suffix (minions, pets, enchantments, drills), else the accessory suffix/prefix rank
      * (TALISMAN=1 … CHRONOMICON=6), else the trophy medal (BRONZE=1 … DIAMOND=4), else the
      * gemstone quality prefix on {@code *_GEM} items (ROUGH=1 … PERFECT=5), else the
-     * Kuudra prefix on armor pieces (HOT=1 … INFERNAL=4). Returns 0 when no tier is found.
+     * Kuudra prefix on armor pieces (HOT=1 … INFERNAL=4), else the size prefix on
+     * {@code *_SACK} items (BEGINNER=1 … LARGE_ENCHANTED=5). Returns 0 when no tier is found.
      */
     public static int extractTier(String internalName) {
         if (internalName == null || internalName.isEmpty()) {
@@ -195,7 +220,52 @@ public final class FamilyResolver {
         if (kuudra != null) {
             return kuudra;
         }
+        SackTier sack = sackTier(internalName);
+        if (sack != null) {
+            return sack.tier();
+        }
         return 0;
+    }
+
+    /** A laddered sack's rung and the line it belongs to. */
+    private record SackTier(int tier, String base) {
+    }
+
+    /**
+     * The ladder position of a tiered sack, or null when the name is not a {@code *_SACK}
+     * carrying a known prefix.
+     *
+     * <p>Two ladders share the shape. A size prefix is consumed whole
+     * ({@code LARGE_ENCHANTED_MINING_SACK} → tier 5 of {@code MINING}), while a trophy medal
+     * consumes only the medal word ({@code BRONZE_TROPHY_FISHING_SACK} → tier 1 of
+     * {@code TROPHY_FISHING}) — keeping {@code TROPHY} in the line name is what stops the
+     * trophy sacks from being bucketed into the plain {@code FISHING} line.</p>
+     *
+     * <p>A non-empty line name is required, so a bare {@code LARGE_SACK} would not qualify.</p>
+     */
+    private static SackTier sackTier(String id) {
+        if (!id.endsWith(SACK_SUFFIX)) {
+            return null;
+        }
+        for (String prefix : SACK_TIER_PREFIXES) {
+            if (id.startsWith(prefix + "_")) {
+                return sackTier(id, SACK_TIER_MAP.get(prefix), prefix.length() + 1);
+            }
+        }
+        int firstUnderscore = id.indexOf('_');
+        if (firstUnderscore > 0) {
+            Integer medal = TROPHY_TIER_MAP.get(id.substring(0, firstUnderscore));
+            if (medal != null) {
+                return sackTier(id, medal, firstUnderscore + 1);
+            }
+        }
+        return null;
+    }
+
+    /** Pairs {@code tier} with the line name between {@code from} and {@code _SACK}. */
+    private static SackTier sackTier(String id, int tier, int from) {
+        int end = id.length() - SACK_SUFFIX.length();
+        return from < end ? new SackTier(tier, id.substring(from, end)) : null;
     }
 
     /**
@@ -340,8 +410,8 @@ public final class FamilyResolver {
 
     private static void buildExplicitFamilies(ConstantsRegistry constants, ItemRegistry items,
                                               Map<String, FamilyInfo> out) {
-        Map<String, List<String>> parentToChildren = constants.getAllParents();
-        if (parentToChildren == null || parentToChildren.isEmpty()) return;
+        Map<String, List<String>> parentToChildren = withSackLadders(constants.getAllParents(), items);
+        if (parentToChildren.isEmpty()) return;
 
         // Child->parent map for root detection; first parent wins for duplicate children.
         Map<String, String> childToParent = new HashMap<>();
@@ -366,6 +436,56 @@ public final class FamilyResolver {
                 out.put(member, info);
             }
         }
+    }
+
+    /**
+     * The curated parent→children map plus synthetic edges completing the sack ladders.
+     *
+     * <p>parents.json only ever curated the SMALL/MEDIUM/LARGE middle of each sack line: the
+     * BEGINNER and LARGE_ENCHANTED tiers are absent everywhere, the Mutations line is missing
+     * outright, and the trophy sacks were never curated at all. Those sacks would otherwise
+     * reach no pass — the implicit pass matches armor/pet/accessory/drill names only, and the
+     * crafted-chain pass needs the lower tier to be an ingredient of the higher one, which
+     * sacks are not (a Beginner Mining Sack is coal + leather, a Small one enchanted coal +
+     * leather).</p>
+     *
+     * <p>Rather than naming the missing ids, every {@code *_SACK} that {@link #sackTier}
+     * recognizes is bucketed by line name and the bucket is hung off its highest tier.
+     * Buckets of one are dropped, which is what leaves the standalone LARGE_-prefixed sacks
+     * (Spooky, Dungeon, Events, Winter) ungrouped without a denylist. Merging rather than
+     * replacing keeps curated roots intact where they already exist.</p>
+     *
+     * <p>{@code curated} is the registry's own map and is never mutated.</p>
+     */
+    private static Map<String, List<String>> withSackLadders(Map<String, List<String>> curated,
+                                                             ItemRegistry items) {
+        Map<String, List<String>> merged = curated != null ? new HashMap<>(curated) : new HashMap<>();
+        if (items == null) return merged;
+
+        Map<String, List<String>> byBase = new HashMap<>();
+        for (NeuItem item : items.getAllItems()) {
+            String id = item.internalName();
+            if (id == null) continue;
+            SackTier tier = sackTier(id);
+            if (tier != null) {
+                byBase.computeIfAbsent(tier.base(), k -> new ArrayList<>()).add(id);
+            }
+        }
+
+        for (List<String> line : byBase.values()) {
+            if (line.size() < 2) continue;
+            line.sort(Comparator.<String>comparingInt(FamilyResolver::extractTier)
+                    .thenComparing(Comparator.naturalOrder()));
+            String root = line.getLast();
+            List<String> children = new ArrayList<>(merged.getOrDefault(root, List.of()));
+            for (String member : line) {
+                if (!member.equals(root) && !children.contains(member)) {
+                    children.add(member);
+                }
+            }
+            merged.put(root, children);
+        }
+        return merged;
     }
 
     private static void collectDescendants(String node, Map<String, List<String>> parentToChildren,
