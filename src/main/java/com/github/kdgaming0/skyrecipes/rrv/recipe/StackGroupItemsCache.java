@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Memo for RRV's {@code StackGroupManager.getGroupItems(AbstractStackGroup)}, which walks the
@@ -184,12 +185,64 @@ public final class StackGroupItemsCache {
      * value-based equals/hashCode. Empty-vs-non-empty pairs never match here, which is at
      * worst slightly stricter than vanilla and only for empty stacks, which don't occur in
      * the item list.
+     *
+     * <p>Memoized per stack instance. Hashing a SkyBlock stack's component map is <em>not</em>
+     * cheap — it walks {@code CustomData}'s whole {@code CompoundTag} tree and every
+     * {@code ItemLore} component — and {@code appendMatchingGroups} keys the entire result
+     * list on every keystroke. Stacks are immutable and identity-stable here, so the key (and
+     * with it the hash) is computed once per instance and reused for the rest of the session.
+     * Guava's {@code weakKeys()} compares by identity and lets stacks from a replaced index be
+     * collected, exactly like {@code SkyblockIdExtractor.ID_CACHE}.</p>
      */
     public static Object dedupKey(ItemStack stack) {
+        DedupKey cached = DEDUP_KEYS.get(stack);
+        if (cached != null) {
+            return cached;
+        }
         boolean empty = stack.isEmpty();
-        return new DedupKey(stack.getItem(), empty, empty ? null : stack.getComponents());
+        DedupKey key = new DedupKey(stack.getItem(), empty, empty ? null : stack.getComponents());
+        DEDUP_KEYS.put(stack, key);
+        return key;
     }
 
-    private record DedupKey(Item item, boolean empty, DataComponentMap components) {
+    private static final java.util.concurrent.ConcurrentMap<ItemStack, DedupKey> DEDUP_KEYS =
+            new com.google.common.collect.MapMaker().weakKeys().makeMap();
+
+    /**
+     * Value-equal to the record it replaces; the only difference is that the expensive
+     * component-map hash is computed once at construction instead of on every lookup.
+     * {@code equals} still compares by value, so two distinct instances carrying equal
+     * components dedup against each other as before.
+     */
+    private static final class DedupKey {
+
+        private final Item item;
+        private final boolean empty;
+        private final DataComponentMap components;
+        private final int hash;
+
+        DedupKey(Item item, boolean empty, DataComponentMap components) {
+            this.item = item;
+            this.empty = empty;
+            this.components = components;
+            int h = System.identityHashCode(item);
+            h = 31 * h + Boolean.hashCode(empty);
+            this.hash = 31 * h + (components == null ? 0 : components.hashCode());
+        }
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof DedupKey other)) return false;
+            return hash == other.hash
+                    && item == other.item
+                    && empty == other.empty
+                    && Objects.equals(components, other.components);
+        }
     }
 }

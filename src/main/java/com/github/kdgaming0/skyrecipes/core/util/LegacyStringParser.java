@@ -18,6 +18,13 @@ public final class LegacyStringParser {
     /**
      * Parses a string containing § color/formatting codes into a {@link Component}.
      *
+     * <p>A string with a single style run — which is most NEU display names and lore lines —
+     * returns that styled literal directly rather than an empty parent holding one sibling.
+     * The wrapper renders identically but costs an extra {@code MutableComponent} plus its
+     * sibling {@code ArrayList} per line, and these components are retained for the session
+     * inside ~8.5k item stacks (roughly 90k redundant objects). It also deepens every
+     * tooltip walk and component hash.</p>
+     *
      * @param text Raw text with § codes (e.g. "§9Aspect of the End")
      * @return A Component with proper styling
      */
@@ -26,7 +33,10 @@ public final class LegacyStringParser {
             return Component.empty();
         }
 
-        MutableComponent result = Component.empty();
+        // `first` holds the sole segment until a second one appears; only then is the
+        // parent allocated and both spliced into it.
+        MutableComponent first = null;
+        MutableComponent result = null;
         StringBuilder currentText = new StringBuilder();
         Style currentStyle = Style.EMPTY;
 
@@ -36,8 +46,17 @@ public final class LegacyStringParser {
             if (c == '§' && i + 1 < text.length()) {
                 // Flush accumulated text with current style
                 if (!currentText.isEmpty()) {
-                    result.append(Component.literal(currentText.toString()).withStyle(currentStyle));
+                    MutableComponent segment =
+                            Component.literal(currentText.toString()).withStyle(currentStyle);
                     currentText.setLength(0);
+                    if (first == null) {
+                        first = segment;
+                    } else {
+                        if (result == null) {
+                            result = Component.empty().append(first);
+                        }
+                        result.append(segment);
+                    }
                 }
 
                 char code = text.charAt(i + 1);
@@ -70,9 +89,22 @@ public final class LegacyStringParser {
 
         // Flush remaining text
         if (!currentText.isEmpty()) {
-            result.append(Component.literal(currentText.toString()).withStyle(currentStyle));
+            MutableComponent segment =
+                    Component.literal(currentText.toString()).withStyle(currentStyle);
+            if (first == null) {
+                first = segment;
+            } else {
+                if (result == null) {
+                    result = Component.empty().append(first);
+                }
+                result.append(segment);
+            }
         }
 
-        return result;
+        if (result != null) {
+            return result;
+        }
+        // Single segment, or none at all (input was only formatting codes).
+        return first != null ? first : Component.empty();
     }
 }

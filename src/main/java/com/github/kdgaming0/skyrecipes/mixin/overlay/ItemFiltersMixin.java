@@ -3,12 +3,15 @@ package com.github.kdgaming0.skyrecipes.mixin.overlay;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemFilters;
 import com.github.kdgaming0.skyrecipes.client.gui.CategoryState;
 import com.github.kdgaming0.skyrecipes.core.model.SkyblockItemCategory;
+import com.github.kdgaming0.skyrecipes.rrv.overlay.ItemExclusionCache;
 import com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
@@ -62,6 +65,22 @@ public class ItemFiltersMixin {
         cir.setReturnValue(filtered);
     }
 
+    // -- Single-entry filter memo ---------------------------------------------
+    // RRV's updateQuery has no unchanged-query early-out and re-fires on every container
+    // open, resize, and widget rebuild (see GroupingResultCache for the full chain), so the
+    // identical filter is recomputed constantly. Grouping was already memoized; this covers
+    // the filter that feeds it. The index reference is part of the key, so a reload that
+    // republishes the index can never serve stale results. Render-thread only, like every
+    // caller of defaultFilter (the side panel uses advancedFilter, off this path).
+    @Unique
+    private static String skyrecipes$memoQuery;
+    @Unique
+    private static SkyblockItemCategory skyrecipes$memoCategory;
+    @Unique
+    private static Object skyrecipes$memoIndex;
+    @Unique
+    private static List<ItemStack> skyrecipes$memoResult;
+
     @Inject(method = "defaultFilter", at = @At("HEAD"), cancellable = true, remap = false)
     private static void skyrecipes$skyblockSearchFilter(String query,
                                                         CallbackInfoReturnable<List<ItemStack>> cir) {
@@ -70,10 +89,43 @@ public class ItemFiltersMixin {
             return;
         }
         SkyblockItemCategory category = CategoryState.getButtonCategory();
-        if (category != null) {
-            cir.setReturnValue(index.filter(query, category, null));
-        } else {
-            cir.setReturnValue(index.filter(query));
+
+        if (skyrecipes$memoResult != null
+                && skyrecipes$memoIndex == index
+                && skyrecipes$memoCategory == category
+                && java.util.Objects.equals(skyrecipes$memoQuery, query)) {
+            cir.setReturnValue(skyrecipes$memoResult);
+            return;
         }
+
+        // Safe to hand the same list back on a hit for the same reason filter("") may return
+        // the immutable master list: RRV consumes the result via filteredItems.addAll(...)
+        // and never mutates it (verified against 8.6.4).
+        List<ItemStack> result = category != null
+                ? index.filter(query, category, null)
+                : index.filter(query);
+
+        skyrecipes$memoQuery = query;
+        skyrecipes$memoCategory = category;
+        skyrecipes$memoIndex = index;
+        skyrecipes$memoResult = result;
+        cir.setReturnValue(result);
+    }
+
+    /**
+     * RRV's own "the item index is stale" signal — fired on world change, resource reload,
+     * and index-source changes. It is the only invalidation channel for the tag-driven half
+     * of {@link ItemExclusionCache} ({@code rrv:excluded_potions} /
+     * {@code rrv:excluded_enchantments} membership changes on a resource reload without
+     * touching the exclusion collections' sizes), so the memo can never outlive the list it
+     * describes. The filter memo above is keyed on the search-index identity instead, which
+     * is independent of RRV's stack cache — but it costs nothing to drop it here too.
+     */
+    @Inject(method = "clearCaches", at = @At("TAIL"), remap = false)
+    private static void skyrecipes$invalidateOnCacheClear(CallbackInfo ci) {
+        ItemExclusionCache.invalidate();
+        skyrecipes$memoQuery = null;
+        skyrecipes$memoResult = null;
+        skyrecipes$memoIndex = null;
     }
 }

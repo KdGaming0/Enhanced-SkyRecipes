@@ -70,6 +70,13 @@ public class SkyblockFusionClientRecipe extends AbstractSkyblockClientRecipe {
     private volatile SlotContent outputContent;
     private volatile List<SlotContent> ingredientContents;
 
+    // -- Frame-invariant render text ------------------------------------------
+    // The title is a fixed shard name but was re-parsed from its § codes into a fresh
+    // Component tree on every frame; the paging label only changes when the page does.
+    private Component cachedTitle;
+    private Component cachedPageLabel;
+    private int cachedPageLabelPage = -1;
+
     public SkyblockFusionClientRecipe(Identifier id, ShardFusionContext context,
                                       int outputIdx, int[] pairs, int[] distinctInputs,
                                       List<String> wikiUrls, String bazaarSearch) {
@@ -145,6 +152,15 @@ public class SkyblockFusionClientRecipe extends AbstractSkyblockClientRecipe {
         lastAdvanceMs = System.currentTimeMillis();
     }
 
+    @Override
+    public void fadeRecipe() {
+        super.fadeRecipe();
+        // Drop the render-text memos with the card, so a font/language change is picked up.
+        cachedTitle = null;
+        cachedPageLabel = null;
+        cachedPageLabelPage = -1;
+    }
+
     // -- Rendering ------------------------------------------------------------
 
     @Override
@@ -155,7 +171,11 @@ public class SkyblockFusionClientRecipe extends AbstractSkyblockClientRecipe {
         advanceAutoCycle();
 
         // Title: output shard name (rarity-coloured via its own § codes)
-        Component title = LegacyStringParser.parse(context.displayName(outputIdx));
+        Component title = cachedTitle;
+        if (title == null) {
+            title = LegacyStringParser.parse(context.displayName(outputIdx));
+            cachedTitle = title;
+        }
         int titleX = (pos.width() - font.width(title)) / 2;
         graphics.text(font, title, titleX, TITLE_Y, RecipeUiHelper.TEXT_WHITE, true);
 
@@ -165,7 +185,12 @@ public class SkyblockFusionClientRecipe extends AbstractSkyblockClientRecipe {
         renderInput(graphics, font, ShardFusionData.pairSecond(packed), INPUT_B_X, pos, mouseX, mouseY);
 
         // Paging label: "current / total"
-        Component labelComponent = Component.literal((page + 1) + " / " + pairs.length);
+        Component labelComponent = cachedPageLabel;
+        if (labelComponent == null || cachedPageLabelPage != page) {
+            labelComponent = Component.literal((page + 1) + " / " + pairs.length);
+            cachedPageLabel = labelComponent;
+            cachedPageLabelPage = page;
+        }
         int labelX = (pos.width() - font.width(labelComponent)) / 2;
         graphics.text(font, labelComponent, labelX, PAGE_LABEL_Y, RecipeUiHelper.TEXT_WHITE, true);
 

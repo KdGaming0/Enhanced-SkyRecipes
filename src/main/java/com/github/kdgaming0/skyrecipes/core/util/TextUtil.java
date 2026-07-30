@@ -21,8 +21,17 @@ public final class TextUtil {
         if (text == null || text.isEmpty()) {
             return "";
         }
+        // Most strings that reach here carry no codes at all (internal names, already-clean
+        // lore, live stack names). trim() returns the same instance when there is nothing to
+        // trim, so that case allocates nothing — this runs ~90k times per index build and
+        // once per live stack in the inventory-highlight path.
+        int firstCode = text.indexOf('§');
+        if (firstCode < 0) {
+            return text.trim();
+        }
         StringBuilder sb = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
+        sb.append(text, 0, firstCode);
+        for (int i = firstCode; i < text.length(); i++) {
             char c = text.charAt(i);
             if (c == '§' && i + 1 < text.length()) {
                 i++; // skip formatting code

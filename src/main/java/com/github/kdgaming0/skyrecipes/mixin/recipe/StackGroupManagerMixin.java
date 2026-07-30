@@ -10,6 +10,7 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.GroupingResultCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockFamilyStackGroup;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.StackGroupIdIndex;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -80,9 +81,14 @@ public class StackGroupManagerMixin {
                                                          CallbackInfoReturnable<List<ItemStack>> cir) {
         List<ItemStack> cached = StackGroupItemsCache.get(group);
         if (cached != null) {
-            // Fresh mutable copy: some RRV callers (e.g. StackGroupNameWidget) expect an
-            // independent list, and the memo must never be exposed for mutation.
-            cir.setReturnValue(new ArrayList<>(cached));
+            // Served without copying: ItemSlot re-resolves a group's contents per group slot
+            // per frame, so a defensive copy here is a full member-list copy every frame.
+            // Verified against RRV 8.6.4 that no caller mutates the result — ItemSlot reads
+            // size()/get(), StackGroupConfigScreen reads size(), expandGroupsInList and
+            // appendMatchingGroups only iterate, and StackGroupNameWidget copies it itself.
+            // The memo stores List.copyOf, so a future mutating caller fails loudly instead
+            // of silently corrupting the cache.
+            cir.setReturnValue(cached);
         }
     }
 
@@ -101,8 +107,47 @@ public class StackGroupManagerMixin {
         // reload() cleared the group list; re-add the SkyBlock family groups before the
         // prewarm so it computes their contents too.
         SkyblockStackGroups.injectInto();
+        StackGroupIdIndex.invalidate();
         StackGroupItemsCache.invalidate();
         StackGroupItemsCache.prewarm();
+    }
+
+    /**
+     * Replaces RRV's linear id scan with an O(1) map lookup.
+     *
+     * <p>RRV resolves a {@code "namespace:path"} id by walking {@code stackGroups} and
+     * calling {@code getId().toString()} on each candidate — a fresh String per group per
+     * lookup. That is fine for the ~75 groups RRV ships; with SkyRecipes' 1000+ family
+     * groups it is ~1000 throwaway Strings per call, and {@code ItemSlot} makes these calls
+     * per group slot per frame. See {@link StackGroupIdIndex} for the cache's invalidation
+     * and its size-check safety net.</p>
+     */
+    @Inject(
+            method = "getGroup(Ljava/lang/String;)Lcc/cassian/rrv/common/recipe/stackgroup/data/AbstractStackGroup;",
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 0
+    )
+    private static void skyrecipes$fastGetGroup(String id,
+                                                CallbackInfoReturnable<AbstractStackGroup> cir) {
+        cir.setReturnValue(StackGroupIdIndex.get(id));
+    }
+
+    /**
+     * Same O(1) id resolution for the {@code String}-keyed {@code getGroupItems}, then
+     * straight into the memoized {@code AbstractStackGroup} overload. RRV returns an empty
+     * list for an unknown id; so does this.
+     */
+    @Inject(
+            method = "getGroupItems(Ljava/lang/String;)Ljava/util/List;",
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 0
+    )
+    private static void skyrecipes$fastGetGroupItemsById(String groupId,
+                                                         CallbackInfoReturnable<List<ItemStack>> cir) {
+        AbstractStackGroup group = StackGroupIdIndex.get(groupId);
+        cir.setReturnValue(group != null ? getGroupItems(group) : List.of());
     }
 
     /**
@@ -239,10 +284,10 @@ public class StackGroupManagerMixin {
 
         String lower = query.toLowerCase(Locale.ROOT);
         List<ItemStack> extendedResults = new ArrayList<>(results);
-        Set<Object> seen = new HashSet<>(Math.max(16, results.size() * 2));
-        for (ItemStack existing : results) {
-            seen.add(StackGroupItemsCache.dedupKey(existing));
-        }
+        // Built on the first matching group, not up front: keying the whole result list
+        // costs one component-map hash per stack (up to ~8.5k on a broad query), and most
+        // queries match no group at all — that work would be pure waste. Null until needed.
+        Set<Object> seen = null;
 
         for (AbstractStackGroup group : StackGroupManager.stackGroups) {
             boolean match;
@@ -261,6 +306,12 @@ public class StackGroupManagerMixin {
             if (!match) continue;
 
             nameMatchedGroups.add(group.getId());
+            if (seen == null) {
+                seen = new HashSet<>(Math.max(16, results.size() * 2));
+                for (ItemStack existing : results) {
+                    seen.add(StackGroupItemsCache.dedupKey(existing));
+                }
+            }
             for (ItemStack stack : getGroupItems(group)) {
                 if (seen.add(StackGroupItemsCache.dedupKey(stack))) {
                     extendedResults.add(stack);

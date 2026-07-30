@@ -155,7 +155,11 @@ public final class ItemStackBuilder {
         if (snbt == null || snbt.isEmpty()) {
             return snbt;
         }
-        StringBuilder result = new StringBuilder(snbt.length());
+        // The builder is allocated only once an index prefix is actually found: most NEU
+        // nbttag strings carry none, and rewriting every one of ~8.5k multi-KB strings into
+        // a fresh StringBuilder plus a fresh String was tens of MB of garbage per cycle.
+        // Until then the input is verbatim, so the skipped prefix can be copied in one go.
+        StringBuilder result = null;
         boolean inString = false;
         boolean escape = false;
 
@@ -163,24 +167,23 @@ public final class ItemStackBuilder {
             char c = snbt.charAt(i);
 
             if (escape) {
-                result.append(c);
+                if (result != null) result.append(c);
                 escape = false;
                 continue;
             }
             if (c == '\\') {
-                result.append(c);
+                if (result != null) result.append(c);
                 escape = true;
                 continue;
             }
             if (c == '"') {
                 inString = !inString;
-                result.append(c);
+                if (result != null) result.append(c);
                 continue;
             }
 
             // When not inside a string, after '[' or ',' skip N: prefixes
             if (!inString && (c == '[' || c == ',')) {
-                result.append(c);
                 int j = i + 1;
                 // Skip whitespace
                 while (j < snbt.length() && Character.isWhitespace(snbt.charAt(j))) {
@@ -192,15 +195,22 @@ public final class ItemStackBuilder {
                     j++;
                 }
                 if (j > digitStart && j < snbt.length() && snbt.charAt(j) == ':') {
+                    if (result == null) {
+                        result = new StringBuilder(snbt.length());
+                        result.append(snbt, 0, i);
+                    }
+                    result.append(c);
                     // This is an index prefix — skip it
                     i = j;
+                    continue;
                 }
+                if (result != null) result.append(c);
                 continue;
             }
 
-            result.append(c);
+            if (result != null) result.append(c);
         }
-        return result.toString();
+        return result == null ? snbt : result.toString();
     }
 
     private static Item resolveItem(String itemId) {
@@ -446,7 +456,7 @@ public final class ItemStackBuilder {
 
     private static ResolvableProfile resolveProfile(CompoundTag skullOwner) {
         try {
-            UUID uuid = UUID.randomUUID();
+            UUID uuid = null;
             Optional<String> idStrOpt = skullOwner.getString("Id");
             if (idStrOpt.isPresent() && !idStrOpt.get().isEmpty()) {
                 uuid = UUID.fromString(idStrOpt.get());
@@ -461,6 +471,14 @@ public final class ItemStackBuilder {
                         );
                     }
                 }
+            }
+            if (uuid == null) {
+                // Only for the rare skull whose tag carries no usable Id. This used to run
+                // unconditionally and was then almost always overwritten — and
+                // UUID.randomUUID() draws from a shared SecureRandom whose nextBytes is
+                // synchronized, so every thread of the parallel stack build queued on one
+                // lock for a value it threw away.
+                uuid = UUID.randomUUID();
             }
 
             String name = skullOwner.getStringOr("Name", "");

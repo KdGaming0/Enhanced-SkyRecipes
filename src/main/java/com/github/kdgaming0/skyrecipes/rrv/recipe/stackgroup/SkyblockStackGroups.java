@@ -117,6 +117,8 @@ public final class SkyblockStackGroups {
 
         List<AbstractStackGroup> groups = StackGroupManager.stackGroups;
         groups.removeIf(g -> g instanceof SkyblockFamilyStackGroup);
+        // The id → group map is built from this list; every splice invalidates it.
+        StackGroupIdIndex.invalidate();
         if (snap == null || !SkyRecipesConfig.groupTieredItems
                 || !Configs.STACK_GROUPS.areStackGroupsEnabled()) {
             return;

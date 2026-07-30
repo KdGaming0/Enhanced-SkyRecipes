@@ -153,11 +153,35 @@ public final class SearchQueryParser {
     private SearchQueryParser() {
     }
 
+    /**
+     * Single-entry memo. RRV re-runs the whole filter on every {@code updateQuery}, which
+     * fires on every container open, resize, and widget rebuild — not just on keystrokes —
+     * so the same string is parsed over and over. Worth memoizing mainly for {@code /regex/}
+     * queries, where each parse otherwise pays a fresh {@link Pattern#compile}.
+     *
+     * <p>{@link SearchQuery} is a record whose canonical constructor deep-copies every
+     * collection into an immutable one, so a shared instance cannot be mutated by a caller.
+     * The volatile single-field swap makes this safe from any thread without locking.</p>
+     */
+    private record ParseMemo(String raw, SearchQuery parsed) {
+    }
+
+    private static volatile ParseMemo lastParse;
+
     public static SearchQuery parse(String raw) {
         if (raw == null || raw.isBlank()) {
             return EMPTY;
         }
+        ParseMemo memo = lastParse;
+        if (memo != null && memo.raw().equals(raw)) {
+            return memo.parsed();
+        }
+        SearchQuery parsed = parseUncached(raw);
+        lastParse = new ParseMemo(raw, parsed);
+        return parsed;
+    }
 
+    private static SearchQuery parseUncached(String raw) {
         String lower = raw.toLowerCase(Locale.ROOT);
         int len = lower.length();
         int i = 0;
@@ -530,6 +554,9 @@ public final class SearchQueryParser {
      */
     public static void setRuntimeKnownStats(Set<String> stats) {
         runtimeKnownStats = stats != null ? Set.copyOf(stats) : null;
+        // Known stats decide whether a token parses as a stat clause or a plain keyword,
+        // so a parse from the previous dataset may no longer be correct.
+        lastParse = null;
     }
 
     /**

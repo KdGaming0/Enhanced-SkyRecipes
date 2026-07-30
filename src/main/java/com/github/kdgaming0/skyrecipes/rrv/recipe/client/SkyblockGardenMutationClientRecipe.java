@@ -54,6 +54,10 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     private static final String WATER_ICON_ITEM = "HYDRO_CAN_ULTRA_3000";
 
     private static final int INFO_TEXT_Y = 136;
+    /** Fixed render text — hoisted out of renderRecipe, which ran once per frame per card. */
+    private static final Component INFO_HINT = Component.literal("§8Hover for more info");
+    private static final List<Component> WATER_TOOLTIP =
+            List.of(Component.literal("§bRequires Water"));
 
     // ── border colors ─────────────────────────────────────────────────────────
     private static final int TARGET_BORDER_COLOR = 0xFFAA66FF;   // 1px solid
@@ -366,14 +370,13 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
 
             if (mouseX >= WATER_ICON_X && mouseX < WATER_ICON_X + WATER_ICON_SIZE
                     && mouseY >= WATER_ICON_Y && mouseY < WATER_ICON_Y + WATER_ICON_SIZE) {
-                graphics.setComponentTooltipForNextFrame(font,
-                        List.of(Component.literal("§bRequires Water")),
+                graphics.setComponentTooltipForNextFrame(font, WATER_TOOLTIP,
                         pos.left() + mouseX, pos.top() + mouseY);
             }
         }
 
         // "Hover for more info"
-        Component hint = Component.literal("§8Hover for more info");
+        Component hint = INFO_HINT;
         int hintWidth = font.width(hint);
         int hintX = (pos.width() - hintWidth) / 2;
         graphics.text(font, hint, hintX, INFO_TEXT_Y, RecipeUiHelper.TEXT_WHITE, true);

@@ -165,7 +165,17 @@ public final class FamilyResolver {
 
     /** Returns every distinct family (explicit and implicit), each appearing once. */
     public Collection<FamilyInfo> getAllFamilies() {
-        return memberToFamily.values().stream().distinct().toList();
+        // Identity, not equality: every member of a family maps to the same FamilyInfo
+        // instance, so a value-based distinct() would hash each record — and with it its
+        // whole member Set — once per member, i.e. O(members²) per family.
+        Set<FamilyInfo> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        List<FamilyInfo> families = new ArrayList<>();
+        for (FamilyInfo info : memberToFamily.values()) {
+            if (seen.add(info)) {
+                families.add(info);
+            }
+        }
+        return families;
     }
 
     // -----------------------------------------------------------------

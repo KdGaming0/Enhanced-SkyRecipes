@@ -1,5 +1,11 @@
 # 0.4.5
 
+## Improvements
+- The item list is noticeably smoother. Scrolling and hovering items no longer cost a chunk of every frame, and grouped items in particular were doing far more work per frame than they needed to.
+- Typing in the search bar responds faster, especially with stack groups enabled and on searches that match a lot of items.
+- SkyRecipes finishes loading quicker on startup and after a data refresh.
+- Lower memory use and less garbage collection.
+
 ## Fixes
 - Beginner sacks and large Enchanted sacks now group together with the Small, Medium, and Large sacks instead of being displayed separately.
 - Bronze and Silver Trophy Fishing and Trophy Frog sacks now group together too.

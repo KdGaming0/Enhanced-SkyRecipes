@@ -53,12 +53,20 @@ public final class RecipeGenerator {
 
         Batch batch = new Batch();
 
-        for (NeuItem item : itemRegistry.getAllItems()) {
-            generateCraftingRecipe(item, batch);
-            AttributeShardData shard = generateShardInfoRecipe(item, batch);
-            generateWikiInfoRecipes(item, shard, batch);
-            generateNpcInfoRecipe(item, batch);
-            generateTypedRecipes(item, batch);
+        // Per-item generation is CPU-bound (SNBT parsing and stack building dominate) and
+        // pure: every parser and builder is stateless, the registries are immutable, and the
+        // one shared sink — NpcInfoRegistry's pending map — is a ConcurrentHashMap. So it
+        // fans out across the common pool, like the stack build in SkyRecipesClientPlugin.
+        // The index-addressed array preserves registry order and the serial merge replays it
+        // exactly: recipe order is load-bearing, because the batched injector passes each
+        // recipe's list index to RRV as its dedup id.
+        List<NeuItem> items = List.copyOf(itemRegistry.getAllItems());
+        ItemRecipes[] built = new ItemRecipes[items.size()];
+        java.util.stream.IntStream.range(0, items.size()).parallel()
+                .forEach(i -> built[i] = generateForItem(items.get(i)));
+
+        for (ItemRecipes produced : built) {
+            merge(produced, batch);
         }
 
         if (constantsRegistry != null) {
@@ -79,15 +87,36 @@ public final class RecipeGenerator {
 
     // ---- Per-item recipe sources ----
 
-    private void generateCraftingRecipe(NeuItem item, Batch batch) {
+    /** All recipes one item contributes. Runs on a worker; touches no shared state. */
+    private ItemRecipes generateForItem(NeuItem item) {
+        ItemRecipes out = new ItemRecipes(item);
+        generateCraftingRecipe(item, out);
+        AttributeShardData shard = generateShardInfoRecipe(item, out);
+        generateWikiInfoRecipes(item, shard, out);
+        generateNpcInfoRecipe(item, out);
+        generateTypedRecipes(item, out);
+        return out;
+    }
+
+    /** Folds one item's contribution into the pass accumulator, in generation order. */
+    private void merge(ItemRecipes produced, Batch batch) {
+        batch.parseAttempts += produced.parseAttempts;
+        batch.parseFailures += produced.parseFailures;
+        for (int i = 0; i < produced.recipes.size(); i++) {
+            ReliableClientRecipe recipe = produced.recipes.get(i);
+            batch.recipes.add(recipe);
+            indexRecipe(recipe, produced.item, produced.ingredients.get(i), batch.indexBuilder);
+        }
+    }
+
+    private void generateCraftingRecipe(NeuItem item, ItemRecipes out) {
         if (item.recipe() instanceof NeuRecipe.CraftingRecipe crafting) {
-            batch.parseAttempts++;
+            out.parseAttempts++;
             ReliableClientRecipe recipe = CraftingRecipeParser.parse(item, crafting, itemRegistry);
             if (recipe != null) {
-                batch.recipes.add(recipe);
-                indexRecipe(recipe, item, crafting.grid().values(), batch.indexBuilder);
+                out.add(recipe, crafting.grid().values());
             } else {
-                batch.parseFailures++;
+                out.parseFailures++;
             }
         }
     }
@@ -98,15 +127,14 @@ public final class RecipeGenerator {
      *
      * @return the shard data if this item is a shard, for the wiki-card skip below
      */
-    private AttributeShardData generateShardInfoRecipe(NeuItem item, Batch batch) {
+    private AttributeShardData generateShardInfoRecipe(NeuItem item, ItemRecipes out) {
         AttributeShardData shard = constantsRegistry != null
                 ? constantsRegistry.getAttributeShard(item.internalName())
                 : null;
         if (shard != null) {
             ReliableClientRecipe shardRecipe = ShardInfoRecipeBuilder.build(item, shard);
             if (shardRecipe != null) {
-                batch.recipes.add(shardRecipe);
-                indexRecipe(shardRecipe, item, List.of(), batch.indexBuilder);
+                out.add(shardRecipe, List.of());
             }
         }
         return shard;
@@ -116,34 +144,32 @@ public final class RecipeGenerator {
      * Wiki info recipes (skip NPCs — they get a unified NPC info card instead;
      * skip shards — their card above already carries the wiki URLs).
      */
-    private void generateWikiInfoRecipes(NeuItem item, AttributeShardData shard, Batch batch) {
+    private void generateWikiInfoRecipes(NeuItem item, AttributeShardData shard, ItemRecipes out) {
         String internalName = item.internalName();
         boolean isNpc = internalName != null && internalName.endsWith("_NPC");
         if (!isNpc && shard == null && item.infoType() != null && !item.infoType().isEmpty()
                 && item.info() != null && !item.info().isEmpty()) {
             List<ReliableClientRecipe> wikiRecipes = WikiInfoRecipeBuilder.build(item);
             for (ReliableClientRecipe recipe : wikiRecipes) {
-                batch.recipes.add(recipe);
-                indexRecipe(recipe, item, List.of(), batch.indexBuilder);
+                out.add(recipe, List.of());
             }
         }
     }
 
-    private void generateNpcInfoRecipe(NeuItem item, Batch batch) {
+    private void generateNpcInfoRecipe(NeuItem item, ItemRecipes out) {
         ReliableClientRecipe npcInfoRecipe = NpcInfoRecipeBuilder.build(item);
         if (npcInfoRecipe != null) {
-            batch.recipes.add(npcInfoRecipe);
-            indexRecipe(npcInfoRecipe, item, List.of(), batch.indexBuilder);
+            out.add(npcInfoRecipe, List.of());
         }
     }
 
     /** All recipe types carried in the item's "recipes" list. */
-    private void generateTypedRecipes(NeuItem item, Batch batch) {
+    private void generateTypedRecipes(NeuItem item, ItemRecipes out) {
         if (item.recipes() == null) {
             return;
         }
         for (NeuRecipe recipeData : item.recipes()) {
-            batch.parseAttempts++;
+            out.parseAttempts++;
             ReliableClientRecipe recipe = switch (recipeData) {
                 case NeuRecipe.CraftingRecipe crafting ->
                         CraftingRecipeParser.parse(item, crafting, itemRegistry);
@@ -155,10 +181,9 @@ public final class RecipeGenerator {
             };
 
             if (recipe != null) {
-                batch.recipes.add(recipe);
-                indexRecipe(recipe, item, extractIngredients(recipeData), batch.indexBuilder);
+                out.add(recipe, extractIngredients(recipeData));
             } else {
-                batch.parseFailures++;
+                out.parseFailures++;
             }
         }
     }
@@ -291,6 +316,28 @@ public final class RecipeGenerator {
             case NeuRecipe.DropsRecipe d -> d.drops().stream().map(NeuRecipe.DropsRecipe.Drop::id).toList();
             case NeuRecipe.TradeRecipe t -> t.cost().isEmpty() ? List.of() : List.of(t.cost());
         };
+    }
+
+    /**
+     * One item's contribution, collected off-thread. Parallel arrays rather than a map so
+     * the serial merge can replay recipes and their ingredient strings in generation order.
+     * Confined to a single worker thread until {@link #merge} folds it in.
+     */
+    private static final class ItemRecipes {
+        final NeuItem item;
+        final List<ReliableClientRecipe> recipes = new ArrayList<>(2);
+        final List<java.util.Collection<String>> ingredients = new ArrayList<>(2);
+        int parseAttempts;
+        int parseFailures;
+
+        ItemRecipes(NeuItem item) {
+            this.item = item;
+        }
+
+        void add(ReliableClientRecipe recipe, java.util.Collection<String> ingredientStrings) {
+            recipes.add(recipe);
+            ingredients.add(ingredientStrings);
+        }
     }
 
     /** Mutable accumulator threaded through one generation pass. */

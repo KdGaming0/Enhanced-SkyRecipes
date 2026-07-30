@@ -1025,25 +1025,48 @@ public final class SkyblockSearchIndex {
         boolean desc = stat.op() == SearchQuery.StatClause.Operator.GT
                 || stat.op() == SearchQuery.StatClause.Operator.GTE;
 
-        Integer[] boxed = new Integer[card];
+        // int[] with a hand-rolled stable merge sort rather than Integer[] + Comparator:
+        // a broad stat query can match thousands of items, and the boxed form allocates an
+        // Integer per candidate plus unboxes twice per comparison. Merge sort matches the
+        // stability of the TimSort this replaces, so equal-key order is unchanged.
+        int[] order = new int[card];
         int idx = 0;
         for (int i = bits.nextSetBit(0); i >= 0; i = bits.nextSetBit(i + 1)) {
-            boxed[idx++] = i;
+            order[idx++] = i;
         }
 
-        Arrays.sort(boxed, (a, b) -> {
-            int va = values != null ? values[a] : Integer.MIN_VALUE;
-            int vb = values != null ? values[b] : Integer.MIN_VALUE;
-            int cmp = desc ? Integer.compare(vb, va) : Integer.compare(va, vb);
-            if (cmp != 0) return cmp;
-            cmp = Boolean.compare(hasCraftingRecipe[b], hasCraftingRecipe[a]);
-            if (cmp != 0) return cmp;
-            return displayNames[a].compareToIgnoreCase(displayNames[b]);
-        });
+        sortByStat(order, new int[card], 0, card, values, desc);
 
-        for (int i : boxed) {
+        for (int i : order) {
             out.add(items.get(i));
         }
+    }
+
+    private void sortByStat(int[] a, int[] tmp, int lo, int hi, int[] values, boolean desc) {
+        if (hi - lo < 2) return;
+        int mid = (lo + hi) >>> 1;
+        sortByStat(a, tmp, lo, mid, values, desc);
+        sortByStat(a, tmp, mid, hi, values, desc);
+        int i = lo;
+        int j = mid;
+        int k = lo;
+        while (i < mid && j < hi) {
+            // <= keeps the left run first on ties, which is what makes this stable.
+            tmp[k++] = compareByStat(a[i], a[j], values, desc) <= 0 ? a[i++] : a[j++];
+        }
+        while (i < mid) tmp[k++] = a[i++];
+        while (j < hi) tmp[k++] = a[j++];
+        System.arraycopy(tmp, lo, a, lo, hi - lo);
+    }
+
+    private int compareByStat(int a, int b, int[] values, boolean desc) {
+        int va = values != null ? values[a] : Integer.MIN_VALUE;
+        int vb = values != null ? values[b] : Integer.MIN_VALUE;
+        int cmp = desc ? Integer.compare(vb, va) : Integer.compare(va, vb);
+        if (cmp != 0) return cmp;
+        cmp = Boolean.compare(hasCraftingRecipe[b], hasCraftingRecipe[a]);
+        if (cmp != 0) return cmp;
+        return displayNames[a].compareToIgnoreCase(displayNames[b]);
     }
 
     /**
