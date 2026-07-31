@@ -44,15 +44,13 @@ public final class SkyblockIdExtractor {
      */
     public static final String INTERNAL_NAME_KEY = "skyrecipes:internal_name";
 
-    // CustomData is immutable, so the extracted id can be memoized per component
-    // instance. Guava's weakKeys() compares keys by identity — O(1) hashing with no
-    // deep NBT comparisons — and lets components from replaced stacks be collected,
-    // replacing the old clear-at-cap eviction (which forced a re-extraction burst
-    // across every slot). The map is concurrent because extraction runs on the
-    // render thread, the pipeline workers, and parallel rebuild streams alike.
+    // CustomData is immutable, so the extracted id is memoized per component instance —
+    // in a field on the component itself, added by CustomDataIdCacheMixin. That replaced a
+    // Guava weakKeys() map which was already identity-keyed but charged a hash, a segment
+    // selection and a weak-ref dereference on every hit; extract() runs per inventory slot
+    // per frame. The field's lifetime is exactly the component's, so nothing has to be
+    // evicted. Sentinel for "checked, no id" so one field covers all three states.
     private static final String NO_ID = "";
-    private static final java.util.concurrent.ConcurrentMap<CustomData, String> ID_CACHE =
-            new com.google.common.collect.MapMaker().weakKeys().makeMap();
 
     private SkyblockIdExtractor() {
     }
@@ -151,13 +149,14 @@ public final class SkyblockIdExtractor {
             return null;
         }
 
-        String cached = ID_CACHE.get(data);
+        SkyblockIdHolder holder = (SkyblockIdHolder) (Object) data;
+        String cached = holder.skyrecipes$getCachedId();
         if (cached != null) {
             return cached.isEmpty() ? null : cached;
         }
 
         String id = extractUncached(data);
-        ID_CACHE.put(data, id != null ? id : NO_ID);
+        holder.skyrecipes$setCachedId(id != null ? id : NO_ID);
         return id;
     }
 

@@ -1,13 +1,16 @@
-# 0.4.5
+# 0.5.0
 
-## Improvements
-- The item list is noticeably smoother. Scrolling and hovering items no longer cost a chunk of every frame, and grouped items in particular were doing far more work per frame than they needed to.
+## Performance
+- Better frame rate whenever a container is open with the item list showing.
+- Searching for items in your inventory is more efficient.
+- Scrolling and hovering the item list no longer costs a chunk of every frame, and grouped items (pets, minions, armor sets, sacks) no longer redo the same lookups every frame.
 - Typing in the search bar responds faster, especially with stack groups enabled and on searches that match a lot of items.
-- SkyRecipes finishes loading quicker on startup and after a data refresh.
+- No more stutter when the item list is open while SkyRecipes is still loading or refreshing its data.
+- SkyRecipes finishes loading quicker, and now spreads its loading work by time instead of a fixed amount per tick, so it never overruns a tick — no loading stutter on slower machines.
 - Lower memory use and less garbage collection.
 
 ## Fixes
-- Beginner sacks and large Enchanted sacks now group together with the Small, Medium, and Large sacks instead of being displayed separately.
+- Beginner sacks and Large Enchanted sacks now group together with the Small, Medium, and Large sacks instead of being displayed separately.
 - Bronze and Silver Trophy Fishing and Trophy Frog sacks now group together too.
 
 # 0.4.4

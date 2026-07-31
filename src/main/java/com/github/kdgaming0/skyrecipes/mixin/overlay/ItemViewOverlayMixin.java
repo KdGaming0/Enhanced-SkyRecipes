@@ -9,6 +9,7 @@ import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
+import com.github.kdgaming0.skyrecipes.rrv.overlay.DimQuadEmitter;
 import com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.ShardGuiResolver;
 import net.minecraft.client.Minecraft;
@@ -197,10 +198,52 @@ public class ItemViewOverlayMixin {
     }
 
     @Unique
-    private static void dimSlot(GuiGraphicsExtractor guiGraphics, Slot slot) {
-        guiGraphics.fill(slot.x, slot.y,
-                slot.x + SLOT_SIZE, slot.y + SLOT_SIZE,
-                DIM_OVERLAY_COLOR);
+    private static DimQuadEmitter skyrecipes$dimEmitter() {
+        return new DimQuadEmitter(SLOT_SIZE, DIM_OVERLAY_COLOR);
+    }
+
+    /**
+     * Blank-query highlighting: dims the empty slots and nothing else.
+     *
+     * <p>Falling through to RRV here instead of cancelling is what this replaces, and it was
+     * expensive for nothing. RRV's {@code renderItemHighlighting} dims a slot when
+     * {@code !slot.hasItem() || availableItems.stream().noneMatch(sameBaseItem) &&
+     * getTooltipMatch(stack, query) == 0} — so for every slot whose base {@code Item} is not
+     * among the ~200 that SkyBlock's ~8,500 stacks are built on, it scans the entire
+     * available list <em>and then builds the item's full tooltip</em>, per slot per frame.
+     * Spark measured that at ~4% of render-thread time.</p>
+     *
+     * <p>With an empty query it buys nothing: {@code getTooltipMatch} tests
+     * {@code key.startsWith(query)}, which is trivially true for {@code ""}, so it returns 1
+     * for any item carrying a translatable tooltip line and the dim condition collapses to
+     * {@code !slot.hasItem()}.</p>
+     *
+     * <p><b>Deliberate deviation:</b> an item with <em>no</em> translatable tooltip line at all
+     * (a server-sent stack with a literal name and literal lore, whose base item is also absent
+     * from the SkyBlock list) would take {@code getTooltipMatch == 0} and be dimmed by RRV even
+     * with an empty search box. That is spurious — an empty query means "no filter", so nothing
+     * filled should read as excluded — and it is what the non-blank path already does once every
+     * item matches. Dimming empty slots is kept because both RRV and the main path below do it.</p>
+     */
+    @Unique
+    private static void skyrecipes$dimEmptySlotsOnly(AbstractContainerScreen<?> screen,
+                                                     GuiGraphicsExtractor guiGraphics) {
+        int left = OverlayManager.INSTANCE.currentInfo().leftPos() - 1;
+        int top = OverlayManager.INSTANCE.currentInfo().topPos() - 1;
+
+        DimQuadEmitter emitter = skyrecipes$dimEmitter();
+        guiGraphics.pose().pushMatrix();
+        guiGraphics.pose().translate(left, top);
+        for (Slot slot : screen.getMenu().slots) {
+            if (!slot.isActive() || !slot.isHighlightable()) {
+                continue;
+            }
+            if (slot.getItem().isEmpty()) {
+                emitter.add(guiGraphics, slot.x, slot.y);
+            }
+        }
+        emitter.flush(guiGraphics);
+        guiGraphics.pose().popMatrix();
     }
 
     /**
@@ -272,8 +315,9 @@ public class ItemViewOverlayMixin {
         }
 
         String query = self.getCurrentQuery();
-        boolean hasFilter = query != null && !query.isBlank();
-        if (!hasFilter) {
+        if (query == null || query.isBlank()) {
+            skyrecipes$dimEmptySlotsOnly(screen, guiGraphics);
+            ci.cancel();
             return;
         }
 
@@ -311,6 +355,7 @@ public class ItemViewOverlayMixin {
         int left = OverlayManager.INSTANCE.currentInfo().leftPos() - 1;
         int top = OverlayManager.INSTANCE.currentInfo().topPos() - 1;
 
+        DimQuadEmitter emitter = skyrecipes$dimEmitter();
         guiGraphics.pose().pushMatrix();
         guiGraphics.pose().translate(left, top);
 
@@ -320,7 +365,7 @@ public class ItemViewOverlayMixin {
             }
 
             if (slot.getItem().isEmpty()) {
-                dimSlot(guiGraphics, slot);
+                emitter.add(guiGraphics, slot.x, slot.y);
                 continue;
             }
 
@@ -362,10 +407,11 @@ public class ItemViewOverlayMixin {
             }
 
             if (!matched) {
-                dimSlot(guiGraphics, slot);
+                emitter.add(guiGraphics, slot.x, slot.y);
             }
         }
 
+        emitter.flush(guiGraphics);
         guiGraphics.pose().popMatrix();
         ci.cancel();
     }

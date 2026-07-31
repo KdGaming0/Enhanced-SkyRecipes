@@ -93,6 +93,36 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private static final boolean DIRECT_INJECTION_AVAILABLE;
     private static final int RECIPES_PER_TICK = 500;
     private static final int STACKS_PER_TICK = 250;
+
+    /**
+     * Wall-clock ceiling for one {@link StartupBatcher} tick.
+     *
+     * <p>The per-tick counts above are a throughput ceiling, not a cost ceiling: what 500
+     * recipe injections cost depends entirely on the machine, and on a slow one they land as
+     * a visible hitch every tick for the whole injection run. The budget bounds the hitch
+     * instead, and the counts stay as the upper bound so a fast machine finishes just as
+     * quickly as before. 1.5 ms is roughly a third of a 20 TPS tick's 50 ms, well under the
+     * frame budget the tick shares.</p>
+     */
+    private static final long BATCH_BUDGET_NANOS = 1_500_000L;
+
+    /**
+     * Items processed between clock reads. Amortizes {@code System.nanoTime()} (~25 ns) to
+     * noise while keeping overshoot bounded, and guarantees at least one chunk of forward
+     * progress per tick so the batch can never stall.
+     */
+    private static final int BATCH_BUDGET_STRIDE = 64;
+
+    /**
+     * Floor on per-tick progress, as a fraction of the nominal per-tick counts.
+     *
+     * <p>A pure time budget lets a slow machine fall back to one {@link #BATCH_BUDGET_STRIDE}
+     * chunk per tick, stretching injection from a few seconds to tens of seconds — and the
+     * stack-group memo is cold for that whole window, so a longer window is not a neutral
+     * trade. This bounds the stretch to 4x the nominal tick count while still capping the
+     * per-tick hitch for everyone above that floor.</p>
+     */
+    private static final int BATCH_MIN_FRACTION = 4;
     /**
      * Above this fraction of failures, a generation/build stage is treated as systemic and the cycle aborts.
      */
@@ -914,8 +944,11 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 .map(java.util.Map.Entry::getValue)
                 .toList();
 
-        // Stack building is CPU-bound and per-item independent (ItemStackBuilder
-        // holds no mutable shared state), so fan out across the common pool.
+        // Stack building is CPU-bound and per-item independent (ItemStackBuilder holds no
+        // mutable shared state), so fan it out. This method is submitted to
+        // SkyRecipesExecutors.worker(), and a parallel stream started from inside a
+        // ForkJoinPool worker runs in that same pool — so the fan-out stays on our bounded
+        // pool and never competes with Minecraft's work on the common pool during startup.
         // The index-addressed array preserves the sorted order deterministically;
         // nulls (failures) are compacted out afterwards.
         ItemStack[] built = new ItemStack[items.size()];
@@ -1151,23 +1184,30 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
         private boolean tickInternal() {
             boolean useDirectInjection = DIRECT_INJECTION_AVAILABLE && !directInjectionBroken;
+            long deadline = System.nanoTime() + BATCH_BUDGET_NANOS;
 
             // Phase 1: batch-inject recipes via direct MethodHandle
             if (useDirectInjection && recipeIndex < recipes.size()) {
                 ClientRecipeCache cache = ClientRecipeCache.INSTANCE;
                 int end = Math.min(recipeIndex + RECIPES_PER_TICK, recipes.size());
-                for (int i = recipeIndex; i < end; i++) {
-                    ReliableClientRecipe recipe = recipes.get(i);
-                    try {
-                        INJECT_RECIPE.invokeExact(cache, recipe.entryId(), recipe, i, true);
-                    } catch (Throwable t) {
-                        failedRecipes++;
-                        if (failedRecipes <= 5) {
-                            LOGGER.warn("Failed to inject recipe {}: {}", recipe.getId(), t.toString());
+                int minThisTick = Math.max(BATCH_BUDGET_STRIDE, RECIPES_PER_TICK / BATCH_MIN_FRACTION);
+                int i = recipeIndex;
+                while (i < end) {
+                    int chunkEnd = Math.min(i + BATCH_BUDGET_STRIDE, end);
+                    for (; i < chunkEnd; i++) {
+                        ReliableClientRecipe recipe = recipes.get(i);
+                        try {
+                            INJECT_RECIPE.invokeExact(cache, recipe.entryId(), recipe, i, true);
+                        } catch (Throwable t) {
+                            failedRecipes++;
+                            if (failedRecipes <= 5) {
+                                LOGGER.warn("Failed to inject recipe {}: {}", recipe.getId(), t.toString());
+                            }
                         }
                     }
+                    if (i - recipeIndex >= minThisTick && System.nanoTime() >= deadline) break;
                 }
-                recipeIndex = end;
+                recipeIndex = i;
                 if (failedRecipes > systemicFailureThreshold()) {
                     rollbackToProviderMode();
                     return false;
@@ -1209,12 +1249,18 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
             // Phase 4: stack-sensitive registration
             if (stackIndex < stacks.size()) {
                 int end = Math.min(stackIndex + STACKS_PER_TICK, stacks.size());
-                for (int i = stackIndex; i < end; i++) {
-                    ItemStack stack = stacks.get(i);
-                    ClientRecipeCache.INSTANCE.addStackSensitive(new ItemView.StackSensitive(stack));
-                    ItemView.addStackSensitive(stack);
+                int minThisTick = Math.max(BATCH_BUDGET_STRIDE, STACKS_PER_TICK / BATCH_MIN_FRACTION);
+                int i = stackIndex;
+                while (i < end) {
+                    int chunkEnd = Math.min(i + BATCH_BUDGET_STRIDE, end);
+                    for (; i < chunkEnd; i++) {
+                        ItemStack stack = stacks.get(i);
+                        ClientRecipeCache.INSTANCE.addStackSensitive(new ItemView.StackSensitive(stack));
+                        ItemView.addStackSensitive(stack);
+                    }
+                    if (i - stackIndex >= minThisTick && System.nanoTime() >= deadline) break;
                 }
-                stackIndex = end;
+                stackIndex = i;
                 if (stackIndex >= stacks.size()) {
                     stacksReady = true;
                     LOGGER.info("Stack-sensitive registration batch complete: {} stacks", stacks.size());

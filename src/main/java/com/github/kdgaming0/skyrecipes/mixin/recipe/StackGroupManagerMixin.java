@@ -80,6 +80,15 @@ public class StackGroupManagerMixin {
     private static void skyrecipes$serveCachedGroupItems(AbstractStackGroup group,
                                                          CallbackInfoReturnable<List<ItemStack>> cir) {
         List<ItemStack> cached = StackGroupItemsCache.get(group);
+        // A family group missing from the memo means the cycle invalidated it without a
+        // prewarm (the batched-injection window does exactly that). Falling through would
+        // cost RRV's whole-registry sweep for this group, this frame, and again for every
+        // other group slot on screen. Family membership needs only the stack sensitives, so
+        // one pass answers all ~900 of them and the miss cannot recur this generation.
+        if (cached == null && group instanceof SkyblockFamilyStackGroup
+                && StackGroupItemsCache.fillFamilyGroups()) {
+            cached = StackGroupItemsCache.get(group);
+        }
         if (cached != null) {
             // Served without copying: ItemSlot re-resolves a group's contents per group slot
             // per frame, so a defensive copy here is a full member-list copy every frame.
@@ -98,6 +107,10 @@ public class StackGroupManagerMixin {
     )
     private static void skyrecipes$storeGroupItems(AbstractStackGroup group,
                                                    CallbackInfoReturnable<List<ItemStack>> cir) {
+        // Unreachable when the HEAD inject served a hit, so arriving here always means RRV's
+        // registry sweep just ran. Counted so the next prewarm can report how often the memo
+        // was bypassed — the diagnostic for a cold-window regression.
+        StackGroupItemsCache.recordLazySweep();
         StackGroupItemsCache.put(group, cir.getReturnValue());
     }
 

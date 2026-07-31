@@ -65,12 +65,103 @@ public final class StackGroupItemsCache {
         }
     }
 
+    /**
+     * Monotonic stamp bumped by every {@link #invalidate()}.
+     *
+     * <p>Exposed so per-instance memos further down the render path — currently
+     * {@code ItemSlotGroupCacheMixin}, which caches a slot's resolved group and member list
+     * for the slot's lifetime — can be invalidated by the same eight call sites that drop
+     * this cache, instead of each having to hook them separately. A consumer that stores the
+     * stamp alongside its value and re-resolves on mismatch can only ever miss, never serve
+     * a stale answer.</p>
+     */
+    public static int generation() {
+        return generation;
+    }
+
     public static void invalidate() {
         generation++;
         groupItems.clear();
         // Group contents feed applyGrouping's representative stacks, so its memo is stale too.
         // Covers the RRV-rebuild invalidation site, which does not go through reload().
         GroupingResultCache.invalidate();
+    }
+
+    /** Counts memo misses that fell through to RRV's registry sweep; reported at each prewarm. */
+    private static int lazySweeps = 0;
+
+    /**
+     * Records that a group's contents were computed by RRV's own {@code getGroupItems} — a
+     * full {@code BuiltInRegistries.ITEM} walk constructing an {@code ItemStack} per item.
+     * Every one of these is a group the prewarm should have covered, so the count is the
+     * diagnostic for whether the memo is being served or bypassed.
+     */
+    public static void recordLazySweep() {
+        lazySweeps++;
+    }
+
+    /**
+     * Seeds every family group's members from the stack-sensitives map in a single pass.
+     *
+     * <p><b>Why this exists:</b> {@link #invalidate()} is called at the start of a batched
+     * injection cycle without a matching {@link #prewarm()} (the prewarm only runs once the
+     * cycle finishes), so the memo is cold for the whole injection window. Any group
+     * representative rendered in that window missed the memo and fell through to RRV's
+     * {@code getGroupItems}, which walks the entire item registry allocating an
+     * {@code ItemStack} per item — ~8,000 allocations, each firing every installed mod's
+     * ItemStack-init mixin, per group, per frame until the RETURN inject memoized it. Spark
+     * measured this at ~1.07% of render-thread time under {@code ItemSlot.extractRenderState}.</p>
+     *
+     * <p>The registry walk is only there to feed <em>foreign</em> group matching — family
+     * membership is decided purely by each stack-sensitive's SkyBlock id (see
+     * {@code computeAllGroups}). So a family group never needs the registry at all: one pass
+     * over the ~200 populated sensitive entries answers all ~900 of them at once.</p>
+     *
+     * <p>An entry is stored for every active family group, including those that end up empty,
+     * so a miss can never recur for the rest of the generation. Contents are ordered with the
+     * same {@code sortByGroupOrder} the prewarm publish uses, so a lazily filled group is
+     * indistinguishable from a prewarmed one. Render thread only — it reads the sensitives map
+     * that the render thread mutates.</p>
+     *
+     * @return true when at least one family group was seeded
+     */
+    public static boolean fillFamilyGroups() {
+        List<SkyblockFamilyStackGroup> families = SkyblockStackGroups.activeGroups();
+        if (families.isEmpty()) {
+            return false;
+        }
+
+        Map<AbstractStackGroup, List<ItemStack>> members = new IdentityHashMap<>();
+        for (SkyblockFamilyStackGroup family : families) {
+            members.put(family, new ArrayList<>());
+        }
+
+        var backing = ((ClientRecipeCacheAccessor) ClientRecipeCache.INSTANCE)
+                .skyrecipes$getStackSensitives();
+        for (List<ItemView.StackSensitive> list : backing.values()) {
+            for (ItemView.StackSensitive sensitive : list) {
+                ItemStack stack = sensitive.stack();
+                String skyblockId = SkyblockIdExtractor.extract(stack);
+                if (skyblockId == null) {
+                    continue;
+                }
+                SkyblockFamilyStackGroup family = SkyblockStackGroups.groupFor(skyblockId);
+                if (family == null) {
+                    continue;
+                }
+                List<ItemStack> bucket = members.get(family);
+                if (bucket != null) {
+                    bucket.add(stack);
+                }
+            }
+        }
+
+        for (Map.Entry<AbstractStackGroup, List<ItemStack>> entry : members.entrySet()) {
+            StackGroupManagerAccessor.skyrecipes$sortByGroupOrder(entry.getValue(), entry.getKey().getId());
+            put(entry.getKey(), entry.getValue());
+        }
+        LOGGER.debug("Lazily filled {} family stack groups", members.size());
+        return true;
     }
 
     /**
@@ -109,7 +200,9 @@ public final class StackGroupItemsCache {
                 Map<AbstractStackGroup, List<ItemStack>> computed = computeAllGroups(groups, sensitives);
                 Minecraft.getInstance().execute(() -> publish(gen, computed));
             } catch (Exception e) {
-                LOGGER.debug("Stack group prewarm failed; groups will compute lazily", e);
+                // WARN, not DEBUG: a swallowed failure here is invisible and costs a full
+                // item-registry sweep per group per frame until something re-warms the memo.
+                LOGGER.warn("Stack group prewarm failed; groups will compute lazily", e);
             }
         });
     }
@@ -170,12 +263,26 @@ public final class StackGroupItemsCache {
 
     /** Render thread: sort with RRV's own ordering (touches its lazy registry-order cache) and store. */
     private static void publish(int gen, Map<AbstractStackGroup, List<ItemStack>> computed) {
-        if (generation != gen) return;
+        if (generation != gen) {
+            // The cycle this was computed for is gone. Whoever bumped the generation is
+            // responsible for the next prewarm; say so rather than vanishing silently,
+            // because the memo is cold until they do.
+            LOGGER.debug("Discarded prewarm of {} groups: generation moved {} -> {}",
+                    computed.size(), gen, generation);
+            return;
+        }
         for (Map.Entry<AbstractStackGroup, List<ItemStack>> entry : computed.entrySet()) {
             StackGroupManagerAccessor.skyrecipes$sortByGroupOrder(entry.getValue(), entry.getKey().getId());
             put(entry.getKey(), entry.getValue());
         }
-        LOGGER.debug("Prewarmed {} stack groups", computed.size());
+        if (lazySweeps > 0) {
+            // Each of these was a full item-registry walk that the memo should have absorbed.
+            LOGGER.info("Prewarmed {} stack groups ({} groups had fallen through to RRV's"
+                    + " registry sweep first)", computed.size(), lazySweeps);
+            lazySweeps = 0;
+        } else {
+            LOGGER.debug("Prewarmed {} stack groups", computed.size());
+        }
     }
 
     /**

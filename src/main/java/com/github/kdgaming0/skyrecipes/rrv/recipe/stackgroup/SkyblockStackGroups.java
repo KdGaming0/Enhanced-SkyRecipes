@@ -86,6 +86,18 @@ public final class SkyblockStackGroups {
     }
 
     /**
+     * Every family group currently injected into RRV, or an empty list.
+     *
+     * <p>Used by {@code StackGroupItemsCache}'s lazy family fill so it can seed an entry for
+     * <em>every</em> family group in one pass — including the ones that end up with no
+     * members — which is what stops a memo miss from recurring frame after frame.</p>
+     */
+    public static List<SkyblockFamilyStackGroup> activeGroups() {
+        Snapshot snap = active;
+        return snap != null ? snap.groups() : List.of();
+    }
+
+    /**
      * Tier-sorts a family group's member stacks; false for foreign groups. Always claims
      * family groups: falling through would run RRV's own sort, whose config lookup NPEs
      * (see {@link #pending}) and whose saved order is a list of vanilla item ids — unable
