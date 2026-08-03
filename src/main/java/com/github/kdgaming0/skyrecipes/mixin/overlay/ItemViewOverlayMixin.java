@@ -15,6 +15,7 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.ShardGuiResolver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
@@ -304,13 +305,18 @@ public class ItemViewOverlayMixin {
             remap = false
     )
     private void skyrecipes$renderItemHighlighting(
-            AbstractContainerScreen<?> screen,
+            Screen rawScreen,
             GuiGraphicsExtractor guiGraphics,
             int mouseX, int mouseY, float partialTicks,
             CallbackInfo ci) {
 
         ItemViewOverlay self = (ItemViewOverlay) (Object) this;
         if (!self.isItemFilterMode()) {
+            return;
+        }
+
+        // Nothing to dim without menu slots; RRV's own body no-ops here too.
+        if (!(rawScreen instanceof AbstractContainerScreen<?> screen)) {
             return;
         }
 

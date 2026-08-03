@@ -2,8 +2,12 @@ package com.github.kdgaming0.skyrecipes.mixin;
 
 import net.fabricmc.loader.api.FabricLoader;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+import org.spongepowered.asm.service.MixinService;
 
 import java.util.List;
 import java.util.Map;
@@ -17,6 +21,33 @@ import java.util.Set;
  * a {@link ClassNotFoundException} during Mixin transformation.</p>
  */
 public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("skyrecipes/mixin-plugin");
+
+    /**
+     * RRV methods a mixin's handler declares the argument list of, keyed by mixin. Mixin validates
+     * handler descriptors exactly, so a mismatch here would throw during APPLY and crash inside
+     * RRV's entrypoint.
+     */
+    private static final Map<String, List<String>> REQUIRED_TARGET_DESCRIPTORS = Map.of(
+            "com.github.kdgaming0.skyrecipes.mixin.overlay.ItemViewOverlayMixin",
+            List.of(
+                    "renderItemHighlighting(Lnet/minecraft/client/gui/screens/Screen;"
+                            + "Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+                    "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+                    "updateQuery(Ljava/lang/String;)V"
+            ),
+            "com.github.kdgaming0.skyrecipes.mixin.rrv.ItemViewOverlayWidthMixin",
+            List.of(
+                    "initForScreen(Lnet/minecraft/client/gui/screens/Screen;"
+                            + "Lcc/cassian/rrv/common/overlay/AbstractRrvOverlay$InventoryPositionInfo;)V"
+            ),
+            "com.github.kdgaming0.skyrecipes.mixin.rrv.SidePanelOverlayWidthMixin",
+            List.of(
+                    "initForScreen(Lnet/minecraft/client/gui/screens/Screen;"
+                            + "Lcc/cassian/rrv/common/overlay/AbstractRrvOverlay$InventoryPositionInfo;)V"
+            )
+    );
 
     /**
      * Optional-mod classes that a mixin references in its own body, keyed by mixin.
@@ -51,6 +82,47 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
             return FabricLoader.getInstance().isModLoaded("skyblocker")
                     && targetClassExists(targetClassName)
                     && requiredClassesExist(mixinClassName);
+        }
+        return targetSignaturesMatch(targetClassName, mixinClassName);
+    }
+
+    /**
+     * Confirms the target still declares each required descriptor, reading its bytecode without
+     * class-loading it. An unreadable target is applied unchecked rather than silently dropped.
+     */
+    private static boolean targetSignaturesMatch(String targetClassName, String mixinClassName) {
+        List<String> required = REQUIRED_TARGET_DESCRIPTORS.get(mixinClassName);
+        if (required == null) {
+            return true;
+        }
+
+        ClassNode target;
+        try {
+            target = MixinService.getService().getBytecodeProvider().getClassNode(targetClassName);
+        } catch (Throwable t) {
+            LOGGER.debug("Could not read {} to verify {}; applying it unchecked.",
+                    targetClassName, mixinClassName, t);
+            return true;
+        }
+
+        for (String signature : required) {
+            int paren = signature.indexOf('(');
+            String name = signature.substring(0, paren);
+            String descriptor = signature.substring(paren);
+
+            boolean found = false;
+            for (MethodNode method : target.methods) {
+                if (method.name.equals(name) && method.desc.equals(descriptor)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                LOGGER.warn("Skipping {}: {} no longer declares {}{}. That feature is disabled; "
+                                + "update SkyRecipes if RRV was recently updated.",
+                        mixinClassName, targetClassName, name, descriptor);
+                return false;
+            }
         }
         return true;
     }

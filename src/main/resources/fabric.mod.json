@@ -33,6 +33,6 @@
     "minecraft": "${minecraft}",
     "fabric-api": "*",
     "midnightlib": ">=1.9.3",
-    "rrv": ">=8.6.4"
+    "rrv": ">=8.7.0"
   }
 }

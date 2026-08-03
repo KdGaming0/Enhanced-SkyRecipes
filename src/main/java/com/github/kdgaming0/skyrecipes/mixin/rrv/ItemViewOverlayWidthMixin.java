@@ -6,8 +6,7 @@ import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.OverlayWidthHelper;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.client.gui.screens.Screen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -24,10 +23,7 @@ public class ItemViewOverlayWidthMixin {
             method = "initForScreen",
             at = @At("TAIL"),
             remap = false)
-    private void skyrecipes$applyWidthPercent(
-            AbstractContainerScreen<? extends AbstractContainerMenu> screen,
-            AbstractRrvOverlay.InventoryPositionInfo invInfo,
-            CallbackInfo ci) {
+    private void skyrecipes$applyWidthPercent(Screen screen, AbstractRrvOverlay.InventoryPositionInfo invInfo, CallbackInfo ci) {
         OverlayWidthHelper.applyWidthPercent(
                 (AbstractRrvOverlayAccessor) this,
                 (AbstractRrvItemListOverlayAccessor) this,
