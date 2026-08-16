@@ -1,3 +1,8 @@
+# 0.5.2
+
+## Fixes
+- The craft button now opens enchanted-book recipes correctly.
+
 # 0.5.1
 
 ## Fixes

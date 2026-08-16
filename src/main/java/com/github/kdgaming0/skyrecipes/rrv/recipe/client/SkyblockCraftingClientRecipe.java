@@ -128,9 +128,9 @@ public class SkyblockCraftingClientRecipe extends AbstractSkyblockClientRecipe {
         if (contents.isEmpty()) {
             return null;
         }
-        // /viewrecipe wants the Hypixel base id, not NEU's ;tier-suffixed internal name
-        // (e.g. ULTIMATE_CROP_FEVER;1 -> ULTIMATE_CROP_FEVER, ATTRIBUTE_SHARD_FIG_COLLECTOR;1
-        // -> SPARROW_SHARD). Plain ids pass through.
+        // Ordinary enchantment books use Hypixel's ENCHANTED_BOOK_SCUBA_1 form; ultimate books
+        // use their base id (ULTIMATE_CROP_FEVER;1 -> ULTIMATE_CROP_FEVER), and attribute shards
+        // use their creature id (ATTRIBUTE_SHARD_FIG_COLLECTOR;1 -> SPARROW_SHARD).
         return SkyblockIdExtractor.toViewRecipeId(contents.getFirst());
     }
 }

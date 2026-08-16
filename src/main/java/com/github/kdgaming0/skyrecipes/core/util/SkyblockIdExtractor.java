@@ -9,10 +9,13 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Extracts the NEU internal name of a SkyBlock {@link ItemStack}.
@@ -78,53 +81,128 @@ public final class SkyblockIdExtractor {
     }
 
     /**
-     * Convert a NEU internal name into the id Hypixel's {@code /viewrecipe} command expects.
+     * Convert a SkyBlock stack into the id Hypixel's {@code /viewrecipe} command expects.
      *
-     * <p>NEU disambiguates enchant books, pets, potions, runes and attribute shards with a
-     * {@code ;tier} suffix ({@code ULTIMATE_CROP_FEVER;1}, {@code CHICKEN;0}). That suffix is a
-     * NEU convention only — Hypixel keys {@code /viewrecipe} by the base id and never accepts a
-     * {@code ';'}, so the suffix must be dropped ({@code ULTIMATE_CROP_FEVER}). Plain item names
-     * carry no {@code ';'} and pass through unchanged, so {@code ENCHANTED_COAL} stays as-is.</p>
+     * <p>NEU identifies shared item families with expanded ids, while Hypixel identifies them by
+     * their raw {@code id} field and a family-specific command form. Ordinary enchantment books
+     * use {@code ENCHANTED_BOOK_<NAME>_<LEVEL>} ({@code SCUBA;1} →
+     * {@code ENCHANTED_BOOK_SCUBA_1}); ultimate books use their suffix-free name
+     * ({@code ULTIMATE_CROP_FEVER;1} → {@code ULTIMATE_CROP_FEVER}). Pets, runes and potions use
+     * their suffix-free name, and attribute shards use their creature id from the display name.</p>
      *
-     * <p>Attribute (Hunting) shards are the exception that needs the stack, not just its id: NEU
-     * names them after the <em>bonus</em> they grant ({@code ATTRIBUTE_SHARD_FIG_COLLECTOR}), but
-     * Hypixel keys the recipe by the shard creature's own id ({@code SPARROW_SHARD}), which only
-     * survives in the display name ("Sparrow Shard"). So for those we derive the id from the
-     * display name instead.</p>
+     * <p>Unknown expanded ids deliberately return {@code null}, so callers can withhold a Craft
+     * button instead of sending an ambiguous command.</p>
      *
-     * @return the {@code /viewrecipe} argument, or {@code null} if the stack has no SkyBlock id
+     * <p>The command-ID convention was informed by <a href="https://github.com/hannibal002/SkyHanni"
+     * >SkyHanni</a>'s {@code NeuInternalName.skyblockCommandId} (LGPL-2.1); this conversion is
+     * independently implemented for SkyRecipes.</p>
+     *
+     * @return the {@code /viewrecipe} argument, or {@code null} when the stack cannot be mapped
+     *         safely
      */
+    @Nullable
     public static String toViewRecipeId(ItemStack stack) {
         String internalName = extract(stack);
-        if (internalName == null) {
+        String baseId = rawBaseId(stack);
+        if (internalName == null || baseId == null) {
             return null;
         }
-        if (internalName.startsWith(ATTRIBUTE_SHARD_PREFIX)) {
-            String shardId = shardIdFromDisplayName(stack);
-            if (shardId != null) {
-                return shardId;
-            }
-        }
-        int semi = internalName.indexOf(';');
-        return semi < 0 ? internalName : internalName.substring(0, semi);
+        return switch (baseId) {
+            case "ENCHANTED_BOOK" -> enchantedBookViewRecipeId(internalName);
+            case "PET", "RUNE", "POTION" -> tieredBaseViewRecipeId(internalName);
+            case "ATTRIBUTE_SHARD" -> shardIdFromDisplayName(stack);
+            default -> internalName.contains(";") ? null : internalName;
+        };
     }
 
-    private static final String ATTRIBUTE_SHARD_PREFIX = "ATTRIBUTE_SHARD_";
+    @Nullable
+    private static String enchantedBookViewRecipeId(String internalName) {
+        TieredId tieredId = parseTieredId(internalName);
+        if (tieredId == null) {
+            return null;
+        }
+        if (tieredId.name().startsWith("ULTIMATE_")) {
+            return tieredId.name();
+        }
+        return "ENCHANTED_BOOK_" + tieredId.name() + "_" + tieredId.tier();
+    }
+
+    @Nullable
+    private static String tieredBaseViewRecipeId(String internalName) {
+        TieredId tieredId = parseTieredId(internalName);
+        return tieredId != null ? tieredId.name() : null;
+    }
+
+    @Nullable
+    private static TieredId parseTieredId(String internalName) {
+        int separator = internalName.indexOf(';');
+        if (separator <= 0 || separator != internalName.lastIndexOf(';')
+                || separator == internalName.length() - 1) {
+            return null;
+        }
+        String name = internalName.substring(0, separator);
+        String tier = internalName.substring(separator + 1);
+        if (!COMMAND_ID.matcher(name).matches() || !tier.chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        try {
+            return new TieredId(name, Integer.parseInt(tier));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private record TieredId(String name, int tier) {
+    }
+
+    private static final Pattern COMMAND_ID = Pattern.compile("[A-Z0-9_]+");
+    private static final Pattern SHARD_DISPLAY_NAME = Pattern.compile("([A-Za-z0-9]+(?: [A-Za-z0-9]+)*) Shard");
 
     /**
      * Build a shard's {@code <CREATURE>_SHARD} id from its display name ("Sparrow Shard" →
-     * {@code SPARROW_SHARD}), or {@code null} when the stack has no custom name to read.
+     * {@code SPARROW_SHARD}), or {@code null} when it is not a valid shard item name.
      */
+    @Nullable
     private static String shardIdFromDisplayName(ItemStack stack) {
         var name = stack.get(DataComponents.CUSTOM_NAME);
         if (name == null) {
             return null;
         }
-        String plain = name.getString().trim();
-        if (plain.isEmpty()) {
+        Matcher matcher = SHARD_DISPLAY_NAME.matcher(name.getString().trim());
+        if (!matcher.matches()) {
             return null;
         }
-        return plain.toUpperCase(Locale.ROOT).replace(' ', '_');
+        return matcher.group(1).toUpperCase(Locale.ROOT).replace(' ', '_') + "_SHARD";
+    }
+
+    /**
+     * Read Hypixel's unexpanded SkyBlock base id from either supported custom-data layout.
+     */
+    @Nullable
+    private static String rawBaseId(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return null;
+        }
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (data == null) {
+            return null;
+        }
+        try {
+            return rawBaseId(((CustomDataAccessor) (Object) data).skyrecipes$getTag());
+        } catch (Exception e) {
+            LOGGER.debug("Failed to read SkyBlock base ID from stack", e);
+            return null;
+        }
+    }
+
+    @Nullable
+    private static String rawBaseId(CompoundTag tag) {
+        CompoundTag source = tag.getCompound("ExtraAttributes").orElse(tag);
+        String id = source.getStringOr("id", "");
+        if (id.isEmpty() && source != tag) {
+            id = tag.getStringOr("id", "");
+        }
+        return id.isEmpty() ? null : id;
     }
 
     /**
@@ -175,11 +253,8 @@ public final class SkyblockIdExtractor {
             // Some NEU nbttags nest these fields under ExtraAttributes; our builder and the
             // live Hypixel server both flatten them to the top level. Support both.
             CompoundTag source = tag.getCompound("ExtraAttributes").orElse(tag);
-            String id = source.getStringOr("id", "");
-            if (id.isEmpty() && source != tag) {
-                id = tag.getStringOr("id", "");
-            }
-            if (id.isEmpty()) {
+            String id = rawBaseId(tag);
+            if (id == null) {
                 return null;
             }
             if (!isSharedBaseId(id)) {
