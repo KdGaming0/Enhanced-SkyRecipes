@@ -8,4 +8,16 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface EditBoxAccessor {
     @Accessor("suggestion")
     String skyrecipes$getSuggestion();
+
+    @Accessor("displayPos")
+    int skyrecipes$getDisplayPos();
+
+    @Accessor("highlightPos")
+    int skyrecipes$getHighlightPos();
+
+    @Accessor("textX")
+    int skyrecipes$getTextX();
+
+    @Accessor("textY")
+    int skyrecipes$getTextY();
 }

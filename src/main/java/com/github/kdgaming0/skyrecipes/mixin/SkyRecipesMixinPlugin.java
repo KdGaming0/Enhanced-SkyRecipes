@@ -32,10 +32,12 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
     private static final Map<String, List<String>> REQUIRED_TARGET_DESCRIPTORS = Map.of(
             "com.github.kdgaming0.skyrecipes.mixin.overlay.ItemViewOverlayMixin",
             List.of(
+                    "<init>()V",
                     "renderItemHighlighting(Lnet/minecraft/client/gui/screens/Screen;"
                             + "Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
                     "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
-                    "updateQuery(Ljava/lang/String;)V"
+                    "updateQuery(Ljava/lang/String;)V",
+                    "onScreenChanged(Lcc/cassian/rrv/common/overlay/AbstractRrvOverlay$InventoryPositionInfo;)V"
             ),
             "com.github.kdgaming0.skyrecipes.mixin.rrv.ItemViewOverlayWidthMixin",
             List.of(

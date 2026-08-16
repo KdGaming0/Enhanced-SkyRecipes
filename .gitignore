@@ -37,6 +37,7 @@ replay_*.log
 
 # AI
 .claude
+.codex
 graphify-out
 .graphifyignore
 

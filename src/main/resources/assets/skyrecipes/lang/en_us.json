@@ -2,7 +2,26 @@
   "skyrecipes.midnightconfig.title": "SkyRecipes Settings",
 
   "skyrecipes.midnightconfig.calculatorEnabled": "Enable Calculator",
-  "skyrecipes.midnightconfig.calculatorEnabled.tooltip": "Allows simple math expressions in the search bar.",
+  "skyrecipes.midnightconfig.calculatorEnabled.tooltip": "Evaluate math in the RRV search bar. Smart mode recognizes obvious calculations without requiring an = prefix.",
+  "skyrecipes.midnightconfig.calculatorInputMode": "Calculator Input Mode",
+  "skyrecipes.midnightconfig.calculatorInputMode.tooltip": "Smart recognizes obvious calculations automatically. Choose Explicit Only if you want every calculation to begin with =.",
+  "skyrecipes.midnightconfig.calculatorDisplayMode": "Calculator Display Mode",
+  "skyrecipes.midnightconfig.calculatorDisplayMode.tooltip": "Inside Search Bar keeps feedback compact. Expanded Panel shows results, errors, and help above the search bar.",
+  "skyrecipes.midnightconfig.calculatorPrecision": "Maximum Decimal Places",
+  "skyrecipes.midnightconfig.calculatorPrecision.tooltip": "Maximum decimal places shown in calculator results. This does not change calculation accuracy.",
+  "skyrecipes.midnightconfig.calculatorResultFormat": "Calculator Result Format",
+  "skyrecipes.midnightconfig.calculatorResultFormat.tooltip": "Automatic shows the clearest result that fits. Full Number uses digits and separators. Compact uses familiar k, m, b, and t suffixes.",
+  "skyrecipes.midnightconfig.calculatorHistorySize": "Calculator History Size",
+  "skyrecipes.midnightconfig.calculatorHistorySize.tooltip": "Number of calculations kept for Up/Down history during this game session.",
+  "skyrecipes.midnightconfig.calculatorContextSuggestions": "Calculator Suggestions",
+  "skyrecipes.midnightconfig.calculatorContextSuggestions.tooltip": "Show useful function and ans completions in gray. Press Tab or Right Arrow to accept one.",
+  "skyrecipes.midnightconfig.enum.CalculatorInputMode.SMART": "Smart (Recommended)",
+  "skyrecipes.midnightconfig.enum.CalculatorInputMode.EXPLICIT_ONLY": "Explicit Only",
+  "skyrecipes.midnightconfig.enum.CalculatorDisplayMode.INLINE": "Inside Search Bar",
+  "skyrecipes.midnightconfig.enum.CalculatorDisplayMode.PANEL": "Expanded Panel",
+  "skyrecipes.midnightconfig.enum.CalculatorResultFormat.ADAPTIVE": "Automatic (Recommended)",
+  "skyrecipes.midnightconfig.enum.CalculatorResultFormat.FULL": "Full Number (1,234,567)",
+  "skyrecipes.midnightconfig.enum.CalculatorResultFormat.COMPACT": "Compact (1.23m)",
 
   "skyrecipes.midnightconfig.familyExpansionEnabled": "Family Expansion",
   "skyrecipes.midnightconfig.familyExpansionEnabled.tooltip": "Group related tiered items (pets, minions, stars, accessory upgrades) into families.",
@@ -40,15 +59,25 @@
   "skyrecipes.midnightconfig.rrvSidePanelWidthPercent": "Side Panel Width",
   "skyrecipes.midnightconfig.rrvSidePanelWidthPercent.tooltip": "Shrinks the RRV side-panel overlay width as a percentage.",
 
-  "skyrecipes.midnightconfig.calculatorPrecision": "Calculator Precision",
-  "skyrecipes.midnightconfig.calculatorPrecision.tooltip": "Number of decimal places shown for search-bar calculator results.",
-
   "skyrecipes.midnightconfig.dataRefreshIntervalMinutes": "Data Refresh Interval",
   "skyrecipes.midnightconfig.dataRefreshIntervalMinutes.tooltip": "How often to check for updated NEU repository data (in minutes).",
 
+  "skyrecipes.midnightconfig.category.calculator": "Calculator",
   "skyrecipes.midnightconfig.category.ui": "UI",
   "skyrecipes.midnightconfig.category.rrv": "RRV",
   "skyrecipes.midnightconfig.category.data": "Data",
+
+  "skyrecipes.calculator.result": "Result: %s",
+  "skyrecipes.calculator.incomplete": "Incomplete: %s",
+  "skyrecipes.calculator.error": "Error: %s",
+  "skyrecipes.calculator.hint.success": "Enter copy · Tab use · Esc return",
+  "skyrecipes.calculator.hint.completion": "Tab or → complete",
+  "skyrecipes.calculator.copied": "Copied calculator result: %s",
+  "skyrecipes.calculator.inline.copied": " ✓ Copied",
+  "skyrecipes.calculator.help.operators": "+  -  *  /  x  ^  **  and parentheses",
+  "skyrecipes.calculator.help.suffixes": "Suffixes: k m b t · s=64 · e=160 · %=÷100",
+  "skyrecipes.calculator.help.functions": "Functions: abs min max round floor ceil sqrt · ans",
+  "skyrecipes.calculator.help.scientific": "1.5e6 is scientific notation; 1.5e is ×160",
 
   "skyrecipes.midnightconfig.open_from_rrv": "SkyRecipes Settings..."
 }

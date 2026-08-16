@@ -1,7 +1,16 @@
 package com.github.kdgaming0.skyrecipes.mixin.overlay;
 
+import cc.cassian.rrv.common.overlay.AbstractRrvOverlay;
 import cc.cassian.rrv.common.overlay.OverlayManager;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
+import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
+import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.client.gui.CalculatorPanelRenderer;
+import com.github.kdgaming0.skyrecipes.client.gui.CalculatorSession;
+import com.github.kdgaming0.skyrecipes.client.gui.CalculatorSessionOwner;
+import com.github.kdgaming0.skyrecipes.client.gui.SearchBarCalculator;
+import com.github.kdgaming0.skyrecipes.client.gui.SearchSuggestionController;
+import com.github.kdgaming0.skyrecipes.client.gui.SearchSuggestionState;
 import com.github.kdgaming0.skyrecipes.core.search.SearchQuery;
 import com.github.kdgaming0.skyrecipes.core.search.SearchQueryParser;
 import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
@@ -9,6 +18,7 @@ import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.AbstractRrvItemListOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.CustomDataAccessor;
+import com.github.kdgaming0.skyrecipes.mixin.accessor.ItemViewOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.overlay.DimQuadEmitter;
 import com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.ShardGuiResolver;
@@ -28,6 +38,7 @@ import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -52,7 +63,28 @@ import java.util.WeakHashMap;
  * when the enchant name is searched.</p>
  */
 @Mixin(value = ItemViewOverlay.class, remap = false)
-public class ItemViewOverlayMixin {
+public class ItemViewOverlayMixin implements CalculatorSessionOwner {
+
+    @Shadow
+    private SearchBar searchbar;
+
+    @Unique
+    private CalculatorSession skyrecipes$calculatorSession;
+    @Unique
+    private boolean skyrecipes$restoringCalculatorQuery;
+
+    @Inject(method = "<init>", at = @At("RETURN"), remap = false)
+    private void skyrecipes$initializeCalculatorSession(CallbackInfo ci) {
+        skyrecipes$calculatorSession = new CalculatorSession();
+    }
+
+    @Unique
+    private CalculatorSession skyrecipes$calculatorSession() {
+        if (skyrecipes$calculatorSession == null) {
+            skyrecipes$calculatorSession = new CalculatorSession();
+        }
+        return skyrecipes$calculatorSession;
+    }
 
     @Unique
     private static final int SLOT_SIZE = 18;
@@ -92,6 +124,61 @@ public class ItemViewOverlayMixin {
     // stale entries are never served — the weak keys collect them.
     @Unique
     private static final Map<ItemStack, Boolean> slotMatchCache = new WeakHashMap<>();
+
+    @Override
+    public CalculatorSession skyrecipes$getCalculatorSession() {
+        return skyrecipes$calculatorSession();
+    }
+
+    @Override
+    public void skyrecipes$refreshEffectiveQuery() {
+        ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+        skyrecipes$restoringCalculatorQuery = true;
+        try {
+            ((ItemViewOverlayAccessor) self).skyrecipes$updateQuery(self.getCurrentQuery());
+        } finally {
+            skyrecipes$restoringCalculatorQuery = false;
+        }
+        CalculatorSession session = skyrecipes$calculatorSession();
+        SearchBarCalculator.Calculation calculation = session.calculation();
+        if (session.isActive() && calculation != null) {
+            skyrecipes$applyCalculatorSuggestion(calculation);
+        }
+    }
+
+    @Override
+    public void skyrecipes$reconcileCalculatorConfig() {
+        CalculatorSession session = skyrecipes$calculatorSession();
+        if (!session.needsConfigReconciliation()) {
+            return;
+        }
+        if (!SkyRecipesConfig.calculatorEnabled) {
+            skyrecipes$restoreSearchAfterCalculatorConfigChange();
+            return;
+        }
+
+        SearchBarCalculator.Calculation calculation = session.classifyAndEvaluate(session.input());
+        if (!calculation.isCalculator()) {
+            skyrecipes$restoreSearchAfterCalculatorConfigChange();
+            return;
+        }
+        session.update(session.input(), ((ItemViewOverlay) (Object) this).getCurrentQuery(), calculation);
+        skyrecipes$applyCalculatorSuggestion(calculation);
+    }
+
+    @Unique
+    private void skyrecipes$restoreSearchAfterCalculatorConfigChange() {
+        String restore = skyrecipes$calculatorSession().exitAndRestoreQuery();
+        skyrecipes$clearSuggestionState();
+        if (searchbar != null && !restore.equals(searchbar.getValue())) {
+            searchbar.setValue(restore);
+            return;
+        }
+        ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+        if (!restore.equals(self.getCurrentQuery())) {
+            ((ItemViewOverlayAccessor) self).skyrecipes$updateQuery(restore);
+        }
+    }
 
     @Unique
     private static boolean liveStackMatches(ItemStack stack, SearchQuery parsed) {
@@ -248,20 +335,124 @@ public class ItemViewOverlayMixin {
     }
 
     /**
-     * Defers the first {@code updateQuery} call until SkyRecipes data is ready.
-     *
-     * <p>If the overlay is opened before {@link SkyRecipesClientPlugin}'s batched injection
-     * has finished, {@code getSearchIndex()} returns {@code null}. Running a search at that
-     * moment would operate on an empty {@code fullStackList()} (all vanilla items filtered out
-     * and no stack-sensitives registered yet), producing an empty item list. Cancelling the
-     * query here prevents that flash-of-empty-list. When injection completes,
-     * {@code OverlayManager.updateOverlaysAndWidgets(true)} triggers {@code onScreenChanged}
-     * again and the query re-runs with the index populated.</p>
+     * Keeps calculator input out of RRV's effective item query, then retains the
+     * existing startup deferral for ordinary searches.
      */
     @Inject(method = "updateQuery", at = @At("HEAD"), cancellable = true, remap = false)
-    private void skyrecipes$deferQueryUntilReady(String newQuery, CallbackInfo ci) {
+    private void skyrecipes$handleCalculatorOrDeferredQuery(String newQuery, CallbackInfo ci) {
+        CalculatorSession session = skyrecipes$calculatorSession();
+
+        if (session.isRebuilding() || skyrecipes$restoringCalculatorQuery) {
+            if (SkyRecipesClientPlugin.getSearchIndex() == null) {
+                ci.cancel();
+            }
+            return;
+        }
+
+        if (SkyRecipesConfig.calculatorEnabled) {
+            SearchBarCalculator.Calculation calculation = session.classifyAndEvaluate(newQuery);
+            if (calculation.isCalculator()) {
+                ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+                String currentQuery = self.getCurrentQuery();
+                boolean entering = !session.isActive();
+                session.update(newQuery, currentQuery, calculation);
+
+                if (entering && SkyRecipesClientPlugin.getSearchIndex() != null
+                        && !session.savedSearchQuery().equals(currentQuery)) {
+                    skyrecipes$restoringCalculatorQuery = true;
+                    try {
+                        ((ItemViewOverlayAccessor) self).skyrecipes$updateQuery(session.savedSearchQuery());
+                    } finally {
+                        skyrecipes$restoringCalculatorQuery = false;
+                    }
+                }
+
+                skyrecipes$applyCalculatorSuggestion(calculation);
+                ci.cancel();
+                return;
+            }
+        }
+
+        if (session.isActive()) {
+            session.exitForNormalQuery();
+            skyrecipes$clearSuggestionState();
+        }
+        if (SkyRecipesConfig.calculatorEnabled
+                && SkyRecipesConfig.calculatorInputMode == SkyRecipesConfig.CalculatorInputMode.SMART
+                && SearchBarCalculator.isSmartPrefix(newQuery)) {
+            session.rememberSmartPrefix(((ItemViewOverlay) (Object) this).getCurrentQuery());
+        } else {
+            session.clearSmartPrefix();
+        }
+
         if (SkyRecipesClientPlugin.getSearchIndex() == null) {
             ci.cancel();
+        }
+    }
+
+    @Inject(method = "onScreenChanged", at = @At("HEAD"), remap = false)
+    private void skyrecipes$beginCalculatorRebuild(AbstractRrvOverlay.InventoryPositionInfo info, CallbackInfo ci) {
+        CalculatorSession session = skyrecipes$calculatorSession();
+        if (session.isActive()) {
+            session.setRebuilding(true);
+            session.invalidatePresentation();
+        }
+    }
+
+    @Inject(method = "onScreenChanged", at = @At("TAIL"), remap = false)
+    private void skyrecipes$restoreCalculatorAfterRebuild(AbstractRrvOverlay.InventoryPositionInfo info, CallbackInfo ci) {
+        CalculatorSession session = skyrecipes$calculatorSession();
+        if (!session.isRebuilding()) {
+            return;
+        }
+        session.setRebuilding(false);
+        if (!SkyRecipesConfig.calculatorEnabled) {
+            skyrecipes$restoreSearchAfterCalculatorConfigChange();
+            return;
+        }
+
+        String retainedInput = session.input();
+        SearchBarCalculator.Calculation calculation = session.classifyAndEvaluate(retainedInput);
+        if (!calculation.isCalculator()) {
+            skyrecipes$restoreSearchAfterCalculatorConfigChange();
+            return;
+        }
+        ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+        session.update(retainedInput, self.getCurrentQuery(), calculation);
+        if (SkyRecipesClientPlugin.getSearchIndex() != null
+                && !session.savedSearchQuery().equals(self.getCurrentQuery())) {
+            skyrecipes$restoringCalculatorQuery = true;
+            try {
+                ((ItemViewOverlayAccessor) self).skyrecipes$updateQuery(session.savedSearchQuery());
+            } finally {
+                skyrecipes$restoringCalculatorQuery = false;
+            }
+        }
+        if (searchbar != null && !retainedInput.equals(searchbar.getValue())) {
+            searchbar.setValue(retainedInput);
+        }
+        SearchBarCalculator.Calculation current = session.calculation();
+        if (current != null) {
+            skyrecipes$applyCalculatorSuggestion(current);
+        }
+    }
+
+    @Unique
+    private void skyrecipes$applyCalculatorSuggestion(SearchBarCalculator.Calculation calculation) {
+        if (searchbar == null) {
+            skyrecipes$clearSuggestionState();
+            return;
+        }
+        CalculatorPanelRenderer.syncSuggestion(
+                searchbar, skyrecipes$calculatorSession(), calculation);
+    }
+
+    @Unique
+    private void skyrecipes$clearSuggestionState() {
+        if (searchbar == null) {
+            SearchSuggestionState.clear();
+        } else {
+            SearchSuggestionController.clear(searchbar);
         }
     }
 

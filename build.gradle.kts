@@ -81,7 +81,7 @@ dependencies {
     modCompileOnly("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
     modRuntimeOnly("cc.cassian.rrv:reliable-recipe-viewer-fabric:${property("deps.rrv_version")}")
 
-    modCompileOnly("maven.modrinth:skyblocker-liap:v6.6.0+26.1.2")
+    modCompileOnly("maven.modrinth:skyblocker-liap:v6.9.1+26.1.2")
 
     implementation("org.msgpack:msgpack-core:0.9.12")
     include("org.msgpack:msgpack-core:0.9.12")
@@ -89,6 +89,9 @@ dependencies {
     modRuntimeOnly("maven.modrinth:resourcepackcached:${property("deps.rpc_version")}")
     modRuntimeOnly("me.djtheredstoner:DevAuth-fabric:1.2.2")
     modRuntimeOnly("maven.modrinth:modmenu:${property("deps.modmenu_version")}")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 loom {
@@ -120,6 +123,10 @@ java {
 }
 
 tasks {
+    withType<Test>().configureEach {
+        useJUnitPlatform()
+    }
+
     processResources {
         fun MutableMap<String, String>.register(key: String, property: String) {
             val value: String = sc.properties[property]

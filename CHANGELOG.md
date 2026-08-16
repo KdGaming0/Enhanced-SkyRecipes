@@ -1,5 +1,12 @@
 # 0.5.2
 
+## New
+- The search bar calculator has been rebuilt with Smart expression detection, functions, calculation history, clearer errors, configurable number formatting, and an optional expanded-panel display.
+- Calculator results can be copied with Enter or Ctrl+C, reused with Tab, or sent back to item search with Shift+Enter. Escape restores the item search that was visible before calculating.
+
+## Compatibility
+- Reliable Recipe Viewer's item list no longer overlaps Skyblocker's new Storage Overlay.
+
 ## Fixes
 - The craft button now opens enchanted-book recipes correctly.
 

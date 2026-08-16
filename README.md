@@ -123,28 +123,40 @@ Plain letters and spaces just match themselves, so you can mix them in. Putting 
 Phrases and regex combine with every other filter — e.g. `%WEAPON rarity:legendary "ability damage"`. A half-typed or invalid regex is simply ignored until it's complete, so your results never blank out while you type. Plain keyword searches are completely unaffected.
 
 ### Search Calculator
-Evaluate math directly in the RRV search bar. The result appears as gray ghost text next to your query — no need to press anything.
+The RRV search bar doubles as a live calculator. **Smart mode** recognizes clear expressions automatically, so `10+10` works immediately; prefix an expression with `=` to force calculator mode for incomplete or ambiguous input. While calculating, the previous item search and its results remain in place, and Escape restores that search.
 
-**Basic arithmetic**
+**Examples**
 - `10+10` → **20**
 - `50m / 1.2k` → **41,666.66667**
 - `(1000+500)*2` → **3,000**
+- `sqrt(144)` → **12**
+- `round(10/3, 2)` → **3.33**
+- `2^3^2` → **512** (powers associate from the right)
 
-**SkyBlock unit suffixes** (no spaces needed)
-- `k` → ×1,000 (e.g. `1.5m + 250k` → **1,750,000**)
-- `m` → ×1,000,000
-- `b` → ×1,000,000,000
-- `t` → ×1,000,000,000,000
-- `s` → ×64 (stack, e.g. `27s` → **1,728**)
-- `e` → ×160 (enchanted item, e.g. `10e` → **1,600**)
-- `%` → ÷100, a postfix percentage modifier (e.g. `50 * 10%` → **5**)
+**Operators and functions**
+- Operators: `+` `-` `*` `/` `x` `^` and `**`
+- Functions: `abs`, `min`, `max`, `round`, `floor`, `ceil`, and `sqrt`
+- Parentheses and unary `+`/`-` are supported.
+- `ans` refers to the last result committed with Enter, Tab, Shift+Enter, or Ctrl+C.
 
-**Operators**
-- `+` `-` `*` `/` `^` (power)
-- `x` can be used in place of `*` for multiplication
-- `**` is treated as `^`
+**SkyBlock and numeric suffixes**
+- `k` → ×1,000; `m` → ×1,000,000; `b` → ×1,000,000,000; `t` → ×1,000,000,000,000
+- `s` → ×64 (a stack), e.g. `27s` → **1,728**
+- A trailing `e` → ×160 (an enchanted material group), e.g. `10e` → **1,600**
+- `%` → ÷100, e.g. `50 * 10%` → **5**
+- Scientific notation is supported: `1.5e6` means **1,500,000**, while `1.5e` means **240**.
 
-**Config:** `calculatorPrecision` controls decimal places (0–10, default 5).
+**Controls**
+- **Enter** or **Ctrl+C** copies the exact result.
+- **Tab** accepts a function completion first; otherwise it replaces the expression with its result so you can continue calculating.
+- **Shift+Enter** sends the result back to normal item search.
+- **Up/Down** navigates calculator history; **Escape** restores the previous item query.
+- `=?` or `=help` opens the calculator syntax guide.
+
+**Feedback styles**
+- **Inline** (default) shows compact results, incomplete markers, and errors inside the search bar.
+- **Panel** shows every calculator state in an expanded panel above the search bar.
+- Result formatting can be Automatic (recommended), Full Number, or Compact. Arithmetic uses high internal precision; the decimal-place setting changes display only.
 
 ### Family Expansion
 Tiered items — dungeon stars, pet tiers, minion tiers, accessory upgrades, and enchantment levels — are grouped into families. When family expansion is enabled, pressing `R` on one member can show recipes across the entire family, so you don't have to hunt down each tier separately.
@@ -158,8 +170,13 @@ Open the config through **Mod Menu → SkyRecipes → Config**. SkyRecipes uses 
 
 | Category | Option | Description                                                                                                        |
 |----------|--------|--------------------------------------------------------------------------------------------------------------------|
-| **UI** | `calculatorEnabled` | Enables math expressions in the RRV search bar                                                                     |
-| **UI** | `calculatorPrecision` | Decimal places for search-bar calculator results (0–10)                                                            |
+| **Calculator** | `calculatorEnabled` | Enables calculator expressions in the RRV search bar                                                               |
+| **Calculator** | `calculatorInputMode` | Smart detection (default) or Explicit Only (`=` required)                                                          |
+| **Calculator** | `calculatorDisplayMode` | Inline feedback (default) or the expanded Panel                                                                    |
+| **Calculator** | `calculatorPrecision` | Maximum displayed decimal places (0–10); does not change arithmetic                                                |
+| **Calculator** | `calculatorResultFormat` | Automatic (recommended), Full Number, or Compact result formatting                                                 |
+| **Calculator** | `calculatorHistorySize` | Number of committed calculations retained for Up/Down history (1–20)                                               |
+| **Calculator** | `calculatorContextSuggestions` | Enables function and `ans` completion ghost text                                                             |
 | **UI** | `familyExpansionEnabled` | Groups tiered items (pets, minions, stars, accessory upgrades) into families                                       |
 | **RRV** | `groupTieredItems` | Collapses tiered items (minions, pets, enchantments, upgrade lines) into expandable groups in the item list        |
 | **RRV** | `groupCraftedChains` | Groups items that craft directly into one another as upgrade chains (takes effect after the next data load)        |

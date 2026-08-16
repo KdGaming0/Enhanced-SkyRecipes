@@ -6,9 +6,9 @@ import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.client.recipe.ClientRecipeCache;
 import cc.cassian.rrv.common.config.Configs;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
-import cc.cassian.rrv.common.overlay.itemlist.view.SearchBar;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.client.gui.CalculatorSessionOwner;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.fusion.ShardFusionData;
@@ -31,13 +31,11 @@ import com.github.kdgaming0.skyrecipes.core.search.SearchAliases;
 import com.github.kdgaming0.skyrecipes.core.search.SkyblockSearchIndex;
 import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
 import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
-import com.github.kdgaming0.skyrecipes.mixin.accessor.EditBoxAccessor;
 import com.github.kdgaming0.skyrecipes.mixin.accessor.ItemViewOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
@@ -224,11 +222,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     private volatile RecipeResult pendingRecipeResult = null;
     private volatile StackBuildResult pendingStackResult = null;
     private StartupBatcher startupBatcher = null;
-
-    // ---- Search-bar suggestion state ----------------------------------------
-
-    private boolean wasRightArrowDown = false;
-    private boolean wasTabDown = false;
 
     // ---- Static helpers -----------------------------------------------------
 
@@ -769,6 +762,10 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
      */
     private void refreshOverlayQuery() {
         if (searchIndex == null) return;
+        if (ItemViewOverlay.INSTANCE instanceof CalculatorSessionOwner owner) {
+            owner.skyrecipes$refreshEffectiveQuery();
+            return;
+        }
         String current = ItemViewOverlay.INSTANCE.getCurrentQuery();
         ((ItemViewOverlayAccessor) ItemViewOverlay.INSTANCE).skyrecipes$updateQuery(current);
     }
@@ -830,10 +827,8 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
 
     private void handleEndClientTick(Minecraft client) {
         // A throw from a Fabric tick handler crashes the client, and this runs
-        // every tick — never let search-bar or launch work escape.
+        // every tick — never let launch work escape.
         try {
-            handleSearchBarSuggestionCommit(client);
-
             if (awaitingComponentBinding && SkyRecipes.isDataReady() && areComponentsBound()) {
                 launchBackgroundGeneration();
             }
@@ -1016,36 +1011,6 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
                 LOGGER.debug("Failed to register alias for {}", entry.getValue());
             }
         }
-    }
-
-    // =========================================================================
-    // Search-bar autocomplete (Right Arrow / Tab commit)
-    // =========================================================================
-
-    private void handleSearchBarSuggestionCommit(Minecraft client) {
-        if (client.screen == null) return;
-        if (!(client.screen.getFocused() instanceof SearchBar searchBar)) return;
-
-        boolean rightDown = InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RIGHT);
-        boolean tabDown = InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_TAB);
-
-        boolean rightPressed = rightDown && !wasRightArrowDown;
-        boolean tabPressed = tabDown && !wasTabDown;
-
-        if (rightPressed || tabPressed) {
-            String suggestion = ((EditBoxAccessor) searchBar).skyrecipes$getSuggestion();
-            if (suggestion != null && !suggestion.isEmpty()) {
-                String current = searchBar.getValue();
-                String fullText = current + suggestion;
-                searchBar.setValue(fullText);
-                searchBar.setCursorPosition(fullText.length());
-                searchBar.setHighlightPos(fullText.length());
-                searchBar.setSuggestion(null);
-            }
-        }
-
-        wasRightArrowDown = rightDown;
-        wasTabDown = tabDown;
     }
 
     // =========================================================================

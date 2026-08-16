@@ -14,6 +14,7 @@
     "accessor.StackGroupConfigAccessor",
     "accessor.StackGroupManagerAccessor",
     "overlay.CategoryButtonMixin",
+    "overlay.EditBoxCalculatorRenderMixin",
     "overlay.ItemFiltersMixin",
     "overlay.ItemSlotTagAccessMixin",
     "overlay.ItemViewExclusionCacheMixin",
@@ -46,7 +47,8 @@
     "skyblocker.HelperWidgetLookupMixin",
     "skyblocker.ItemViewOverlayLookupMixin",
     "skyblocker.MuseumManagerMixin",
-    "skyblocker.RecipeSlotRarityBackgroundMixin"
+    "skyblocker.RecipeSlotRarityBackgroundMixin",
+    "skyblocker.StorageOverlayScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

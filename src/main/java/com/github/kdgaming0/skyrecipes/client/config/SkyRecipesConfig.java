@@ -16,14 +16,32 @@ import eu.midnightdust.lib.config.MidnightConfig;
 public class SkyRecipesConfig extends MidnightConfig {
 
     // -----------------------------------------------------------------
-    // UI settings
+    // Calculator settings
     // -----------------------------------------------------------------
-    @Entry(category = "ui")
+    @Entry(category = "calculator")
     public static boolean calculatorEnabled = true;
 
-    @Entry(category = "ui", isSlider = true, min = 0, max = 10, precision = 0)
+    @Entry(category = "calculator")
+    public static CalculatorInputMode calculatorInputMode = CalculatorInputMode.SMART;
+
+    @Entry(category = "calculator")
+    public static CalculatorDisplayMode calculatorDisplayMode = CalculatorDisplayMode.INLINE;
+
+    @Entry(category = "calculator", isSlider = true, min = 0, max = 10, precision = 0)
     public static int calculatorPrecision = 5;
 
+    @Entry(category = "calculator")
+    public static CalculatorResultFormat calculatorResultFormat = CalculatorResultFormat.ADAPTIVE;
+
+    @Entry(category = "calculator", isSlider = true, min = 1, max = 20, precision = 0)
+    public static int calculatorHistorySize = 10;
+
+    @Entry(category = "calculator")
+    public static boolean calculatorContextSuggestions = true;
+
+    // -----------------------------------------------------------------
+    // UI settings
+    // -----------------------------------------------------------------
     @Entry(category = "ui")
     public static boolean familyExpansionEnabled = true;
 
@@ -71,4 +89,20 @@ public class SkyRecipesConfig extends MidnightConfig {
     // -----------------------------------------------------------------
     @Entry(category = "data", min = 15, max = 480, isSlider = true)
     public static int dataRefreshIntervalMinutes = 60;
+
+    public enum CalculatorInputMode {
+        SMART,
+        EXPLICIT_ONLY
+    }
+
+    public enum CalculatorDisplayMode {
+        INLINE,
+        PANEL
+    }
+
+    public enum CalculatorResultFormat {
+        ADAPTIVE,
+        FULL,
+        COMPACT
+    }
 }
