@@ -1,3 +1,10 @@
+# 0.5.3
+
+## Fixes
+- Rift NPC names and NPCs whose NEU and SkyHanni names differ now resolve correctly when SkyHanni has a matching location.
+- When SkyHanni does not know an NPC by name, SkyRecipes now offers a clickable coordinate fallback if you are on the correct island.
+- Navigation now warns when the NPC is on a different island instead of directing you to meaningless coordinates on the current island.
+
 # 0.5.2
 
 ## New

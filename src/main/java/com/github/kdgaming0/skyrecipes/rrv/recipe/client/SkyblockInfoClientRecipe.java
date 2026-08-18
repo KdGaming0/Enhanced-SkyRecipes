@@ -7,12 +7,11 @@ import cc.cassian.rrv.common.recipe.inventory.SlotContent;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
-import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockInfoRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.ClientCommandSender;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
-import net.fabricmc.loader.api.FabricLoader;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.util.SkyHanniNpcNavigator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractButton;
@@ -32,9 +31,6 @@ import java.util.List;
  * a wiki button, and optionally a navigate button for NPCs.
  */
 public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
-
-    private static final boolean SKYHANNI_PRESENT =
-            FabricLoader.getInstance().isModLoaded("skyhanni");
 
     private static final int TITLE_Y = 22;
     private static final int INFO_START_Y = 36;
@@ -84,14 +80,6 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
         this.isNpc = isNpc;
         this.npcDisplayName = npcDisplayName != null ? npcDisplayName : "";
         this.bazaarSearch = bazaarSearch != null ? bazaarSearch : "";
-    }
-
-    private static String stripFormatting(String raw) {
-        String clean = TextUtil.stripColorCodes(raw);
-        if (clean.endsWith(" (NPC)")) {
-            clean = clean.substring(0, clean.length() - 6);
-        }
-        return clean.trim();
     }
 
     /**
@@ -195,7 +183,7 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
         AbstractButton sentinel = addWikiButton(screen, pos);
 
-        if (isNpc && SKYHANNI_PRESENT && !npcDisplayName.isEmpty()) {
+        if (isNpc && SkyHanniNpcNavigator.isAvailable() && !npcDisplayName.isEmpty()) {
             Button navBtn = placeNavigateButton(screen, pos, sentinel != null);
             if (navBtn != null) {
                 sentinel = navBtn;
@@ -260,6 +248,6 @@ public class SkyblockInfoClientRecipe extends AbstractSkyblockClientRecipe {
     }
 
     private void sendNavigateCommand() {
-        ClientCommandSender.send("shnav " + stripFormatting(npcDisplayName));
+        SkyHanniNpcNavigator.navigate(neuItem, npcDisplayName);
     }
 }

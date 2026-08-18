@@ -4,6 +4,7 @@ import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import com.github.kdgaming0.skyrecipes.core.model.NeuItem;
 import com.github.kdgaming0.skyrecipes.core.recipe.util.ParserUtil;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.core.util.SkyblockIslandNames;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockInfoClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
@@ -12,7 +13,6 @@ import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Builds info recipe cards for NPC items (internal names ending in {@code _NPC}).
@@ -20,33 +20,6 @@ import java.util.Map;
  * <p>Displays the NPC's head, island location, and coordinates as an info card.</p>
  */
 public final class NpcInfoRecipeBuilder {
-
-    /**
-     * NEU island codes → human-readable names.
-     */
-    private static final Map<String, String> ISLAND_NAMES = Map.ofEntries(
-            Map.entry("dynamic", "Private Island"),
-            Map.entry("hub", "Hub"),
-            Map.entry("mining_1", "Gold Mine"),
-            Map.entry("mining_2", "Deep Caverns"),
-            Map.entry("mining_3", "Dwarven Mines"),
-            Map.entry("combat_1", "Spider's Den"),
-            Map.entry("crimson_isle", "Crimson Isle"),
-            Map.entry("combat_3", "The End"),
-            Map.entry("farming_1", "The Farming Islands"),
-            Map.entry("foraging_1", "The Park"),
-            Map.entry("winter", "Jerry's Workshop"),
-            Map.entry("dungeon", "Dungeon"),
-            Map.entry("dungeon_hub", "Dungeon Hub"),
-            Map.entry("crystal_hollows", "Crystal Hollows"),
-            Map.entry("garden", "The Garden"),
-            Map.entry("rift", "Rift"),
-            Map.entry("kuudra", "Kuudra's Hollow"),
-            Map.entry("mineshaft", "Glacite Mineshafts"),
-            Map.entry("fishing_1", "Backwater Bayou"),
-            Map.entry("foraging_2", "Galatea"),
-            Map.entry("lotus_atoll", "Lotus Atoll")
-    );
 
     private NpcInfoRecipeBuilder() {
     }
@@ -90,7 +63,7 @@ public final class NpcInfoRecipeBuilder {
     private static List<Component> buildNpcInfoLines(NeuItem item) {
         List<Component> lines = new ArrayList<>();
 
-        String island = formatIsland(item.island());
+        String island = SkyblockIslandNames.displayName(item.island());
         if (!island.isEmpty()) {
             lines.add(RecipeUiHelper.label("Island:"));
             lines.add(Component.literal("  " + island));
@@ -105,8 +78,4 @@ public final class NpcInfoRecipeBuilder {
         return lines;
     }
 
-    private static String formatIsland(String code) {
-        if (code == null || code.isEmpty()) return "";
-        return ISLAND_NAMES.getOrDefault(code, code);
-    }
 }

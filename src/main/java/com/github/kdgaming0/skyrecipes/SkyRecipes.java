@@ -2,6 +2,7 @@ package com.github.kdgaming0.skyrecipes;
 
 import com.github.kdgaming0.skyrecipes.client.command.SkyRecipesCommand;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
+import com.github.kdgaming0.skyrecipes.client.hypixel.HypixelLocationTracker;
 import com.github.kdgaming0.skyrecipes.core.data.CacheLayout;
 import com.github.kdgaming0.skyrecipes.core.data.DataLoadResult;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
@@ -121,6 +122,7 @@ public class SkyRecipes implements ClientModInitializer {
         LOGGER.info("SkyRecipes v{} for Minecraft {} initializing...", VERSION, MINECRAFT);
 
         MidnightConfig.init(MOD_ID, SkyRecipesConfig.class);
+        HypixelLocationTracker.initialize();
 
         cacheLayout = new CacheLayout(FabricLoader.getInstance().getGameDir());
         cacheLayout.migrateLegacyLayout();
