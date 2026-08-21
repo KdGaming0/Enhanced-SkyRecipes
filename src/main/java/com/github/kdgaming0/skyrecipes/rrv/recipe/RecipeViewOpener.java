@@ -29,7 +29,7 @@ public final class RecipeViewOpener {
 
         Screen current = Minecraft.getInstance().screen;
         Screen parent = current;
-        ArrayList<RecipeViewScreen> viewHistory = new ArrayList<>();
+        ArrayList<RecipeViewMenu> viewHistory = new ArrayList<>();
 
         if (current instanceof RecipeViewScreen existing) {
             parent = existing.getMenu().getParentScreen();

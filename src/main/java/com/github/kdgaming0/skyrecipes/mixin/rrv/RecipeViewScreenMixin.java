@@ -3,6 +3,7 @@ package com.github.kdgaming0.skyrecipes.mixin.rrv;
 import cc.cassian.rrv.api.recipe.ReliableClientRecipe;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewMenu;
 import cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen;
+import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractScrollArea;
@@ -10,9 +11,11 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.input.MouseButtonEvent;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -26,6 +29,30 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(RecipeViewScreen.class)
 public class RecipeViewScreenMixin {
+
+    /** Category icons are 16px tall, plus 2px spacing and a 2px safety gap. */
+    @Unique
+    private static final int SKYRECIPES$CATEGORY_BUTTONS_BOTTOM_PADDING = 20;
+
+    @Shadow protected int topPos;
+
+    /**
+     * Keeps RRV 8.9's responsive page capacity, but moves the completed recipe screen
+     * up by the category-button row so its final card clears the item-list controls.
+     */
+    @Redirect(
+            method = "checkGui",
+            at = @At(
+                    value = "FIELD",
+                    target = "Lcc/cassian/rrv/common/recipe/inventory/RecipeViewScreen;topPos:I",
+                    opcode = org.objectweb.asm.Opcodes.PUTFIELD
+            ),
+            remap = false
+    )
+    private void skyrecipes$leaveCategoryButtonPadding(RecipeViewScreen screen, int calculatedTop) {
+        int padding = SkyRecipesConfig.hideCategoryButtons ? 0 : SKYRECIPES$CATEGORY_BUTTONS_BOTTOM_PADDING;
+        this.topPos = Math.max(32, calculatedTop - padding);
+    }
 
     /**
      * RRV consumes mouse-wheel events anywhere over the recipe GUI to flip recipe

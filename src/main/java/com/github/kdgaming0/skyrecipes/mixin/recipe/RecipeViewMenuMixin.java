@@ -14,9 +14,7 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
@@ -24,10 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * Raises RRV's hard-coded recipe-viewer height limit so SkyRecipes' taller
- * drop recipe cards (168×151) can display without being collapsed to zero recipes.
- *
- * <p>Also makes the recipe view open on the tab that actually produces the clicked
+ * Makes the recipe view open on the tab that actually produces the clicked
  * SkyBlock item. Family expansion merges recipes of several categories into one view
  * (gemstones: Rough→Flawless are crafting, Perfect is forge), and RRV always starts
  * on the first tab by category priority — so clicking Perfect Gemstone landed on the
@@ -43,18 +38,13 @@ public abstract class RecipeViewMenuMixin {
 
     @Shadow public abstract void setClientRecipeType(int typeId);
 
-    @ModifyConstant(method = "calculateRecipesPerPage", constant = @Constant(intValue = 214))
-    private int increaseMaxPossibleHeight(int original) {
-        return 224;
-    }
-
     @Inject(
             method = "<init>(Lnet/minecraft/client/gui/screens/Screen;ILnet/minecraft/world/entity/player/Inventory;Ljava/util/List;Lnet/minecraft/world/item/ItemStack;Lcc/cassian/rrv/api/ActionType;Ljava/util/ArrayList;Lcc/cassian/rrv/api/recipe/ReliableClientRecipeType;)V",
             at = @At("RETURN")
     )
     private void skyrecipes$openOnOriginTab(Screen parentScreen, int containerId, Inventory inventory,
                                             List<? extends ReliableClientRecipe> recipes, ItemStack origin,
-                                            ActionType originType, ArrayList<RecipeViewScreen> viewHistory,
+                                            ActionType originType, ArrayList<RecipeViewMenu> viewHistory,
                                             ReliableClientRecipeType clientRecipeType, CallbackInfo ci) {
         if (originType != ActionType.RESULT || !ReliableClientRecipeType.NONE.equals(clientRecipeType)) {
             return;
