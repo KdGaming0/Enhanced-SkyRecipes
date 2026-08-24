@@ -22,6 +22,46 @@ class NeuCalculatorTest {
     }
 
     @Test
+    void binaryOperatorsHonorPrecedenceInEitherOrder() throws Exception {
+        assertDecimal("7", NeuCalculator.calculate("1+2*3", 0));
+        assertDecimal("-5", NeuCalculator.calculate("1-2*3", 0));
+        assertDecimal("1.5", NeuCalculator.calculate("1+2/4", 0));
+        assertDecimal("0.5", NeuCalculator.calculate("1-2/4", 0));
+        assertDecimal("7", NeuCalculator.calculate("1+2x3", 0));
+        assertDecimal("-5", NeuCalculator.calculate("1-2x3", 0));
+
+        assertDecimal("5", NeuCalculator.calculate("1*2+3", 0));
+        assertDecimal("-1", NeuCalculator.calculate("1*2-3", 0));
+        assertDecimal("3.5", NeuCalculator.calculate("1/2+3", 0));
+        assertDecimal("-2.5", NeuCalculator.calculate("1/2-3", 0));
+        assertDecimal("5", NeuCalculator.calculate("1x2+3", 0));
+        assertDecimal("-1", NeuCalculator.calculate("1x2-3", 0));
+    }
+
+    @Test
+    void xMultiplicationSupportsCompactAndSpacedForms() throws Exception {
+        assertDecimal("6", NeuCalculator.calculate("2x3", 0));
+        assertDecimal("6", NeuCalculator.calculate("2x 3", 0));
+        assertDecimal("6", NeuCalculator.calculate("2 x3", 0));
+        assertDecimal("6", NeuCalculator.calculate("2 x 3", 0));
+        assertDecimal("6", NeuCalculator.calculate("2X3", 0));
+        assertDecimal("8", NeuCalculator.calculate("2x(3+1)", 0));
+        assertDecimal("6", NeuCalculator.calculate("sqrt(9)x2", 0));
+        assertDecimal("6000", NeuCalculator.calculate("2kx3", 0));
+    }
+
+    @Test
+    void mixedExpressionsPreserveEveryGrammarLevel() throws Exception {
+        assertDecimal("154", NeuCalculator.calculate("10+12*12", 0));
+        assertDecimal("156", NeuCalculator.calculate("12+12x12", 0));
+        assertDecimal("6", NeuCalculator.calculate("10-12/3", 0));
+        assertDecimal("11", NeuCalculator.calculate("2+3^2", 0));
+        assertDecimal("8", NeuCalculator.calculate("2^(1+2)", 0));
+        assertDecimal("7", NeuCalculator.calculate("max(1, 2*3)+1", 0));
+        assertDecimal("1281", NeuCalculator.calculate("1+10s*2", 0));
+    }
+
+    @Test
     void supportsBigDecimalLiteralsScientificNotationAndPostfixes() throws Exception {
         assertDecimal("1500000", NeuCalculator.calculate("1.5e6", 2));
         assertDecimal("240", NeuCalculator.calculate("1.5e", 2));

@@ -37,6 +37,15 @@ class SearchBarCalculatorTest {
     }
 
     @Test
+    void smartModeEvaluatesMixedPrecedenceAndCompactMultiplication() {
+        assertSuccessfulCalculation("10+12*12", "154");
+        assertSuccessfulCalculation("12+12x12", "156");
+        assertSuccessfulCalculation("12*12+10", "154");
+        assertSuccessfulCalculation("12x12+10", "154");
+        assertSuccessfulCalculation("10-12/3", "6");
+    }
+
+    @Test
     void smartModeLeavesNormalSearchesAlone() {
         assertNormal("42");
         assertNormal("aote");

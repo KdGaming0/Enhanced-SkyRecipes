@@ -234,6 +234,13 @@ public final class NeuCalculator {
                     readNumber();
                 } else if (character == '$') {
                     readVariable();
+                } else if (isPostfixLetter(character) && previousTokenCanEndValue()) {
+                    int start = position++;
+                    tokens.add(new Token(TokenType.POSTFIX,
+                            String.valueOf(Character.toLowerCase(character)), start, 1));
+                } else if ((character == 'x' || character == 'X') && previousTokenCanEndValue()) {
+                    int start = position++;
+                    tokens.add(new Token(TokenType.OPERATOR, "x", start, 1));
                 } else if (isIdentifierStart(character)) {
                     readIdentifierOrPostfix();
                 } else {
@@ -377,6 +384,20 @@ public final class NeuCalculator {
             }
         }
 
+        private boolean previousTokenCanEndValue() {
+            if (tokens.isEmpty()) {
+                return false;
+            }
+            return switch (tokens.getLast().type) {
+                case NUMBER, IDENTIFIER, VARIABLE, POSTFIX, RIGHT_PAREN -> true;
+                default -> false;
+            };
+        }
+
+        private static boolean isPostfixLetter(char character) {
+            return "kmbtse".indexOf(Character.toLowerCase(character)) >= 0;
+        }
+
         private static boolean isIdentifierStart(char character) {
             return Character.isLetter(character) || character == '_';
         }
@@ -419,7 +440,7 @@ public final class NeuCalculator {
             BigDecimal value = parseMultiplication();
             while (isOperator("+") || isOperator("-")) {
                 Token operator = consume();
-                BigDecimal right = parseRequiredValue();
+                BigDecimal right = parseRequiredMultiplication();
                 value = operator.text.equals("+")
                         ? value.add(right, MATH_CONTEXT)
                         : value.subtract(right, MATH_CONTEXT);
@@ -677,6 +698,13 @@ public final class NeuCalculator {
                 throw incomplete("Expected a value", sourceLength);
             }
             return parseUnary();
+        }
+
+        private BigDecimal parseRequiredMultiplication() throws Diagnostic, CalculatorException {
+            if (peek().type == TokenType.END) {
+                throw incomplete("Expected a value", sourceLength);
+            }
+            return parseMultiplication();
         }
 
         private void enterNesting(Token token) throws Diagnostic {

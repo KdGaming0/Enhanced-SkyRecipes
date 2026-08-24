@@ -1,3 +1,8 @@
+# 0.5.5
+
+## Fixes
+- Calculator expressions now apply multiplication and division correctly after addition or subtraction, including compact `x` multiplication such as `12+12x12`.
+
 # 0.5.4
 
 ## Compatibility
