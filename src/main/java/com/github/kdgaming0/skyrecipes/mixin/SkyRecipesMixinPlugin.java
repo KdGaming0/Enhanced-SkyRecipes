@@ -48,7 +48,27 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
             List.of(
                     "initForScreen(Lnet/minecraft/client/gui/screens/Screen;"
                             + "Lcc/cassian/rrv/common/overlay/AbstractRrvOverlay$InventoryPositionInfo;)V"
+            ),
+            "com.github.kdgaming0.skyrecipes.mixin.skyblocker.ItemViewOverlayLookupMixin",
+            List.of(
+                    "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z"
+            ),
+            "com.github.kdgaming0.skyrecipes.mixin.skyblocker.SidePanelOverlayLookupMixin",
+            List.of(
+                    "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z"
+            ),
+            "com.github.kdgaming0.skyrecipes.mixin.skyblocker.RecipeViewScreenLookupMixin",
+            List.of(
+                    "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",
+                    "rrv$hoveredStack()Lnet/minecraft/world/item/ItemStack;"
             )
+    );
+
+    private static final List<String> SKYBLOCKER_LOOKUP_CLASSES = List.of(
+            "cc.cassian.rrv.common.overlay.ItemSlot",
+            "de.hysky.skyblocker.config.SkyblockerConfigManager",
+            "de.hysky.skyblocker.skyblock.item.ItemPrice",
+            "de.hysky.skyblocker.skyblock.item.wikilookup.WikiLookupManager"
     );
 
     /**
@@ -60,6 +80,12 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
      * rename upstream turns into a {@link NoClassDefFoundError} at apply time.</p>
      */
     private static final Map<String, List<String>> REQUIRED_CLASSES = Map.of(
+            "com.github.kdgaming0.skyrecipes.mixin.skyblocker.ItemViewOverlayLookupMixin",
+            SKYBLOCKER_LOOKUP_CLASSES,
+            "com.github.kdgaming0.skyrecipes.mixin.skyblocker.SidePanelOverlayLookupMixin",
+            SKYBLOCKER_LOOKUP_CLASSES,
+            "com.github.kdgaming0.skyrecipes.mixin.skyblocker.RecipeViewScreenLookupMixin",
+            SKYBLOCKER_LOOKUP_CLASSES,
             "com.github.kdgaming0.skyrecipes.mixin.skyblocker.RecipeSlotRarityBackgroundMixin",
             List.of(
                     "de.hysky.skyblocker.skyblock.item.background.ItemBackgroundManager",
@@ -83,7 +109,8 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
         if (mixinClassName.contains(".mixin.skyblocker.")) {
             return FabricLoader.getInstance().isModLoaded("skyblocker")
                     && targetClassExists(targetClassName)
-                    && requiredClassesExist(mixinClassName);
+                    && requiredClassesExist(mixinClassName)
+                    && targetSignaturesMatch(targetClassName, mixinClassName);
         }
         return targetSignaturesMatch(targetClassName, mixinClassName);
     }

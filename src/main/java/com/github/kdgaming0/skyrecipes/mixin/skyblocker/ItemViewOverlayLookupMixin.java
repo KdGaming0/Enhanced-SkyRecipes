@@ -2,13 +2,9 @@ package com.github.kdgaming0.skyrecipes.mixin.skyblocker;
 
 import cc.cassian.rrv.common.overlay.ItemSlot;
 import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
-import com.mojang.datafixers.util.Either;
-import de.hysky.skyblocker.config.SkyblockerConfigManager;
-import de.hysky.skyblocker.skyblock.item.ItemPrice;
-import de.hysky.skyblocker.skyblock.item.wikilookup.WikiLookupManager;
-import net.minecraft.client.Minecraft;
+import com.github.kdgaming0.skyrecipes.SkyRecipes;
+import com.github.kdgaming0.skyrecipes.compat.skyblocker.SkyblockerLookupHandler;
 import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -37,31 +33,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = ItemViewOverlay.class, remap = false)
 public class ItemViewOverlayLookupMixin {
 
-    @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true, remap = false)
+    @Unique
+    private static boolean skyrecipes$broken;
+
+    @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true, require = 0, remap = false)
     private void skyrecipes$skyblockerLookupKeybinds(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
-        LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null) {
+        if (skyrecipes$broken) {
             return;
         }
 
-        ItemStack stack = skyrecipes$hoveredStack();
-        if (stack == null || stack.isEmpty()) {
-            return;
-        }
-
-        // Wiki lookup: handleWikiLookup checks its own keybinds (official + independent)
-        // and the enable flag, returning true only when it actually opened the wiki.
-        if (WikiLookupManager.handleWikiLookup(Either.right(stack), player, event)) {
-            cir.setReturnValue(true);
-            return;
-        }
-
-        // Price (AH/BZ) lookup: the keybind + enable check live in Skyblocker's screen
-        // mixin, not in itemPriceLookup, so replicate them here.
-        if (SkyblockerConfigManager.get().helpers.itemPrice.enableItemPriceLookup
-                && ItemPrice.ITEM_PRICE_LOOKUP.matches(event)) {
-            ItemPrice.itemPriceLookup(player, stack);
-            cir.setReturnValue(true);
+        try {
+            if (SkyblockerLookupHandler.handle(skyrecipes$hoveredStack(), event)) {
+                cir.setReturnValue(true);
+            }
+        } catch (Throwable t) {
+            skyrecipes$broken = true;
+            SkyRecipes.LOGGER.warn(
+                    "RRV item-list lookup integration disabled (RRV API changed?)", t);
         }
     }
 

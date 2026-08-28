@@ -1,3 +1,8 @@
+# 0.5.6
+
+## Compatibility
+- Skyblocker's wiki and price lookup keybinds now work across Reliable Recipe Viewer's central recipe slots and left bookmarks/craftables panel.
+
 # 0.5.5
 
 ## Fixes

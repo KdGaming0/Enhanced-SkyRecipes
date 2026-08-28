@@ -43,7 +43,9 @@
     "skyblocker.HelperWidgetLookupMixin",
     "skyblocker.ItemViewOverlayLookupMixin",
     "skyblocker.MuseumManagerMixin",
+    "skyblocker.RecipeViewScreenLookupMixin",
     "skyblocker.RecipeSlotRarityBackgroundMixin",
+    "skyblocker.SidePanelOverlayLookupMixin",
     "skyblocker.StorageOverlayScreenMixin"
   ],
   "injectors": {
