@@ -9,6 +9,7 @@ import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.client.config.SkyRecipesConfig;
 import com.github.kdgaming0.skyrecipes.client.gui.CalculatorSessionOwner;
+import com.github.kdgaming0.skyrecipes.compat.skyocean.SkyOceanItemListCompat;
 import com.github.kdgaming0.skyrecipes.core.data.PipelineStatus;
 import com.github.kdgaming0.skyrecipes.core.family.FamilyResolver;
 import com.github.kdgaming0.skyrecipes.core.fusion.ShardFusionData;
@@ -38,6 +39,7 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -321,6 +323,18 @@ public class SkyRecipesClientPlugin implements ReliableRecipeViewerClientPlugin 
     @Override
     public void onIntegrationInitialize() {
         LOGGER.info("SkyRecipes RRV client plugin initializing...");
+
+        // Keep every SkyOcean type behind the mod-presence branch. If its embedded APIs move,
+        // linkage failure is contained here and SkyRecipes/RRV continue without this bridge.
+        if (FabricLoader.getInstance().isModLoaded("skyocean")) {
+            try {
+                SkyOceanItemListCompat.registerOverlayHandler();
+            } catch (Throwable t) {
+                LOGGER.warn("SkyOcean hovered-item compatibility could not be initialized; "
+                        + "other SkyRecipes features remain available.", t);
+            }
+        }
+
         if (!DIRECT_INJECTION_AVAILABLE) {
             LOGGER.warn("================================================================================");
             LOGGER.warn("  SkyRecipes is running in PROVIDER-ONLY mode.");

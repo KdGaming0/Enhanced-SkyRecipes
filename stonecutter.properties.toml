@@ -11,7 +11,7 @@ loomx.loom_version = "1.17-SNAPSHOT"
 mod.mc_compat = "~26.1"
 mod.mc_releases = ["26.1", "26.1.1", "26.1.2"]
 
-deps.fabric_api = "0.151.0+26.1.2"
+deps.fabric_api = "0.155.2+26.1.2"
 deps.midnightlib_version = "1.9.3+26.1-fabric"
 deps.hm_api_version = "1.0.3+26.1"
 deps.modmenu_version = "18.0.0-beta.1"
@@ -23,7 +23,7 @@ deps.rpc_version="1.2.7"
 mod.mc_compat = "~26.2"
 mod.mc_releases = ["26.2"]
 
-deps.fabric_api = "0.155.2+26.2"
+deps.fabric_api = "0.158.0+26.2"
 deps.midnightlib_version = "1.9.3+26.2-fabric"
 deps.hm_api_version = "1.0.4+26.2"
 deps.modmenu_version = "20.0.1"

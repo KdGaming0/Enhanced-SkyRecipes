@@ -37,6 +37,7 @@
     "rrv.fix.AbstractRrvItemListOverlaySlotThreadingMixin",
     "rrv.fix.ItemSlotGroupCacheMixin",
     "rrv.fix.RrvScreenNullItemGuardMixin",
+    "skyocean.RecipeViewScreenKeybindMixin",
     "skyblocker.AccessoriesHelperWidgetMixin",
     "skyblocker.AccessoriesTabButtonMixin",
     "skyblocker.GardenPlotsWidgetMixin",

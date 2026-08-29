@@ -16,9 +16,9 @@ import java.util.Set;
 /**
  * Conditionally applies mixins that target optional companion mods.
  *
- * <p>Skyblocker is an optional runtime dependency. Mixins that reference its
- * classes must be skipped when it is not loaded so the game does not crash with
- * a {@link ClassNotFoundException} during Mixin transformation.</p>
+ * <p>Companion mods are optional runtime dependencies. Mixins that reference their
+ * classes must be skipped when the relevant mod is not loaded so the game does not
+ * crash with a {@link ClassNotFoundException} during Mixin transformation.</p>
  */
 public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
 
@@ -61,6 +61,11 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
             List.of(
                     "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",
                     "rrv$hoveredStack()Lnet/minecraft/world/item/ItemStack;"
+            ),
+            "com.github.kdgaming0.skyrecipes.mixin.skyocean.RecipeViewScreenKeybindMixin",
+            List.of(
+                    "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",
+                    "rrv$hoveredStack()Lnet/minecraft/world/item/ItemStack;"
             )
     );
 
@@ -91,6 +96,13 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
                     "de.hysky.skyblocker.skyblock.item.background.ItemBackgroundManager",
                     "de.hysky.skyblocker.utils.Utils",
                     "cc.cassian.rrv.common.recipe.inventory.RecipeViewScreen"
+            ),
+            "com.github.kdgaming0.skyrecipes.mixin.skyocean.RecipeViewScreenKeybindMixin",
+            List.of(
+                    "cc.cassian.rrv.common.overlay.ItemSlot",
+                    "me.owdding.lib.events.ItemListEvent$HoveredItemKeyPress",
+                    "tech.thatgravyboat.skyblockapi.api.SkyBlockAPI",
+                    "tech.thatgravyboat.skyblockapi.api.events.base.EventBus"
             )
     );
 
@@ -108,6 +120,12 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.contains(".mixin.skyblocker.")) {
             return FabricLoader.getInstance().isModLoaded("skyblocker")
+                    && targetClassExists(targetClassName)
+                    && requiredClassesExist(mixinClassName)
+                    && targetSignaturesMatch(targetClassName, mixinClassName);
+        }
+        if (mixinClassName.contains(".mixin.skyocean.")) {
+            return FabricLoader.getInstance().isModLoaded("skyocean")
                     && targetClassExists(targetClassName)
                     && requiredClassesExist(mixinClassName)
                     && targetSignaturesMatch(targetClassName, mixinClassName);
@@ -171,7 +189,7 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
 
     /**
      * Resource-level existence check that never class-loads the target, so a
-     * renamed or removed Skyblocker class skips the mixin cleanly instead of
+     * renamed or removed companion-mod class skips the mixin cleanly instead of
      * failing the mixin apply.
      */
     private static boolean targetClassExists(String targetClassName) {

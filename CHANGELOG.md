@@ -2,6 +2,7 @@
 
 ## Compatibility
 - Skyblocker's wiki and price lookup keybinds now work across Reliable Recipe Viewer's central recipe slots and left bookmarks/craftables panel.
+- SkyOcean's Craft Helper keybind now works on items throughout Reliable Recipe Viewer, including the item list, bookmarks/craftables panel, and recipe slots.
 
 # 0.5.5
 
