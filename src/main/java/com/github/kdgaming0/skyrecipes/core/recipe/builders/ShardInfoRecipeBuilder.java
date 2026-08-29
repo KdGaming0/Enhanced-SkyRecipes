@@ -70,13 +70,18 @@ public final class ShardInfoRecipeBuilder {
      *
      * @return the info recipe, or {@code null} if building failed
      */
-    public static ReliableClientRecipe build(NeuItem item, AttributeShardData shard) {
+    public static ReliableClientRecipe build(NeuItem item, AttributeShardData shard,
+                                             List<String> sources) {
         try {
             Identifier id = IdentifierUtil.skyRecipeId("shard_info/", item.internalName());
 
             List<Component> lines = new ArrayList<>(6);
             if (!shard.abilityName().isEmpty()) {
                 lines.add(RecipeUiHelper.labeledLine("Attribute:", shard.abilityName()));
+            }
+            if (sources != null && !sources.isEmpty()) {
+                lines.add(RecipeUiHelper.labeledLine(
+                        sources.size() == 1 ? "Source:" : "Sources:", String.join(", ", sources)));
             }
             String rarityLine = shard.rarity();
             if (!shard.alignment().isEmpty()) {

@@ -54,6 +54,11 @@ public final class WikiInfoRecipeBuilder {
         return recipes;
     }
 
+    /** Whether this card adds information beyond the item title and wiki button. */
+    public static boolean hasUsefulInfo(NeuItem item) {
+        return !buildInfoLines(item).isEmpty();
+    }
+
     private static List<Component> buildInfoLines(NeuItem item) {
         List<Component> lines = new ArrayList<>();
 

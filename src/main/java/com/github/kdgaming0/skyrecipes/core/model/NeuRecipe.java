@@ -82,9 +82,15 @@ public sealed interface NeuRecipe {
     record DropsRecipe(
             String name,
             String render,
+            int level,
+            int xp,
+            int combatXp,
+            int coins,
+            String panorama,
+            List<String> extra,
             List<Drop> drops
     ) implements NeuRecipe {
-        public record Drop(String id, String chance) {
+        public record Drop(String id, String chance, List<String> extra) {
         }
     }
 

@@ -44,7 +44,7 @@ public class BinaryDataCompiler {
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[]{'S', 'K', 'Y', '2'};
-    private static final int SCHEMA_VERSION = 10;
+    private static final int SCHEMA_VERSION = 12;
     private static final int HEADER_SIZE = 96;
     private static final int SECTION_COUNT = 3; // items, constants, metadata
     /**
@@ -671,14 +671,30 @@ public class BinaryDataCompiler {
                             JsonObject d = de.getAsJsonObject();
                             drops.add(new NeuRecipe.DropsRecipe.Drop(
                                     JsonUtil.getString(d, "id"),
-                                    JsonUtil.getString(d, "chance")
+                                    JsonUtil.getString(d, "chance"),
+                                    JsonUtil.getStringList(d, "extra")
                             ));
+                        }
+                    }
+                }
+                List<String> extra = new ArrayList<>();
+                JsonElement extraElem = obj.get("extra");
+                if (extraElem != null && extraElem.isJsonArray()) {
+                    for (JsonElement line : extraElem.getAsJsonArray()) {
+                        if (line.isJsonPrimitive() && line.getAsJsonPrimitive().isString()) {
+                            extra.add(line.getAsString());
                         }
                     }
                 }
                 yield new NeuRecipe.DropsRecipe(
                         JsonUtil.getString(obj, "name"),
                         JsonUtil.getString(obj, "render"),
+                        obj.has("level") ? JsonUtil.getInt(obj, "level", -1) : -1,
+                        obj.has("xp") ? JsonUtil.getInt(obj, "xp", -1) : -1,
+                        obj.has("combat_xp") ? JsonUtil.getInt(obj, "combat_xp", -1) : -1,
+                        obj.has("coins") ? JsonUtil.getInt(obj, "coins", -1) : -1,
+                        JsonUtil.getString(obj, "panorama"),
+                        extra,
                         drops
                 );
             }

@@ -214,21 +214,35 @@ public final class ItemCodec {
                 }
             }
             case NeuRecipe.DropsRecipe d -> {
-                packer.packMapHeader(4);
+                packer.packMapHeader(10);
                 packer.packString("_type");
                 packer.packString("drops");
                 packer.packString("name");
                 packer.packString(d.name());
                 packer.packString("render");
                 packer.packString(d.render());
+                packer.packString("level");
+                packer.packInt(d.level());
+                packer.packString("xp");
+                packer.packInt(d.xp());
+                packer.packString("combat_xp");
+                packer.packInt(d.combatXp());
+                packer.packString("coins");
+                packer.packInt(d.coins());
+                packer.packString("panorama");
+                packer.packString(d.panorama());
+                packer.packString("extra");
+                CodecUtil.packStringCollection(packer, d.extra());
                 packer.packString("drops");
                 packer.packArrayHeader(d.drops().size());
                 for (NeuRecipe.DropsRecipe.Drop drop : d.drops()) {
-                    packer.packMapHeader(2);
+                    packer.packMapHeader(3);
                     packer.packString("id");
                     packer.packString(drop.id());
                     packer.packString("chance");
                     packer.packString(drop.chance());
+                    packer.packString("extra");
+                    CodecUtil.packStringCollection(packer, drop.extra());
                 }
             }
             case NeuRecipe.TradeRecipe t -> {
@@ -312,17 +326,28 @@ public final class ItemCodec {
                         Map<Value, Value> dm = v.asMapValue().map();
                         String id = "";
                         String chance = "";
+                        List<String> extra = Collections.emptyList();
                         for (Map.Entry<Value, Value> e : dm.entrySet()) {
                             String k = e.getKey().asStringValue().asString();
                             if (k.equals("id")) id = e.getValue().asStringValue().asString();
                             else if (k.equals("chance")) chance = e.getValue().asStringValue().asString();
+                            else if (k.equals("extra")) extra = stringListOf(e.getValue());
                         }
-                        drops.add(new NeuRecipe.DropsRecipe.Drop(id, chance));
+                        drops.add(new NeuRecipe.DropsRecipe.Drop(id, chance, extra));
                     }
                 }
                 String name = raw.containsKey("name") ? raw.get("name").asStringValue().asString() : "";
                 String render = raw.containsKey("render") ? raw.get("render").asStringValue().asString() : "";
-                yield new NeuRecipe.DropsRecipe(name, render, drops);
+                int level = raw.containsKey("level") ? raw.get("level").asIntegerValue().asInt() : -1;
+                int xp = raw.containsKey("xp") ? raw.get("xp").asIntegerValue().asInt() : -1;
+                int combatXp = raw.containsKey("combat_xp") ? raw.get("combat_xp").asIntegerValue().asInt() : -1;
+                int coins = raw.containsKey("coins") ? raw.get("coins").asIntegerValue().asInt() : -1;
+                String panorama = raw.containsKey("panorama")
+                        ? raw.get("panorama").asStringValue().asString() : "";
+                List<String> extra = raw.containsKey("extra")
+                        ? stringListOf(raw.get("extra")) : Collections.emptyList();
+                yield new NeuRecipe.DropsRecipe(name, render, level, xp, combatXp, coins,
+                        panorama, extra, drops);
             }
             case "trade" -> new NeuRecipe.TradeRecipe(
                     raw.containsKey("cost") ? raw.get("cost").asStringValue().asString() : "",

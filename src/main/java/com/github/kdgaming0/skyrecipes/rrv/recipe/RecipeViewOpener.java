@@ -24,6 +24,11 @@ public final class RecipeViewOpener {
     }
 
     public static void open(ReliableClientRecipe recipe) {
+        open(List.of(recipe));
+    }
+
+    public static void open(List<? extends ReliableClientRecipe> recipes) {
+        if (recipes == null || recipes.isEmpty()) return;
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return;
 
@@ -43,7 +48,7 @@ public final class RecipeViewOpener {
         Minecraft.getInstance().setScreen(new RecipeViewScreen(
                 new RecipeViewMenu(
                         parent, containerId, player.getInventory(),
-                        List.of(recipe), ItemStack.EMPTY, ActionType.ANY, viewHistory),
+                        List.copyOf(recipes), ItemStack.EMPTY, ActionType.ANY, viewHistory),
                 player.getInventory(),
                 Component.empty()));
     }

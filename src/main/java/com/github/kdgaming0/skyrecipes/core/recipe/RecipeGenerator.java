@@ -16,6 +16,8 @@ import com.github.kdgaming0.skyrecipes.core.recipe.parsers.*;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
+import com.github.kdgaming0.skyrecipes.core.recipe.util.SlotRefParser;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockFusionClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockGardenMutationClientRecipe;
@@ -24,8 +26,7 @@ import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Orchestrator that iterates all {@link NeuItem}s and generates RRV client recipes.
@@ -61,9 +62,11 @@ public final class RecipeGenerator {
         // exactly: recipe order is load-bearing, because the batched injector passes each
         // recipe's list index to RRV as its dedup id.
         List<NeuItem> items = List.copyOf(itemRegistry.getAllItems());
+        Map<String, List<String>> shardSources = constantsRegistry != null
+                ? buildShardSources(items) : Map.of();
         ItemRecipes[] built = new ItemRecipes[items.size()];
         java.util.stream.IntStream.range(0, items.size()).parallel()
-                .forEach(i -> built[i] = generateForItem(items.get(i)));
+                .forEach(i -> built[i] = generateForItem(items.get(i), shardSources));
 
         for (ItemRecipes produced : built) {
             merge(produced, batch);
@@ -88,13 +91,13 @@ public final class RecipeGenerator {
     // ---- Per-item recipe sources ----
 
     /** All recipes one item contributes. Runs on a worker; touches no shared state. */
-    private ItemRecipes generateForItem(NeuItem item) {
+    private ItemRecipes generateForItem(NeuItem item, Map<String, List<String>> shardSources) {
         ItemRecipes out = new ItemRecipes(item);
         generateCraftingRecipe(item, out);
-        AttributeShardData shard = generateShardInfoRecipe(item, out);
-        generateWikiInfoRecipes(item, shard, out);
+        AttributeShardData shard = generateShardInfoRecipe(item, shardSources, out);
         generateNpcInfoRecipe(item, out);
         generateTypedRecipes(item, out);
+        generateWikiInfoRecipes(item, shard, out);
         return out;
     }
 
@@ -127,12 +130,15 @@ public final class RecipeGenerator {
      *
      * @return the shard data if this item is a shard, for the wiki-card skip below
      */
-    private AttributeShardData generateShardInfoRecipe(NeuItem item, ItemRecipes out) {
+    private AttributeShardData generateShardInfoRecipe(NeuItem item,
+                                                        Map<String, List<String>> shardSources,
+                                                        ItemRecipes out) {
         AttributeShardData shard = constantsRegistry != null
                 ? constantsRegistry.getAttributeShard(item.internalName())
                 : null;
         if (shard != null) {
-            ReliableClientRecipe shardRecipe = ShardInfoRecipeBuilder.build(item, shard);
+            ReliableClientRecipe shardRecipe = ShardInfoRecipeBuilder.build(
+                    item, shard, shardSources.getOrDefault(item.internalName(), List.of()));
             if (shardRecipe != null) {
                 out.add(shardRecipe, List.of());
             }
@@ -148,12 +154,54 @@ public final class RecipeGenerator {
         String internalName = item.internalName();
         boolean isNpc = internalName != null && internalName.endsWith("_NPC");
         if (!isNpc && shard == null && item.infoType() != null && !item.infoType().isEmpty()
-                && item.info() != null && !item.info().isEmpty()) {
+                && item.info() != null && !item.info().isEmpty()
+                && (out.recipes.isEmpty() || WikiInfoRecipeBuilder.hasUsefulInfo(item))) {
             List<ReliableClientRecipe> wikiRecipes = WikiInfoRecipeBuilder.build(item);
             for (ReliableClientRecipe recipe : wikiRecipes) {
                 out.add(recipe, List.of());
             }
         }
+    }
+
+    private Map<String, List<String>> buildShardSources(List<NeuItem> items) {
+        Map<String, LinkedHashSet<String>> sources = new HashMap<>();
+        for (NeuItem sourceItem : items) {
+            if (sourceItem.recipes() == null) continue;
+            for (NeuRecipe recipe : sourceItem.recipes()) {
+                if (!(recipe instanceof NeuRecipe.DropsRecipe dropsRecipe)) continue;
+                String mobName = TextUtil.stripColorCodes(dropsRecipe.name());
+                if (mobName.isBlank()) mobName = TextUtil.stripColorCodes(sourceItem.displayName());
+                for (NeuRecipe.DropsRecipe.Drop drop : dropsRecipe.drops()) {
+                    SlotRefParser.IngredientRef ref = SlotRefParser.parse(drop.id());
+                    if (ref == null || constantsRegistry.getAttributeShard(ref.internalName()) == null) continue;
+                    String source = mobName;
+                    if (drop.chance() != null && !drop.chance().isBlank()) {
+                        source += " (" + TextUtil.stripColorCodes(drop.chance()) + ")";
+                    }
+                    String acquisitionNote = cleanAcquisitionNote(drop.extra());
+                    if (!acquisitionNote.isEmpty()) {
+                        source += " — " + acquisitionNote;
+                    }
+                    sources.computeIfAbsent(ref.internalName(), _ -> new LinkedHashSet<>()).add(source);
+                }
+            }
+        }
+        Map<String, List<String>> result = new HashMap<>(sources.size());
+        sources.forEach((id, values) -> result.put(id, List.copyOf(values)));
+        return Map.copyOf(result);
+    }
+
+    private static String cleanAcquisitionNote(List<String> extra) {
+        if (extra == null || extra.isEmpty()) return "";
+        List<String> notes = new ArrayList<>(extra.size());
+        for (String raw : extra) {
+            String note = TextUtil.stripColorCodes(raw).trim();
+            while (note.startsWith("-") || note.startsWith("•")) {
+                note = note.substring(1).trim();
+            }
+            if (!note.isEmpty()) notes.add(note);
+        }
+        return String.join(" ", notes);
     }
 
     private void generateNpcInfoRecipe(NeuItem item, ItemRecipes out) {

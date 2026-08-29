@@ -127,6 +127,19 @@ public final class SkyblockRecipeCache {
                 }
             }
         }
+
+        if (recipe instanceof SkyblockIdAliases aliases) {
+            for (String id : aliases.ingredientAliases()) {
+                if (id != null && !id.isBlank()) {
+                    byIngredient.computeIfAbsent(id, _ -> ConcurrentHashMap.newKeySet()).add(recipe);
+                }
+            }
+            for (String id : aliases.resultAliases()) {
+                if (id != null && !id.isBlank()) {
+                    byResult.computeIfAbsent(id, _ -> ConcurrentHashMap.newKeySet()).add(recipe);
+                }
+            }
+        }
     }
 
     private static String extractCached(ItemStack stack, ConcurrentMap<ItemStack, String> idCache) {
@@ -243,6 +256,13 @@ public final class SkyblockRecipeCache {
         // After move-to-front so the clicked item's own recipe stays the default tab.
         appendIdMatches(id, result);
         return result;
+    }
+
+    /** Direct ID lookup for custom-rendered entities such as NPC previews. */
+    public static List<ReliableClientRecipe> getRecipesForResultId(String id) {
+        if (id == null || id.isBlank()) return List.of();
+        List<ReliableClientRecipe> recipes = byResultId.get(id);
+        return recipes == null ? List.of() : new ArrayList<>(recipes);
     }
 
     /**

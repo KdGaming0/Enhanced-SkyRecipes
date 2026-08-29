@@ -24,7 +24,7 @@ import java.util.*;
  */
 public class BinaryDataLoader {
 
-    public static final int EXPECTED_SCHEMA = 10;
+    public static final int EXPECTED_SCHEMA = 12;
     private static final int HEADER_SIZE = 96;
     private static final long MAX_METADATA_LENGTH = 1 << 20;
     private static final Logger LOGGER = LoggerFactory.getLogger(BinaryDataLoader.class);

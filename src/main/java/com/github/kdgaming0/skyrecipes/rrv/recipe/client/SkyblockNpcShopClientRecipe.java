@@ -9,12 +9,15 @@ import com.github.kdgaming0.skyrecipes.core.render.mob.PlayerSkinRenderer;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.NpcInfoRegistry;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.RecipeViewOpener;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockIdAliases;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockRecipeCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockNpcShopRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -26,7 +29,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
+public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe implements SkyblockIdAliases {
 
     private static final int NPC_RENDER_X = -1;
     private static final int NPC_RENDER_Y = 17;
@@ -37,6 +40,10 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
     private static final int NPC_INFO_BUTTON_WIDTH = 56;
     private static final int NPC_INFO_BUTTON_HEIGHT = 12;
     private static final int BUTTON_GAP = 4;
+    private static final int SHOW_OFFERS_BUTTON_X = 4;
+    private static final int SHOW_OFFERS_BUTTON_WIDTH = 72;
+    private static final List<Component> NPC_TOOLTIP =
+            List.of(Component.literal("§eClick to view all offers"));
 
     // 2×4 cost grid starting at (29, 16) with 18px spacing
     private static final int COST_GRID_ORIGIN_X = 29;
@@ -111,8 +118,33 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
 
         // NPC skin preview — full player model using the same path as Drops recipes
         renderNpcSkin(graphics, pos);
+        if (isOverNpc(mouseX, mouseY)) {
+            graphics.setComponentTooltipForNextFrame(font, NPC_TOOLTIP,
+                    pos.left() + mouseX, pos.top() + mouseY);
+        }
 
         maintainButtons(screen, pos);
+    }
+
+    @Override
+    public List<String> resultAliases() {
+        return npcInternalName.isEmpty() ? List.of() : List.of(npcInternalName);
+    }
+
+    @Override
+    public List<String> ingredientAliases() {
+        return resultAliases();
+    }
+
+    @Override
+    public boolean handleClick(double relX, double relY, int button) {
+        if (button != 0 || !isOverNpc(relX, relY)) return false;
+        return openOffers();
+    }
+
+    private static boolean isOverNpc(double x, double y) {
+        return x >= NPC_RENDER_X && x < NPC_RENDER_X + NPC_RENDER_WIDTH
+                && y >= NPC_RENDER_Y && y < NPC_RENDER_Y + NPC_RENDER_HEIGHT;
     }
 
     @Override
@@ -158,6 +190,17 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
     @Nullable
     protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
         Button wiki = addWikiButton(screen, pos);
+        AbstractWidget sentinel = wiki;
+
+        if (!SkyblockRecipeCache.getRecipesForResultId(npcInternalName).isEmpty()) {
+            Button offersBtn = Button.builder(Component.literal("Show Offers"), _ -> openOffers())
+                    .pos(pos.left() + SHOW_OFFERS_BUTTON_X, pos.top() + BUTTON_ROW_Y_OFFSET)
+                    .size(SHOW_OFFERS_BUTTON_WIDTH, NPC_INFO_BUTTON_HEIGHT)
+                    .tooltip(Tooltip.create(Component.literal("Show every offer from this NPC")))
+                    .build();
+            screen.addRecipeWidget(offersBtn);
+            sentinel = offersBtn;
+        }
 
         SkyblockInfoClientRecipe infoRecipe = NpcInfoRegistry.get(npcInternalName);
         if (infoRecipe != null) {
@@ -170,10 +213,18 @@ public class SkyblockNpcShopClientRecipe extends AbstractSkyblockClientRecipe {
                     .size(NPC_INFO_BUTTON_WIDTH, NPC_INFO_BUTTON_HEIGHT)
                     .build();
             screen.addRecipeWidget(infoBtn);
-            return infoBtn;
+            sentinel = infoBtn;
         }
 
-        return wiki;
+        return sentinel;
+    }
+
+    private boolean openOffers() {
+        List<cc.cassian.rrv.api.recipe.ReliableClientRecipe> offers =
+                SkyblockRecipeCache.getRecipesForResultId(npcInternalName);
+        if (offers.isEmpty()) return false;
+        RecipeViewOpener.open(offers);
+        return true;
     }
 
     public record ShopCost(ItemStack stack, String internalName, int count, boolean isCoins) {

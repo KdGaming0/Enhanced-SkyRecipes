@@ -15,12 +15,19 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockGardenMutationRec
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.*;
 
 /**
@@ -40,6 +47,9 @@ import java.util.*;
  */
 public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRecipe {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockGardenMutationClientRecipe.class);
+    private static final String SKY_MUTATIONS_URL = "https://skymutations.eu/";
+
     private static final int GRID_SIZE = 6;
     private static final int SLOT_SIZE = 18;
     private static final int GRID_ORIGIN_X = 19;
@@ -53,9 +63,9 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     private static final int WATER_ICON_SIZE = 16;
     private static final String WATER_ICON_ITEM = "HYDRO_CAN_ULTRA_3000";
 
-    private static final int INFO_TEXT_Y = 136;
-    /** Fixed render text — hoisted out of renderRecipe, which ran once per frame per card. */
-    private static final Component INFO_HINT = Component.literal("§8Hover for more info");
+    private static final int SKY_MUTATIONS_BUTTON_WIDTH = 92;
+    private static final int SKY_MUTATIONS_BUTTON_HEIGHT = 12;
+    private static final int BUTTON_GAP = 4;
     private static final List<Component> WATER_TOOLTIP =
             List.of(Component.literal("§bRequires Water"));
 
@@ -363,6 +373,14 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         // Mutation name beside surface slot
         Component name = getNameComponent();
         graphics.text(font, name, NAME_X, NAME_Y, RecipeUiHelper.TEXT_WHITE, true);
+        if (mouseX >= NAME_X && mouseX < NAME_X + font.width(name)
+                && mouseY >= NAME_Y && mouseY < NAME_Y + font.lineHeight) {
+            List<Component> tooltip = getTooltip();
+            if (!tooltip.isEmpty()) {
+                graphics.setComponentTooltipForNextFrame(font, tooltip,
+                        pos.left() + mouseX, pos.top() + mouseY);
+            }
+        }
 
         // Watering can indicator + tooltip
         if (mutation.needsWater()) {
@@ -375,23 +393,31 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
             }
         }
 
-        // "Hover for more info"
-        Component hint = INFO_HINT;
-        int hintWidth = font.width(hint);
-        int hintX = (pos.width() - hintWidth) / 2;
-        graphics.text(font, hint, hintX, INFO_TEXT_Y, RecipeUiHelper.TEXT_WHITE, true);
-
-        // Tooltip on hover over the info area
-        if (mouseX >= 0 && mouseX < pos.width()
-                && mouseY >= INFO_TEXT_Y - 2 && mouseY < INFO_TEXT_Y + font.lineHeight + 2) {
-            List<Component> tooltip = getTooltip();
-            if (!tooltip.isEmpty()) {
-                graphics.setComponentTooltipForNextFrame(font, tooltip,
-                        pos.left() + mouseX, pos.top() + mouseY);
-            }
-        }
-
         maintainButtons(screen, pos);
+    }
+
+    @Override
+    @Nullable
+    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
+        addWikiButton(screen, pos);
+        int wikiX = getType().getDisplayWidth() - RecipeUiHelper.WIKI_BUTTON_OFFSET;
+        int buttonY = getType().getDisplayHeight() - RecipeUiHelper.WIKI_BUTTON_OFFSET;
+        int buttonX = wikiX - BUTTON_GAP - SKY_MUTATIONS_BUTTON_WIDTH;
+        Button planner = Button.builder(Component.literal("SkyMutations.eu"), _ -> openSkyMutations())
+                .pos(pos.left() + buttonX, pos.top() + buttonY)
+                .size(SKY_MUTATIONS_BUTTON_WIDTH, SKY_MUTATIONS_BUTTON_HEIGHT)
+                .tooltip(Tooltip.create(Component.literal("Open in SkyMutations website for more info")))
+                .build();
+        screen.addRecipeWidget(planner);
+        return planner;
+    }
+
+    private static void openSkyMutations() {
+        try {
+            Util.getPlatform().openUri(URI.create(SKY_MUTATIONS_URL));
+        } catch (Exception e) {
+            LOGGER.debug("Failed to open SkyMutations URL", e);
+        }
     }
 
     // ── dashed line drawing ───────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import com.github.kdgaming0.skyrecipes.core.mob.MobPreview;
 import com.github.kdgaming0.skyrecipes.core.mob.MobPreviewResolver;
 import com.github.kdgaming0.skyrecipes.core.registry.ConstantsRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.mob.MobPreviewController;
+import com.github.kdgaming0.skyrecipes.core.util.LegacyStringParser;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockDropsRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
@@ -48,29 +49,61 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
      */
     private final List<SlotContent> results;
     private final MobPreviewController previewController;
+    private final List<Component> hoverTooltip;
     @Nullable
     private final RecipeViewMenu.AdditionalStackModifier[] chanceModifiers;
     @Nullable
     private Component cachedMobName;
-    /** Hover tooltip line; mobName is final, so it never changes after first build. */
-    @Nullable
-    private Component cachedHoverTip;
 
     public SkyblockDropsClientRecipe(Identifier id, String mobName, String renderRef,
                                      @Nullable ItemStack sourceStack,
                                      List<DropEntry> drops, String[] chances,
+                                     int level, int xp, int combatXp, int coins,
+                                     String location, List<String> extra,
+                                     String health, String damage,
                                      List<String> wikiUrls) {
         super(id, wikiUrls);
         this.mobName = mobName != null ? mobName : "";
         this.chances = chances != null ? chances : new String[0];
         this.drops = buildDropsList(drops);
         this.results = buildResultsList(this.drops, sourceStack);
+        this.hoverTooltip = buildHoverTooltip(this.mobName, level, xp, combatXp, coins,
+                location, extra, health, damage);
 
         ConstantsRegistry constants = SkyRecipes.getConstantsRegistry();
         MobPreview resolved = constants != null ? MobPreviewResolver.resolve(renderRef, constants) : null;
         if (resolved == null) logUnresolvedOnce(renderRef);
         this.previewController = new MobPreviewController(resolved);
         this.chanceModifiers = buildChanceModifiers(drops);
+    }
+
+    private static List<Component> buildHoverTooltip(String name, int level, int xp, int combatXp,
+                                                      int coins, String location, List<String> extra,
+                                                      String health, String damage) {
+        List<Component> lines = new ArrayList<>();
+        if (!name.isEmpty()) lines.add(LegacyStringParser.parse(name));
+        addDetail(lines, "Level", level >= 0 ? Integer.toString(level) : "");
+        addDetail(lines, "Health", health);
+        addDetail(lines, "Damage", damage);
+        addDetail(lines, "Location", location);
+        addDetail(lines, "Combat XP", combatXp >= 0 ? formatNumber(combatXp) : "");
+        addDetail(lines, "XP", xp >= 0 ? formatNumber(xp) : "");
+        addDetail(lines, "Coins", coins >= 0 ? formatNumber(coins) : "");
+        if (extra != null && !extra.isEmpty()) {
+            lines.add(Component.empty());
+            for (String line : extra) lines.add(LegacyStringParser.parse(line));
+        }
+        return List.copyOf(lines);
+    }
+
+    private static void addDetail(List<Component> lines, String label, String value) {
+        if (value == null || value.isBlank()) return;
+        lines.add(Component.literal(label + ": ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal(value).withStyle(ChatFormatting.YELLOW)));
+    }
+
+    private static String formatNumber(int number) {
+        return String.format(java.util.Locale.ROOT, "%,d", number);
     }
 
     private static List<SlotContent> buildDropsList(List<DropEntry> rawDrops) {
@@ -203,16 +236,10 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
 
     private void renderHoverTooltipIfNeeded(GuiGraphicsExtractor gfx, RecipeViewScreen screen,
                                             RecipePosition pos, int mouseX, int mouseY) {
-        if (!previewController.isHovered() || mobName.isEmpty()) return;
-
-        Component tip = cachedHoverTip;
-        if (tip == null) {
-            tip = Component.literal(mobName).withStyle(ChatFormatting.GOLD);
-            cachedHoverTip = tip;
-        }
+        if (!previewController.isHovered() || hoverTooltip.isEmpty()) return;
         gfx.setComponentTooltipForNextFrame(
                 screen.getFont(),
-                List.of(tip),
+                hoverTooltip,
                 pos.left() + mouseX,
                 pos.top() + mouseY);
     }

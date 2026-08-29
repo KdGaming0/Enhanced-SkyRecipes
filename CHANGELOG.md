@@ -1,5 +1,14 @@
 # 0.5.6
 
+## New
+- Mob drop previews now show available level, health, damage, location, experience, coin rewards, and other details when hovered.
+- Attribute shard information now shows which mobs drop the shard, its drop chance, and any special acquisition conditions.
+- NPC shop recipes now include a **Show Offers** button, and recipe/usage lookup on an NPC exposes all of its offers.
+- Garden mutation recipes now include a **SkyMutations.eu** button for opening additional mutation information.
+
+## Improvements
+- Redundant empty information cards are hidden when an item already has a more useful recipe or information view.
+
 ## Compatibility
 - Skyblocker's wiki and price lookup keybinds now work across Reliable Recipe Viewer's central recipe slots and left bookmarks/craftables panel.
 - SkyOcean's Craft Helper keybind now works on items throughout Reliable Recipe Viewer, including the item list, bookmarks/craftables panel, and recipe slots.

@@ -7,6 +7,8 @@ import com.github.kdgaming0.skyrecipes.core.recipe.util.SlotRefParser;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
 import com.github.kdgaming0.skyrecipes.core.util.IdentifierUtil;
+import com.github.kdgaming0.skyrecipes.core.util.SkyblockIslandNames;
+import com.github.kdgaming0.skyrecipes.core.util.TextUtil;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.client.SkyblockDropsClientRecipe;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -59,7 +61,23 @@ public final class DropsRecipeParser {
                 sourceStack = ItemStack.EMPTY;
             }
 
-            return new SkyblockDropsClientRecipe(recipeId, name, render, sourceStack, drops, chances, item.info());
+            return new SkyblockDropsClientRecipe(recipeId, name, render, sourceStack, drops, chances,
+                    recipe.level(), recipe.xp(), recipe.combatXp(), recipe.coins(),
+                    SkyblockIslandNames.displayName(recipe.panorama()), recipe.extra(),
+                    findLoreValue(item.lore(), "Health"), findLoreValue(item.lore(), "Damage"),
+                    item.info());
         });
+    }
+
+    private static String findLoreValue(List<String> lore, String label) {
+        for (String rawLine : lore) {
+            String line = TextUtil.stripColorCodes(rawLine);
+            int colon = line.indexOf(':');
+            String heading = colon >= 0 ? line.substring(0, colon).trim() : "";
+            if (heading.toLowerCase().endsWith(label.toLowerCase()) && colon + 1 < line.length()) {
+                return line.substring(colon + 1).trim();
+            }
+        }
+        return "";
     }
 }
