@@ -39,6 +39,9 @@ public class SkyRecipesConfig extends MidnightConfig {
     @Entry(category = "calculator")
     public static boolean calculatorContextSuggestions = true;
 
+    @Entry(category = "calculator")
+    public static boolean calculatorEscapeClosesMenu = true;
+
     // -----------------------------------------------------------------
     // UI settings
     // -----------------------------------------------------------------
@@ -74,6 +77,9 @@ public class SkyRecipesConfig extends MidnightConfig {
 
     @Entry(category = "rrv")
     public static boolean blockKeybindsWhileTyping = true;
+
+    @Entry(category = "rrv")
+    public static boolean rememberSearchBetweenMenus = true;
 
     @Entry(category = "rrv", isSlider = true, min = 100, max = 300, precision = 1)
     public static int rrvSearchBarWidth = 200;

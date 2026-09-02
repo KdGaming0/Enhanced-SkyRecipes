@@ -21,8 +21,10 @@ public final class CalculatorPanelRenderer {
     private static final int RESULT_COLOR = 0xFF808080;
     private static final InlinePresentation INCOMPLETE_INLINE =
             new InlinePresentation(" …", 0xFFAAAAAA, null);
-    private static final Component SUCCESS_HINT =
-            Component.translatable("skyrecipes.calculator.hint.success");
+    private static final Component SUCCESS_CLOSE_HINT =
+            Component.translatable("skyrecipes.calculator.hint.success.close");
+    private static final Component SUCCESS_RETURN_HINT =
+            Component.translatable("skyrecipes.calculator.hint.success.return");
     private static final List<PanelLine> HELP_LINES = List.of(
             new PanelLine(Component.translatable("skyrecipes.calculator.help.operators"), 0xFFFFFFFF),
             new PanelLine(Component.translatable("skyrecipes.calculator.help.suffixes"), 0xFFDDDDDD),
@@ -235,6 +237,7 @@ public final class CalculatorPanelRenderer {
         private CalculatorResultFormatter.PreparedResult panelPrepared;
         private SkyRecipesConfig.CalculatorResultFormat panelFormat;
         private boolean panelCopied;
+        private boolean panelEscapeCloses;
         private int panelWidth = -1;
         private Font panelFont;
         private List<PanelLine> panelLines;
@@ -347,8 +350,10 @@ public final class CalculatorPanelRenderer {
         private List<PanelLine> successPanel(CalculatorResultFormatter.PreparedResult prepared,
                                              SkyRecipesConfig.CalculatorResultFormat format,
                                              boolean copied, int contentWidth, Font font) {
+            boolean escapeCloses = SkyRecipesConfig.calculatorEscapeClosesMenu;
             if (panelLines != null && panelPrepared == prepared && panelFormat == format
-                    && panelCopied == copied && panelWidth == contentWidth && panelFont == font) {
+                    && panelCopied == copied && panelEscapeCloses == escapeCloses
+                    && panelWidth == contentWidth && panelFont == font) {
                 return panelLines;
             }
 
@@ -356,10 +361,11 @@ public final class CalculatorPanelRenderer {
                     value -> font.width(Component.translatable("skyrecipes.calculator.result", value)) <= contentWidth);
             Component hint = copied
                     ? Component.translatable("skyrecipes.calculator.copied", formatted)
-                    : SUCCESS_HINT;
+                    : escapeCloses ? SUCCESS_CLOSE_HINT : SUCCESS_RETURN_HINT;
             panelPrepared = prepared;
             panelFormat = format;
             panelCopied = copied;
+            panelEscapeCloses = escapeCloses;
             panelWidth = contentWidth;
             panelFont = font;
             panelLines = List.of(

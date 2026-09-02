@@ -94,6 +94,9 @@ public class SearchBarKeyInputMixin {
         }
 
         if (event.isEscape()) {
+            if (SkyRecipesConfig.calculatorEscapeClosesMenu) {
+                return false;
+            }
             String restore = session.exitAndRestoreQuery();
             SearchSuggestionController.clear(bar);
             bar.setValue(restore);

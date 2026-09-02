@@ -15,6 +15,8 @@
   "skyrecipes.midnightconfig.calculatorHistorySize.tooltip": "Number of calculations kept for Up/Down history during this game session.",
   "skyrecipes.midnightconfig.calculatorContextSuggestions": "Calculator Suggestions",
   "skyrecipes.midnightconfig.calculatorContextSuggestions.tooltip": "Show useful function and ans completions in gray. Press Tab or Right Arrow to accept one.",
+  "skyrecipes.midnightconfig.calculatorEscapeClosesMenu": "Escape Closes Menu",
+  "skyrecipes.midnightconfig.calculatorEscapeClosesMenu.tooltip": "Close the current menu when Escape is pressed during a calculation. Disable to leave calculator mode and restore the previous item search instead.",
   "skyrecipes.midnightconfig.enum.CalculatorInputMode.SMART": "Smart (Recommended)",
   "skyrecipes.midnightconfig.enum.CalculatorInputMode.EXPLICIT_ONLY": "Explicit Only",
   "skyrecipes.midnightconfig.enum.CalculatorDisplayMode.INLINE": "Inside Search Bar",
@@ -50,6 +52,9 @@
   "skyrecipes.midnightconfig.blockKeybindsWhileTyping": "Block Keybinds While Typing",
   "skyrecipes.midnightconfig.blockKeybindsWhileTyping.tooltip": "Stops other mods' inventory keybinds from firing while you are typing in an RRV search box. Escape and Tab still work as normal.",
 
+  "skyrecipes.midnightconfig.rememberSearchBetweenMenus": "Remember Search Between Menus",
+  "skyrecipes.midnightconfig.rememberSearchBetweenMenus.tooltip": "Keep the last item search or active calculation when menus are closed. When disabled, the next menu opens with a blank search bar.",
+
   "skyrecipes.midnightconfig.rrvSearchBarWidth": "Search Bar Width",
   "skyrecipes.midnightconfig.rrvSearchBarWidth.tooltip": "Minimum width for the search bar when wide mode is enabled.",
 
@@ -70,7 +75,8 @@
   "skyrecipes.calculator.result": "Result: %s",
   "skyrecipes.calculator.incomplete": "Incomplete: %s",
   "skyrecipes.calculator.error": "Error: %s",
-  "skyrecipes.calculator.hint.success": "Enter copy · Tab use · Esc return",
+  "skyrecipes.calculator.hint.success.close": "Enter copy · Tab use · Esc close",
+  "skyrecipes.calculator.hint.success.return": "Enter copy · Tab use · Esc return",
   "skyrecipes.calculator.hint.completion": "Tab or → complete",
   "skyrecipes.calculator.copied": "Copied calculator result: %s",
   "skyrecipes.calculator.inline.copied": " ✓ Copied",

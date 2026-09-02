@@ -1,3 +1,9 @@
+# 0.5.7
+
+## Improvements
+- Escape now closes the menu during an active search-bar calculation by default, with an option to restore the previous behavior.
+- A new setting controls whether item searches and calculations are remembered between menus.
+
 # 0.5.6
 
 ## New

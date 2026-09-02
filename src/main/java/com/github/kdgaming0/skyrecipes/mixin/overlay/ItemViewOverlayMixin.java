@@ -22,6 +22,7 @@ import com.github.kdgaming0.skyrecipes.mixin.accessor.ItemViewOverlayAccessor;
 import com.github.kdgaming0.skyrecipes.rrv.overlay.DimQuadEmitter;
 import com.github.kdgaming0.skyrecipes.rrv.plugin.SkyRecipesClientPlugin;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.ShardGuiResolver;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -44,6 +45,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -72,6 +74,9 @@ public class ItemViewOverlayMixin implements CalculatorSessionOwner {
     private CalculatorSession skyrecipes$calculatorSession;
     @Unique
     private boolean skyrecipes$restoringCalculatorQuery;
+    @Unique
+    private static final Set<Screen> skyrecipes$trackedSearchScreens =
+            Collections.newSetFromMap(new WeakHashMap<>());
 
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     private void skyrecipes$initializeCalculatorSession(CallbackInfo ci) {
@@ -164,6 +169,22 @@ public class ItemViewOverlayMixin implements CalculatorSessionOwner {
         }
         session.update(session.input(), ((ItemViewOverlay) (Object) this).getCurrentQuery(), calculation);
         skyrecipes$applyCalculatorSuggestion(calculation);
+    }
+
+    @Override
+    public void skyrecipes$clearSearchState() {
+        CalculatorSession session = skyrecipes$calculatorSession();
+        session.exitForNormalQuery();
+        skyrecipes$clearSuggestionState();
+
+        if (searchbar != null && !searchbar.getValue().isEmpty()) {
+            searchbar.setValue("");
+            return;
+        }
+        ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+        if (!self.getCurrentQuery().isEmpty()) {
+            ((ItemViewOverlayAccessor) self).skyrecipes$updateQuery("");
+        }
     }
 
     @Unique
@@ -392,11 +413,29 @@ public class ItemViewOverlayMixin implements CalculatorSessionOwner {
 
     @Inject(method = "onScreenChanged", at = @At("HEAD"), remap = false)
     private void skyrecipes$beginCalculatorRebuild(AbstractRrvOverlay.InventoryPositionInfo info, CallbackInfo ci) {
+        skyrecipes$trackSearchPersistence(info.screen());
         CalculatorSession session = skyrecipes$calculatorSession();
         if (session.isActive()) {
             session.setRebuilding(true);
             session.invalidatePresentation();
         }
+    }
+
+    @Unique
+    private static void skyrecipes$trackSearchPersistence(Screen screen) {
+        if (!skyrecipes$trackedSearchScreens.add(screen)) {
+            return;
+        }
+        ScreenEvents.remove(screen).register(_ -> Minecraft.getInstance().schedule(() -> {
+            Minecraft client = Minecraft.getInstance();
+            if (SkyRecipesConfig.rememberSearchBetweenMenus
+                    || client.screen instanceof AbstractContainerScreen<?>) {
+                return;
+            }
+            if (ItemViewOverlay.INSTANCE instanceof CalculatorSessionOwner owner) {
+                owner.skyrecipes$clearSearchState();
+            }
+        }));
     }
 
     @Inject(method = "onScreenChanged", at = @At("TAIL"), remap = false)

@@ -7,4 +7,6 @@ public interface CalculatorSessionOwner {
     void skyrecipes$refreshEffectiveQuery();
 
     void skyrecipes$reconcileCalculatorConfig();
+
+    void skyrecipes$clearSearchState();
 }
