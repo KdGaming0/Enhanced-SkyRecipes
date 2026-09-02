@@ -3,6 +3,13 @@
 ## Improvements
 - Escape now closes the menu during an active search-bar calculation by default, with an option to restore the previous behavior.
 - A new setting controls whether item searches and calculations are remembered between menus.
+- Recipe now shows the selected item's recipe path without mixing in later upgrades that use it, while Usage puts the immediate next family upgrade first.
+- SkyMutations.eu buttons now open the page for the mutation being viewed instead of the website's front page.
+
+## Fixes
+- Category filters now correctly distinguish Minions, Enchanted Books, and Materials from unrelated mobs and ordinary book items.
+- Mob previews no longer crash Minecraft 26.2 when rendering entities such as chickens and composite mobs.
+- The Wiki button in Mob Drops recipes not opening the wiki link.
 
 # 0.5.6
 

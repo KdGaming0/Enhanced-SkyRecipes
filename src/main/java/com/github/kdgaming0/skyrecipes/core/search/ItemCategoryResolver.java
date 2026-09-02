@@ -146,7 +146,6 @@ public final class ItemCategoryResolver {
             return SkyblockItemCategory.TOOL;
         if (id.contains("rod")) return SkyblockItemCategory.FISHING;
         if (id.contains("potion")) return SkyblockItemCategory.CONSUMABLE;
-        if (id.contains("book")) return SkyblockItemCategory.ENCHANTED_BOOK;
         return SkyblockItemCategory.UNKNOWN;
     }
 

@@ -25,8 +25,8 @@
   "skyrecipes.midnightconfig.enum.CalculatorResultFormat.FULL": "Full Number (1,234,567)",
   "skyrecipes.midnightconfig.enum.CalculatorResultFormat.COMPACT": "Compact (1.23m)",
 
-  "skyrecipes.midnightconfig.familyExpansionEnabled": "Family Expansion",
-  "skyrecipes.midnightconfig.familyExpansionEnabled.tooltip": "Group related tiered items (pets, minions, stars, accessory upgrades) into families.",
+  "skyrecipes.midnightconfig.familyExpansionEnabled": "Show Recipe Paths",
+  "skyrecipes.midnightconfig.familyExpansionEnabled.tooltip": "Recipe shows the selected tier and the family steps leading to it. Usage puts the next family upgrade first.",
 
   "skyrecipes.midnightconfig.groupTieredItems": "Group Tiered Items",
   "skyrecipes.midnightconfig.groupTieredItems.tooltip": "Collapse tiered SkyBlock items (minion tiers, pet rarities, enchantment levels, accessory upgrades, ...) into expandable stacks in the item list. Individual groups can be managed in RRV's Stack Groups screen.",

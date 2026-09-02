@@ -203,15 +203,19 @@ public final class SkyblockRecipeCache {
         List<ReliableClientRecipe> list = byIngredientId.get(id);
         List<ReliableClientRecipe> result = list == null ? new ArrayList<>() : new ArrayList<>(list);
         appendIdMatches(id, result);
+        if (familyResolver != null) {
+            moveRecipesProducingToFront(result, familyResolver.getNextFamilyMember(id));
+        }
         return result;
     }
 
     /**
      * Look up recipes that produce the given stack as a result.
      *
-     * <p>When family expansion is enabled, recipes for all family members are included.
-     * The clicked item's recipes are moved to the front of the list so they appear first
-     * in the recipe view.</p>
+     * <p>When family expansion is enabled, ordered families include the path through the
+     * clicked member, while unordered sibling families expand in full. Exact recipes are
+     * moved to the front so Recipe answers "how do I get here?" without including later
+     * upgrades that consume the clicked item.</p>
      *
      * @return a <b>mutable</b> list of matching recipes, or {@code null} if the stack is not
      * a SkyBlock item (caller should fall back to RRV's native lookup).
@@ -240,22 +244,27 @@ public final class SkyblockRecipeCache {
 
         List<ReliableClientRecipe> result = new ArrayList<>(merged);
 
-        // Move the clicked item's recipes to the front so it is displayed first
-        int targetIdx = -1;
-        for (int i = 0; i < result.size(); i++) {
-            if (recipeContainsResultId(result.get(i), id)) {
-                targetIdx = i;
-                break;
-            }
-        }
-        if (targetIdx > 0) {
-            ReliableClientRecipe target = result.remove(targetIdx);
-            result.add(0, target);
-        }
+        // Keep every exact recipe ahead of earlier recipe-path steps.
+        moveRecipesProducingToFront(result, id);
 
         // After move-to-front so the clicked item's own recipe stays the default tab.
         appendIdMatches(id, result);
         return result;
+    }
+
+    /** Stable partition: matching recipes first, preserving the existing order in both halves. */
+    private static void moveRecipesProducingToFront(List<ReliableClientRecipe> recipes,
+                                                     String resultId) {
+        if (resultId == null || recipes.size() <= 1) return;
+        List<ReliableClientRecipe> matches = new ArrayList<>();
+        List<ReliableClientRecipe> others = new ArrayList<>();
+        for (ReliableClientRecipe recipe : recipes) {
+            (recipeContainsResultId(recipe, resultId) ? matches : others).add(recipe);
+        }
+        if (matches.isEmpty() || others.isEmpty()) return;
+        recipes.clear();
+        recipes.addAll(matches);
+        recipes.addAll(others);
     }
 
     /** Direct ID lookup for custom-rendered entities such as NPC previews. */

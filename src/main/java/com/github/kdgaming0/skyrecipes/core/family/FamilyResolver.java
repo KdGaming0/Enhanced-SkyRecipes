@@ -151,16 +151,53 @@ public final class FamilyResolver {
     }
 
     /**
-     * Returns the set of internal names to search for recipes when the player presses
-     * <b>R</b> on the given item: the whole family in tier order for expanding family
-     * types, otherwise a singleton of the given name. Never null.
+     * Returns the internal names to search when the player presses <b>R</b>.
+     *
+     * <p>For an ordered family this is the recipe path up to and including the selected
+     * member. Later members are usages of the selected item, so they belong under <b>U</b>.
+     * Unordered sibling families (armor sets and branching variants) still expand in full.
+     * The selected member is always present. Never null.</p>
      */
     public Set<String> getFamilyMembers(String internalName) {
         FamilyInfo info = memberToFamily.get(internalName);
         if (info == null || !info.type().expandsForResults()) {
             return Collections.singleton(internalName);
         }
-        return info.members();
+        return recipePathMembers(info, internalName);
+    }
+
+    /** Immediate next member of an ordered family, or {@code null} at the end/no family. */
+    public String getNextFamilyMember(String internalName) {
+        FamilyInfo info = memberToFamily.get(internalName);
+        return nextFamilyMember(info, internalName);
+    }
+
+    /** Package-visible for regression tests of Usage successor ordering. */
+    static String nextFamilyMember(FamilyInfo info, String internalName) {
+        if (info == null || !info.type().formsOrderedRecipePath()) return null;
+
+        boolean selected = false;
+        for (String member : info.members()) {
+            if (selected) return member;
+            selected = member.equals(internalName);
+        }
+        return null;
+    }
+
+    /** Package-visible for regression tests of the exact path semantics. */
+    static Set<String> recipePathMembers(FamilyInfo info, String internalName) {
+        if (!info.type().formsOrderedRecipePath()) {
+            return info.members();
+        }
+
+        LinkedHashSet<String> path = new LinkedHashSet<>();
+        for (String member : info.members()) {
+            path.add(member);
+            if (member.equals(internalName)) {
+                return Collections.unmodifiableSet(path);
+            }
+        }
+        return Collections.singleton(internalName);
     }
 
     /** Returns every distinct family (explicit and implicit), each appearing once. */

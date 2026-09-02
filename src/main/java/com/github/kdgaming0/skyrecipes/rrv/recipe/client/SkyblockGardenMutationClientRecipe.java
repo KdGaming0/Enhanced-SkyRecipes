@@ -48,7 +48,6 @@ import java.util.*;
 public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRecipe {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockGardenMutationClientRecipe.class);
-    private static final String SKY_MUTATIONS_URL = "https://skymutations.eu/";
 
     private static final int GRID_SIZE = 6;
     private static final int SLOT_SIZE = 18;
@@ -412,9 +411,10 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         return planner;
     }
 
-    private static void openSkyMutations() {
+    private void openSkyMutations() {
         try {
-            Util.getPlatform().openUri(URI.create(SKY_MUTATIONS_URL));
+            URI uri = new URI("https", "skymutations.eu", "/wiki/" + mutation.name(), null);
+            Util.getPlatform().openUri(uri);
         } catch (Exception e) {
             LOGGER.debug("Failed to open SkyMutations URL", e);
         }

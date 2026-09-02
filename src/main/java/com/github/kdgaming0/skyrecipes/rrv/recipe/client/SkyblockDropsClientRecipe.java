@@ -16,6 +16,7 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -36,6 +37,8 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockDropsClientRecipe.class);
     private static final Set<String> LOGGED_UNRESOLVED = ConcurrentHashMap.newKeySet();
+    private static final int WIKI_BUTTON_Y = 4;
+    private static final int MOB_NAME_SIDE_CLEARANCE = 20;
 
     private final String mobName;
     private final String[] chances;
@@ -216,10 +219,18 @@ public class SkyblockDropsClientRecipe extends AbstractSkyblockClientRecipe {
         maintainButtons(screen, pos);
     }
 
+    @Override
+    @Nullable
+    protected AbstractWidget placeButtons(RecipeViewScreen screen, RecipePosition pos) {
+        return addWikiButton(screen, pos,
+                getType().getDisplayWidth() - RecipeUiHelper.WIKI_BUTTON_OFFSET,
+                WIKI_BUTTON_Y);
+    }
+
     private void renderMobName(GuiGraphicsExtractor gfx, RecipePosition pos) {
         if (mobName.isEmpty()) return;
 
-        int maxWidth = pos.width() - 8;
+        int maxWidth = pos.width() - MOB_NAME_SIDE_CLEARANCE * 2;
         Component line = cachedMobName;
         if (line == null) {
             line = ellipsize(mobName, maxWidth);

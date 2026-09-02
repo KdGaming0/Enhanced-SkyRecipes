@@ -68,22 +68,27 @@ public enum SkyblockItemCategory {
 
         String[] parts = clean.split("\\s+");
         int idx = 0;
+        boolean foundRarity = false;
 
         // Skip rarity words (handles "VERY SPECIAL")
         while (idx < parts.length) {
             String part = parts[idx];
             if (part.equals("VERY") && idx + 1 < parts.length && parts[idx + 1].equals("SPECIAL")) {
                 idx += 2;
+                foundRarity = true;
             } else if (RARITY_WORDS.contains(part)) {
                 idx++;
+                foundRarity = true;
             } else {
                 break;
             }
         }
 
-        // Skip DUNGEON prefix
-        if (idx < parts.length && parts[idx].equals("DUNGEON")) {
-            idx++;
+        // A type footer always starts with a rarity. Without this guard, ordinary prose
+        // such as "Ignores your defense" (contains ORE) and "encountered in SkyBlock"
+        // (contains BLOCK) is mistaken for a material/type declaration.
+        if (!foundRarity) {
+            return UNKNOWN;
         }
 
         if (idx >= parts.length) {
@@ -156,7 +161,7 @@ public enum SkyblockItemCategory {
             case "POTION" -> CONSUMABLE;
 
             // ── Enchanted books ───────────────────────────────────────────────
-            case "ENCHANTED BOOK", "BOOK" -> ENCHANTED_BOOK;
+            case "ENCHANTED BOOK" -> ENCHANTED_BOOK;
 
             // ── Reforge stones ────────────────────────────────────────────────
             case "REFORGE STONE" -> REFORGE_STONE;
@@ -178,37 +183,47 @@ public enum SkyblockItemCategory {
                  "FOOD", "ARROW", "SACK" -> MISC;
 
             default -> {
-                // Broad fallback: if it contains known type words
-                if (t.contains("SWORD") || t.contains("BOW") || t.contains("WAND") || t.contains("LONGSWORD"))
+                // Fallbacks operate on complete words. Substring checks classified prose
+                // such as IGNORES as ORE, SKYBLOCK as BLOCK, and "minions!" as MINION.
+                if (hasWord(t, "SWORD", "BOW", "SHORTBOW", "LONGSWORD", "WAND"))
                     yield WEAPON;
-                if (t.contains("HELMET") || t.contains("CHESTPLATE") || t.contains("LEGGINGS") || t.contains("BOOTS"))
+                if (hasWord(t, "HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS"))
                     yield ARMOR;
-                if (t.contains("BELT") || t.contains("NECKLACE") || t.contains("CLOAK") || t.contains("GLOVES") || t.contains("BRACELET"))
+                if (hasWord(t, "BELT", "NECKLACE", "CLOAK", "GLOVES", "BRACELET"))
                     yield EQUIPMENT;
-                if (t.contains("ACCESSORY") || t.contains("TALISMAN") || t.contains("RING") || t.contains("ARTIFACT") || t.contains("RELIC") || t.contains("HATCESSORY") || t.contains("CARNIVAL MASK"))
+                if (hasWord(t, "ACCESSORY", "TALISMAN", "RING", "ARTIFACT", "RELIC", "HATCESSORY"))
                     yield ACCESSORY;
-                if (t.contains("PET") && !t.contains("PET ITEM")) yield PET;
-                if (t.contains("MINION")) yield MINION;
-                if (t.contains("PICKAXE") || t.contains("DRILL") || t.contains("HOE") || t.contains("AXE") || t.contains("SHOVEL") || t.contains("SHEARS") || t.contains("CHISEL") || t.contains("FARMING TOOL") || t.contains("DEPLOYABLE") || t.contains("GARDEN CHIP") || t.contains("VACUUM"))
+                if (hasWord(t, "PET") && !t.contains("PET ITEM")) yield PET;
+                if (hasWord(t, "MINION")) yield MINION;
+                if (hasWord(t, "PICKAXE", "DRILL", "HOE", "AXE", "SHOVEL", "SHEARS",
+                        "CHISEL", "DEPLOYABLE", "VACUUM"))
                     yield TOOL;
-                if (t.contains("ROD") || t.contains("BAIT") || t.contains("TROPHY") || t.contains("FISHING"))
+                if (hasWord(t, "ROD", "BAIT", "TROPHY", "FISHING"))
                     yield FISHING;
-                if (t.contains("POTION")) yield CONSUMABLE;
-                if (t.contains("BOOK") && !t.contains("ROD")) yield ENCHANTED_BOOK;
+                if (hasWord(t, "POTION")) yield CONSUMABLE;
                 if (t.contains("REFORGE STONE") || t.contains("REFORGE")) yield REFORGE_STONE;
-                if (t.contains("DYE") || t.contains("SKIN") || t.contains("COSMETIC") || t.contains("MEMENTO"))
+                if (hasWord(t, "DYE", "SKIN", "COSMETIC", "MEMENTO"))
                     yield COSMETIC;
-                if (t.contains("PORTAL") || t.contains("TRAVEL SCROLL")) yield PORTAL;
-                if (t.contains("RIFT") && !t.contains("TIMECHARM")) yield RIFT_ITEM;
-                if (t.contains("DUNGEON") && t.contains("ITEM")) yield DUNGEON_ITEM;
-                if (t.contains("GEMSTONE") || t.contains("ORE") || t.contains("BLOCK") || t.contains("METAL") || t.contains("SALT"))
+                if (hasWord(t, "PORTAL") || t.contains("TRAVEL SCROLL")) yield PORTAL;
+                if (hasWord(t, "RIFT") && !hasWord(t, "TIMECHARM")) yield RIFT_ITEM;
+                if (hasWord(t, "DUNGEON") && hasWord(t, "ITEM")) yield DUNGEON_ITEM;
+                if (hasWord(t, "GEMSTONE", "ORE", "BLOCK", "METAL", "SALT"))
                     yield MATERIAL;
-                if (t.contains("MUTATION")) yield FARMING;
-                if (t.contains("POWER STONE") || t.contains("SHARD") || t.contains("SACK") || t.contains("FOOD") || t.contains("ARROW"))
+                if (hasWord(t, "MUTATION")) yield FARMING;
+                if (t.contains("POWER STONE") || hasWord(t, "SHARD", "SACK", "FOOD", "ARROW"))
                     yield MISC;
                 yield UNKNOWN;
             }
         };
+    }
+
+    private static boolean hasWord(String text, String... candidates) {
+        for (String word : text.split("[^A-Z0-9]+")) {
+            for (String candidate : candidates) {
+                if (word.equals(candidate)) return true;
+            }
+        }
+        return false;
     }
 
     /**

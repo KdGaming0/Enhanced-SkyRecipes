@@ -158,8 +158,8 @@ The RRV search bar doubles as a live calculator. **Smart mode** recognizes clear
 - **Panel** shows every calculator state in an expanded panel above the search bar.
 - Result formatting can be Automatic (recommended), Full Number, or Compact. Arithmetic uses high internal precision; the decimal-place setting changes display only.
 
-### Family Expansion
-Tiered items — dungeon stars, pet tiers, minion tiers, accessory upgrades, and enchantment levels — are grouped into families. When family expansion is enabled, pressing `R` on one member can show recipes across the entire family, so you don't have to hunt down each tier separately.
+### Recipe Paths
+Tiered items — dungeon stars, pet tiers, minion tiers, accessory upgrades, enchantment levels, and crafted upgrade chains — are grouped into ordered recipe paths. Pressing `R` shows the selected item's recipe first, followed by the earlier family steps needed to reach it; later upgrades stay under `U`, where the immediate next step appears first. Unordered sibling families such as armor sets continue to show their related recipes together.
 
 ### Tiered Item Grouping
 The item list groups tiered items into single expandable entries: minions, pets, enchantments, drills, accessory upgrade lines (Talisman → Ring → Artifact → Relic), armor upgrade lines, and crafted upgrade chains (Diamond → Enchanted Diamond → Enchanted Diamond Block, Aspect of the End → Aspect of the Void, and similar). Click a group to expand it; searching still surfaces exact tiers directly. Controlled by the `groupTieredItems` and `groupCraftedChains` settings, with per-group management in RRV's Stack Groups screen.
@@ -177,7 +177,7 @@ Open the config through **Mod Menu → SkyRecipes → Config**. SkyRecipes uses 
 | **Calculator** | `calculatorResultFormat` | Automatic (recommended), Full Number, or Compact result formatting                                                 |
 | **Calculator** | `calculatorHistorySize` | Number of committed calculations retained for Up/Down history (1–20)                                               |
 | **Calculator** | `calculatorContextSuggestions` | Enables function and `ans` completion ghost text                                                             |
-| **UI** | `familyExpansionEnabled` | Groups tiered items (pets, minions, stars, accessory upgrades) into families                                       |
+| **UI** | `familyExpansionEnabled` | Shows the selected item's recipe path while keeping later upgrades under Usage                                    |
 | **RRV** | `groupTieredItems` | Collapses tiered items (minions, pets, enchantments, upgrade lines) into expandable groups in the item list        |
 | **RRV** | `groupCraftedChains` | Groups items that craft directly into one another as upgrade chains (takes effect after the next data load)        |
 | **RRV** | `shardFusionRecipes` | Shows fusion recipes for attribute shards (data from skyshards.com)                                                |

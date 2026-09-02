@@ -4,9 +4,10 @@ package com.github.kdgaming0.skyrecipes.core.family;
  * Classification of item families, declaring the two behaviors a family can have:
  *
  * <ul>
- *   <li><b>expands for results</b> — pressing <b>R</b> on a member shows recipes for the
- *       whole family. <b>U</b> lookups never expand: the ingredient index already
- *       captures upgrade chains naturally.</li>
+ *   <li><b>expands for results</b> — pressing <b>R</b> on a member shows related recipes.
+ *       Ordered paths stop at the selected member; unordered sibling families show the
+ *       whole family. <b>U</b> lookups never expand: the ingredient index already captures
+ *       upgrade chains naturally.</li>
  *   <li><b>forms a stack group</b> — members collapse into one stack in the RRV item list.</li>
  * </ul>
  */
@@ -64,6 +65,18 @@ public enum FamilyType {
     /** True when pressing <b>R</b> on a member should show recipes for the whole family. */
     public boolean expandsForResults() {
         return expandsForResults;
+    }
+
+    /**
+     * True when family members form a progression with a meaningful before/after order.
+     * Recipe expansion for these families means "the path to this item", not every later
+     * upgrade that consumes it.
+     */
+    public boolean formsOrderedRecipePath() {
+        return switch (this) {
+            case TIERED, ACCESSORY_CHAIN, STARRED, UPGRADE_CHAIN -> true;
+            case BRANCHING, ARMOR_SET, VARIANT_SET, SINGLE -> false;
+        };
     }
 
     /** True when members should collapse into one stack group in the item list. */

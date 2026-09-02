@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Owns the entity lifecycle, animation, and rendering for a drop-recipe mob preview.
@@ -22,6 +23,10 @@ public class MobPreviewController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MobPreviewController.class);
     private static final int ROTATION_PERIOD = 360;
+    // Preview entities never enter the ClientLevel, whose 26.2 ID allocator returns
+    // Entity.INVALID_ENTITY_ID (0). Negative IDs keep these detached entities valid
+    // for render-state extraction without colliding with server-owned entity IDs.
+    private static final AtomicInteger NEXT_PREVIEW_ENTITY_ID = new AtomicInteger(-1);
 
     private final MobPreview preview;
     private final List<LivingEntity> entityStack = new ArrayList<>();
@@ -38,9 +43,14 @@ public class MobPreviewController {
         if (type == null) return null;
         Entity entity = type.create(level, EntitySpawnReason.LOAD);
         if (!(entity instanceof LivingEntity living)) return null;
+        assignPreviewEntityId(living);
         living.setYBodyRot(30.0F);
         living.setYHeadRot(30.0F);
         return living;
+    }
+
+    private static void assignPreviewEntityId(LivingEntity entity) {
+        entity.setId(NEXT_PREVIEW_ENTITY_ID.getAndDecrement());
     }
 
     /**
@@ -52,6 +62,7 @@ public class MobPreviewController {
         try {
             var entity = net.minecraft.world.entity.EntityType.VILLAGER.create(mc.level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
             if (entity instanceof LivingEntity living) {
+                assignPreviewEntityId(living);
                 living.setPos(0, 0, 0);
                 living.yRotO = 0;
                 living.setYRot(0);
