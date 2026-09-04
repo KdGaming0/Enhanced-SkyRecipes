@@ -46,7 +46,7 @@ public class MuseumManagerMixin {
         if (skyrecipes$broken) return;
         try {
             MuseumManager self = (MuseumManager) (Object) this;
-            OverlayManager.INSTANCE.setGuiBlocking(new BlockingGuiComponent(
+            OverlayManager.INSTANCE.setExclusionArea(new BlockingGuiComponent(
                     SKYRECIPES$MUSEUM_ID,
                     self.getX(),
                     self.getY(),
@@ -57,7 +57,7 @@ public class MuseumManagerMixin {
             Screen screen = Minecraft.getInstance().screen;
             if (screen != null) {
                 ScreenEvents.remove(screen).register(_ ->
-                        OverlayManager.INSTANCE.removeGuiBlocking(SKYRECIPES$MUSEUM_ID, true)
+                        OverlayManager.INSTANCE.removeExclusionArea(SKYRECIPES$MUSEUM_ID, true)
                 );
             }
         } catch (Throwable t) {

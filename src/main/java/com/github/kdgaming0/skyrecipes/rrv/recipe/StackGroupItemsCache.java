@@ -20,10 +20,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Memo for RRV's {@code StackGroupManager.getGroupItems(AbstractStackGroup)}, which walks the
@@ -41,16 +43,18 @@ import java.util.Objects;
  * frozen item registry); results are published back on the render thread, where a generation
  * check discards them if an invalidation happened mid-computation.</p>
  *
- * <p>The memo map itself is only ever touched on the render thread (every RRV caller and every
- * invalidation site runs there), so it needs no synchronization.</p>
+ * <p>RRV 8.10 resolves groups from background workers as well as the render thread. The
+ * synchronized identity map keeps those reads and the infrequent publish/invalidate writes
+ * safe; hot per-frame slot lookups are still absorbed by {@code ItemSlotGroupCacheMixin}.</p>
  */
 public final class StackGroupItemsCache {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StackGroupItemsCache.class);
 
-    private static final Map<AbstractStackGroup, List<ItemStack>> groupItems = new IdentityHashMap<>();
-    /** Bumped by every invalidation (render thread); read by in-flight prewarm publishes. */
-    private static volatile int generation = 0;
+    private static final Map<AbstractStackGroup, List<ItemStack>> groupItems =
+            Collections.synchronizedMap(new IdentityHashMap<>());
+    /** Bumped by every invalidation; read by in-flight prewarm publishes. */
+    private static final AtomicInteger generation = new AtomicInteger();
 
     private StackGroupItemsCache() {
     }
@@ -76,19 +80,21 @@ public final class StackGroupItemsCache {
      * a stale answer.</p>
      */
     public static int generation() {
-        return generation;
+        return generation.get();
     }
 
     public static void invalidate() {
-        generation++;
-        groupItems.clear();
+        synchronized (groupItems) {
+            generation.incrementAndGet();
+            groupItems.clear();
+        }
         // Group contents feed applyGrouping's representative stacks, so its memo is stale too.
         // Covers the RRV-rebuild invalidation site, which does not go through reload().
         GroupingResultCache.invalidate();
     }
 
     /** Counts memo misses that fell through to RRV's registry sweep; reported at each prewarm. */
-    private static int lazySweeps = 0;
+    private static final AtomicInteger lazySweeps = new AtomicInteger();
 
     /**
      * Records that a group's contents were computed by RRV's own {@code getGroupItems} — a
@@ -97,7 +103,7 @@ public final class StackGroupItemsCache {
      * diagnostic for whether the memo is being served or bypassed.
      */
     public static void recordLazySweep() {
-        lazySweeps++;
+        lazySweeps.incrementAndGet();
     }
 
     /**
@@ -175,7 +181,7 @@ public final class StackGroupItemsCache {
         List<AbstractStackGroup> groups = List.copyOf(StackGroupManager.stackGroups);
         if (groups.isEmpty()) return;
 
-        int gen = generation;
+        int gen = generation();
 
         // Snapshot the stack sensitives on the render thread: the backing map is mutated
         // there (batched injection, RRV rebuilds) with no synchronization. One pass over
@@ -263,23 +269,23 @@ public final class StackGroupItemsCache {
 
     /** Render thread: sort with RRV's own ordering (touches its lazy registry-order cache) and store. */
     private static void publish(int gen, Map<AbstractStackGroup, List<ItemStack>> computed) {
-        if (generation != gen) {
+        if (generation() != gen) {
             // The cycle this was computed for is gone. Whoever bumped the generation is
             // responsible for the next prewarm; say so rather than vanishing silently,
             // because the memo is cold until they do.
             LOGGER.debug("Discarded prewarm of {} groups: generation moved {} -> {}",
-                    computed.size(), gen, generation);
+                    computed.size(), gen, generation());
             return;
         }
         for (Map.Entry<AbstractStackGroup, List<ItemStack>> entry : computed.entrySet()) {
             StackGroupManagerAccessor.skyrecipes$sortByGroupOrder(entry.getValue(), entry.getKey().getId());
             put(entry.getKey(), entry.getValue());
         }
-        if (lazySweeps > 0) {
+        int sweeps = lazySweeps.getAndSet(0);
+        if (sweeps > 0) {
             // Each of these was a full item-registry walk that the memo should have absorbed.
             LOGGER.info("Prewarmed {} stack groups ({} groups had fallen through to RRV's"
-                    + " registry sweep first)", computed.size(), lazySweeps);
-            lazySweeps = 0;
+                    + " registry sweep first)", computed.size(), sweeps);
         } else {
             LOGGER.debug("Prewarmed {} stack groups", computed.size());
         }

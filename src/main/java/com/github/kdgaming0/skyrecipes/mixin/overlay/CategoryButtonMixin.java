@@ -117,7 +117,7 @@ public class CategoryButtonMixin {
         int blockHeight = rows * btnSize + (rows - 1) * btnGap + 2;
         BlockingGuiComponent rowBlocking =
                 new BlockingGuiComponent(skyrecipes$ROW_ID, startX, firstRowY, actualTotalWidth, blockHeight);
-        OverlayManager.INSTANCE.setGuiBlocking(rowBlocking);
+        OverlayManager.INSTANCE.setExclusionArea(rowBlocking);
 
         skyrecipes$updateCategoryButtonVisibility();
     }

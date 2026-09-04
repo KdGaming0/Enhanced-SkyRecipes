@@ -11,13 +11,11 @@ import com.github.kdgaming0.skyrecipes.rrv.recipe.StackGroupItemsCache;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockFamilyStackGroup;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.SkyblockStackGroups;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.stackgroup.StackGroupIdIndex;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -28,6 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -63,9 +62,10 @@ import java.util.Set;
 @Mixin(value = StackGroupManager.class, remap = false)
 public class StackGroupManagerMixin {
 
-    @Shadow
-    @Final
-    private static Set<Identifier> nameMatchedGroups;
+    /** RRV 8.10 may run overlapping searches on its shared worker pool. */
+    @Unique
+    private static final ThreadLocal<Set<Identifier>> skyrecipes$nameMatchedGroups =
+            ThreadLocal.withInitial(HashSet::new);
 
     @Shadow
     public static List<ItemStack> getGroupItems(AbstractStackGroup group) {
@@ -179,9 +179,9 @@ public class StackGroupManagerMixin {
      *
      * <p>See {@link GroupingResultCache} for why this repeats so often (RRV's
      * {@code updateQuery} has no unchanged-query early-out) and why the memo is safe.
-     * Deliberately narrow: only the render thread participates, and only while stack
-     * grouping is on — with grouping off RRV returns the input list <em>by identity</em> and
-     * the caller mutates it in place, which a copy would silently break.</p>
+     * Deliberately narrow to enabled grouping: with grouping off RRV returns the input list
+     * <em>by identity</em> and the caller mutates it in place, which a copy would silently
+     * break.</p>
      */
     @Inject(
             method = "applyGrouping(Ljava/util/List;Z)Ljava/util/List;",
@@ -220,8 +220,29 @@ public class StackGroupManagerMixin {
     private static boolean skyrecipes$groupingMemoApplies(List<ItemStack> items) {
         return items != null
                 && !items.isEmpty()
-                && Configs.STACK_GROUPS.areStackGroupsEnabled()
-                && Minecraft.getInstance().isSameThread();
+                && Configs.STACK_GROUPS.areStackGroupsEnabled();
+    }
+
+    /**
+     * Keeps matched-group state local to one RRV worker. RRV's static HashSet can be cleared by
+     * another overlapping search between {@code appendMatchingGroups} and {@code applyGrouping}.
+     */
+    @Redirect(
+            method = "applyGrouping(Ljava/util/List;Z)Ljava/util/List;",
+            at = @At(value = "INVOKE", target = "Ljava/util/Set;contains(Ljava/lang/Object;)Z")
+    )
+    private static boolean skyrecipes$isNameMatchedGroup(Set<?> ignored, Object groupId) {
+        return skyrecipes$nameMatchedGroups.get().contains(groupId);
+    }
+
+    @Inject(
+            method = "applyGrouping(Ljava/util/List;Z)Ljava/util/List;",
+            at = @At("RETURN")
+    )
+    private static void skyrecipes$clearNameMatchedGroups(List<ItemStack> items,
+                                                          boolean searchExpandActive,
+                                                          CallbackInfoReturnable<List<ItemStack>> cir) {
+        skyrecipes$nameMatchedGroups.remove();
     }
 
     /**
@@ -289,20 +310,24 @@ public class StackGroupManagerMixin {
     @Inject(method = "appendMatchingGroups", at = @At("HEAD"), cancellable = true)
     private static void skyrecipes$fastAppendMatchingGroups(String query, List<ItemStack> results,
                                                             CallbackInfoReturnable<List<ItemStack>> cir) {
-        nameMatchedGroups.clear();
+        Set<Identifier> matchedGroups = skyrecipes$nameMatchedGroups.get();
+        matchedGroups.clear();
         if (!Configs.STACK_GROUPS.areStackGroupsEnabled()) {
             cir.setReturnValue(results);
             return;
         }
 
         String lower = query.toLowerCase(Locale.ROOT);
-        List<ItemStack> extendedResults = new ArrayList<>(results);
+        ItemStack[] resultSnapshot = results.toArray(ItemStack[]::new);
+        List<ItemStack> extendedResults = new ArrayList<>(Arrays.asList(resultSnapshot));
         // Built on the first matching group, not up front: keying the whole result list
         // costs one component-map hash per stack (up to ~8.5k on a broad query), and most
         // queries match no group at all — that work would be pure waste. Null until needed.
         Set<Object> seen = null;
 
-        for (AbstractStackGroup group : StackGroupManager.stackGroups) {
+        Object[] groupSnapshot = StackGroupManager.stackGroups.toArray();
+        for (Object value : groupSnapshot) {
+            if (!(value instanceof AbstractStackGroup group)) continue;
             boolean match;
             if (group instanceof SkyblockFamilyStackGroup familyGroup) {
                 // Family groups match on their display name only, and never on 1-char
@@ -318,10 +343,10 @@ public class StackGroupManagerMixin {
             }
             if (!match) continue;
 
-            nameMatchedGroups.add(group.getId());
+            matchedGroups.add(group.getId());
             if (seen == null) {
-                seen = new HashSet<>(Math.max(16, results.size() * 2));
-                for (ItemStack existing : results) {
+                seen = new HashSet<>(Math.max(16, resultSnapshot.length * 2));
+                for (ItemStack existing : resultSnapshot) {
                     seen.add(StackGroupItemsCache.dedupKey(existing));
                 }
             }

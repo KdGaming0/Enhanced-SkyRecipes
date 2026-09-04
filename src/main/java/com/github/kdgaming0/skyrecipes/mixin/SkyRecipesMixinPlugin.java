@@ -49,6 +49,10 @@ public class SkyRecipesMixinPlugin implements IMixinConfigPlugin {
                     "initForScreen(Lnet/minecraft/client/gui/screens/Screen;"
                             + "Lcc/cassian/rrv/common/overlay/AbstractRrvOverlay$InventoryPositionInfo;)V"
             ),
+            "com.github.kdgaming0.skyrecipes.mixin.rrv.SidePanelContentsCraftablesMixin",
+            List.of(
+                    "filter(Ljava/util/List;)V"
+            ),
             "com.github.kdgaming0.skyrecipes.mixin.skyblocker.ItemViewOverlayLookupMixin",
             List.of(
                     "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z"

@@ -1,3 +1,8 @@
+# 0.5.8
+
+## Compatibility
+- SkyRecipes now supports Reliable Recipe Viewer 8.10.0.
+
 # 0.5.7
 
 ## Improvements

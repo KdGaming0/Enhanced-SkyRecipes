@@ -140,6 +140,7 @@ tasks {
             register("version", "mod.version")
             register("minecraft", "mod.mc_compat")
             register("loader_version", "deps.fabric_loader")
+            register("rrv_version", "deps.rrv_version")
         }
 
         filesMatching("fabric.mod.json") { expand(props) }

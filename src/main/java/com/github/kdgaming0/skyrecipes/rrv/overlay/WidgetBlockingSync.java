@@ -22,7 +22,7 @@ import java.util.function.Supplier;
  * per-screen tick event and only pushed to RRV when it actually changed.
  * Changes force a full overlay re-layout via
  * {@link OverlayManager#updateOverlaysAndWidgets}, because
- * {@code setGuiBlocking} alone only queues a lighter widget update that does
+ * {@code setExclusionArea} alone only queues a lighter widget update that does
  * not re-wrap the item list mid-screen.</p>
  *
  * <p>The tick handler self-disables on any throw, so a Skyblocker or RRV API
@@ -74,7 +74,7 @@ public final class WidgetBlockingSync {
     private static void install(Screen screen, WidgetBlockingSync sync) {
         ScreenEvents.afterTick(screen).register(_ -> sync.sync());
         ScreenEvents.remove(screen).register(_ ->
-                OverlayManager.INSTANCE.removeGuiBlocking(sync.id, true)
+                OverlayManager.INSTANCE.removeExclusionArea(sync.id, true)
         );
     }
 
@@ -117,7 +117,7 @@ public final class WidgetBlockingSync {
         lastY = y;
         lastWidth = width;
         lastHeight = height;
-        OverlayManager.INSTANCE.setGuiBlocking(new BlockingGuiComponent(
+        OverlayManager.INSTANCE.setExclusionArea(new BlockingGuiComponent(
                 id, lastX, lastY, lastWidth, lastHeight));
         OverlayManager.INSTANCE.updateOverlaysAndWidgets(true);
         blockingSet = true;
@@ -125,7 +125,7 @@ public final class WidgetBlockingSync {
 
     private void clearBlocking() {
         if (!blockingSet) return;
-        OverlayManager.INSTANCE.removeGuiBlocking(id, true);
+        OverlayManager.INSTANCE.removeExclusionArea(id, true);
         blockingSet = false;
     }
 }

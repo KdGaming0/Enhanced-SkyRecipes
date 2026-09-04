@@ -138,13 +138,20 @@ public class ItemViewOverlayMixin implements CalculatorSessionOwner {
     @Override
     public void skyrecipes$refreshEffectiveQuery() {
         ItemViewOverlay self = (ItemViewOverlay) (Object) this;
+        CalculatorSession session = skyrecipes$calculatorSession();
+        // A query typed before the search index exists is cancelled at updateQuery HEAD,
+        // so RRV's currentQuery never receives it even though the SearchBar does. Replay
+        // the visible input once the index is published. Calculator input is deliberately
+        // not an item query, so keep replaying the query saved when calculator mode began.
+        String query = session.isActive()
+                ? session.savedSearchQuery()
+                : searchbar != null ? searchbar.getValue() : self.getCurrentQuery();
         skyrecipes$restoringCalculatorQuery = true;
         try {
-            ((ItemViewOverlayAccessor) self).skyrecipes$updateQuery(self.getCurrentQuery());
+            ((ItemViewOverlayAccessor) self).skyrecipes$updateQuery(query);
         } finally {
             skyrecipes$restoringCalculatorQuery = false;
         }
-        CalculatorSession session = skyrecipes$calculatorSession();
         SearchBarCalculator.Calculation calculation = session.calculation();
         if (session.isActive() && calculation != null) {
             skyrecipes$applyCalculatorSuggestion(calculation);

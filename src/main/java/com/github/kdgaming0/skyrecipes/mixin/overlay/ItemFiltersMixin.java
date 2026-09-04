@@ -70,16 +70,15 @@ public class ItemFiltersMixin {
     // open, resize, and widget rebuild (see GroupingResultCache for the full chain), so the
     // identical filter is recomputed constantly. Grouping was already memoized; this covers
     // the filter that feeds it. The index reference is part of the key, so a reload that
-    // republishes the index can never serve stale results. Render-thread only, like every
-    // caller of defaultFilter (the side panel uses advancedFilter, off this path).
+    // republishes the index can never serve stale results. RRV 8.10 calls this from background
+    // workers, so the complete key and result are published together as one immutable object.
     @Unique
-    private static String skyrecipes$memoQuery;
+    private record SearchMemo(String query, SkyblockItemCategory category,
+                              Object index, List<ItemStack> result) {
+    }
+
     @Unique
-    private static SkyblockItemCategory skyrecipes$memoCategory;
-    @Unique
-    private static Object skyrecipes$memoIndex;
-    @Unique
-    private static List<ItemStack> skyrecipes$memoResult;
+    private static volatile SearchMemo skyrecipes$memo;
 
     @Inject(method = "defaultFilter", at = @At("HEAD"), cancellable = true, remap = false)
     private static void skyrecipes$skyblockSearchFilter(String query,
@@ -90,11 +89,12 @@ public class ItemFiltersMixin {
         }
         SkyblockItemCategory category = CategoryState.getButtonCategory();
 
-        if (skyrecipes$memoResult != null
-                && skyrecipes$memoIndex == index
-                && skyrecipes$memoCategory == category
-                && java.util.Objects.equals(skyrecipes$memoQuery, query)) {
-            cir.setReturnValue(skyrecipes$memoResult);
+        SearchMemo memo = skyrecipes$memo;
+        if (memo != null
+                && memo.index() == index
+                && memo.category() == category
+                && java.util.Objects.equals(memo.query(), query)) {
+            cir.setReturnValue(memo.result());
             return;
         }
 
@@ -105,10 +105,7 @@ public class ItemFiltersMixin {
                 ? index.filter(query, category, null)
                 : index.filter(query);
 
-        skyrecipes$memoQuery = query;
-        skyrecipes$memoCategory = category;
-        skyrecipes$memoIndex = index;
-        skyrecipes$memoResult = result;
+        skyrecipes$memo = new SearchMemo(query, category, index, result);
         cir.setReturnValue(result);
     }
 
@@ -124,8 +121,6 @@ public class ItemFiltersMixin {
     @Inject(method = "clearCaches", at = @At("TAIL"), remap = false)
     private static void skyrecipes$invalidateOnCacheClear(CallbackInfo ci) {
         ItemExclusionCache.invalidate();
-        skyrecipes$memoQuery = null;
-        skyrecipes$memoResult = null;
-        skyrecipes$memoIndex = null;
+        skyrecipes$memo = null;
     }
 }

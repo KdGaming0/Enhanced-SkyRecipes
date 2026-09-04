@@ -45,7 +45,7 @@ public class GardenPlotsWidgetMixin {
             Screen screen = Minecraft.getInstance().screen;
             if (screen != null) {
                 ScreenEvents.remove(screen).register(_ ->
-                        OverlayManager.INSTANCE.removeGuiBlocking(SKYRECIPES$GARDEN_PLOTS_ID, true)
+                        OverlayManager.INSTANCE.removeExclusionArea(SKYRECIPES$GARDEN_PLOTS_ID, true)
                 );
             }
         } catch (Throwable t) {
@@ -75,7 +75,7 @@ public class GardenPlotsWidgetMixin {
 
     @Unique
     private void skyrecipes$updateBlocking(GardenPlotsWidget widget) {
-        OverlayManager.INSTANCE.setGuiBlocking(new BlockingGuiComponent(
+        OverlayManager.INSTANCE.setExclusionArea(new BlockingGuiComponent(
                 SKYRECIPES$GARDEN_PLOTS_ID,
                 widget.getX(),
                 widget.getY(),

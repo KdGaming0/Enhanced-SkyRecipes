@@ -32,10 +32,10 @@ import java.util.List;
  * compares. Nothing is served when the identity scan fails, so a genuinely different list
  * always recomputes.</p>
  *
- * <p>Render-thread only (see the caller's {@code isSameThread()} guard) — plain fields, no
- * synchronization. The stored list is never handed out: callers get a fresh mutable copy,
- * because RRV mutates the returned list ({@code availableItems.removeIf(...)} in
- * {@code updateDisplayedItems}).</p>
+ * <p>RRV 8.10 performs grouping on background workers. Access is synchronized so overlapping
+ * refreshes cannot observe a half-published key/result tuple. The stored list is never handed
+ * out: callers get a fresh mutable copy because RRV mutates the returned list
+ * ({@code availableItems.removeIf(...)} in {@code updateDisplayedItems}).</p>
  *
  * <p><b>Upstream:</b> RRV bug, worth filing — {@code updateQuery} should early-out when the
  * query is unchanged. Remove this memo if that lands.</p>
@@ -50,7 +50,7 @@ public final class GroupingResultCache {
     }
 
     /** Drops the memo. Called from every stack-group mutation point. */
-    public static void invalidate() {
+    public static synchronized void invalidate() {
         inputSnapshot = null;
         groupedResult = null;
     }
@@ -59,13 +59,15 @@ public final class GroupingResultCache {
      * @return a fresh mutable copy of the memoized grouping for this exact input, or
      * {@code null} when nothing is cached for it and the caller must recompute.
      */
-    public static List<ItemStack> get(List<ItemStack> items, boolean searchExpandActive) {
+    public static synchronized List<ItemStack> get(List<ItemStack> items, boolean searchExpandActive) {
         if (groupedResult == null || inputSnapshot == null || searchExpandActive != inputFlag) {
             return null;
         }
-        if (items == null || items.size() != inputSnapshot.length || !sameElements(items)) {
+        if (items == null) {
             return null;
         }
+        ItemStack[] current = items.toArray(ItemStack[]::new);
+        if (current.length != inputSnapshot.length || !sameElements(current)) return null;
         return new ArrayList<>(groupedResult);
     }
 
@@ -74,13 +76,13 @@ public final class GroupingResultCache {
      * are copied: RRV refills the same {@code filteredItems} list instance every pass, and
      * mutates the returned list right after {@code applyGrouping} returns.
      */
-    public static void put(List<ItemStack> items, boolean searchExpandActive, List<ItemStack> grouped) {
+    public static synchronized void put(List<ItemStack> items, boolean searchExpandActive, List<ItemStack> grouped) {
         inputSnapshot = items.toArray(new ItemStack[0]);
         inputFlag = searchExpandActive;
         groupedResult = new ArrayList<>(grouped);
     }
 
-    private static boolean sameElements(List<ItemStack> items) {
+    private static boolean sameElements(ItemStack[] items) {
         ItemStack[] snapshot = inputSnapshot;
         int i = 0;
         for (ItemStack stack : items) {

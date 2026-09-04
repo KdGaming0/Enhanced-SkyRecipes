@@ -13,7 +13,7 @@ import org.jetbrains.annotations.Nullable;
 public final class CategoryState {
 
     @Nullable
-    private static SkyblockItemCategory buttonCategory = null;
+    private static volatile SkyblockItemCategory buttonCategory = null;
 
     private CategoryState() {
     }
