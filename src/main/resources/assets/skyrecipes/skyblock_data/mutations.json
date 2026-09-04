@@ -125,7 +125,7 @@
       "rewardCopper": 500,
       "spreadingConditions": [
         {
-          "itemId": "WHEAT_SEEDS",
+          "itemId": "SEEDS",
           "count": 1,
           "text": "1x Wheat Seeds"
         },
@@ -155,12 +155,12 @@
           "text": "1x Red Mushroom"
         },
         {
-          "itemId": "SUNFLOWER",
+          "itemId": "DOUBLE_PLANT",
           "count": 1,
           "text": "1x Sunflower"
         },
         {
-          "itemId": "COCOA_BEANS",
+          "itemId": "INK_SACK-3",
           "count": 1,
           "text": "1x Cocoa Beans"
         },
@@ -175,7 +175,7 @@
           "text": "1x Sugar Cane"
         },
         {
-          "itemId": "NETHER_WART",
+          "itemId": "NETHER_STALK",
           "count": 1,
           "text": "1x Nether Wart"
         },
@@ -215,16 +215,16 @@
         [
           "EMPTY",
           "INGREDIENT:MELON_SEEDS",
-          "INGREDIENT:WHEAT_SEEDS",
+          "INGREDIENT:SEEDS",
           "INGREDIENT:RED_MUSHROOM",
           "EMPTY"
         ],
         [
-          "INGREDIENT:SUNFLOWER",
+          "INGREDIENT:DOUBLE_PLANT",
           "TARGET",
           "TARGET",
           "TARGET",
-          "INGREDIENT:COCOA_BEANS"
+          "INGREDIENT:INK_SACK-3"
         ],
         [
           "INGREDIENT:CARROT",
@@ -242,7 +242,7 @@
         ],
         [
           "EMPTY",
-          "INGREDIENT:NETHER_WART",
+          "INGREDIENT:NETHER_STALK",
           "INGREDIENT:PUMPKIN_SEEDS",
           "INGREDIENT:WILD_ROSE",
           "EMPTY"
@@ -1636,7 +1636,7 @@
           "text": "2x Shadevine"
         },
         {
-          "itemId": "SUNFLOWER",
+          "itemId": "DOUBLE_PLANT",
           "count": 2,
           "text": "2x Sunflower"
         },
@@ -1654,9 +1654,9 @@
       ],
       "layout": [
         [
-          "INGREDIENT:SUNFLOWER",
+          "INGREDIENT:DOUBLE_PLANT",
           "INGREDIENT:MOONFLOWER",
-          "INGREDIENT:SUNFLOWER"
+          "INGREDIENT:DOUBLE_PLANT"
         ],
         [
           "INGREDIENT:MOONFLOWER",
@@ -2065,7 +2065,7 @@
       "rewardCopper": 5,
       "spreadingConditions": [
         {
-          "itemId": "WHEAT_SEEDS",
+          "itemId": "SEEDS",
           "count": 2,
           "text": "2x Wheat Seeds"
         }
@@ -2079,10 +2079,10 @@
       "layout": [
         [
           "EMPTY",
-          "INGREDIENT:WHEAT_SEEDS"
+          "INGREDIENT:SEEDS"
         ],
         [
-          "INGREDIENT:WHEAT_SEEDS",
+          "INGREDIENT:SEEDS",
           "TARGET"
         ]
       ],
@@ -2150,12 +2150,12 @@
       "rewardCopper": 5,
       "spreadingConditions": [
         {
-          "itemId": "NETHER_WART",
+          "itemId": "NETHER_STALK",
           "count": 2,
           "text": "2x Nether Wart"
         },
         {
-          "itemId": "FIRE",
+          "itemId": "FLINT_AND_STEEL",
           "count": 2,
           "text": "2x Fire"
         }
@@ -2173,17 +2173,17 @@
       "layout": [
         [
           "EMPTY",
-          "INGREDIENT:NETHER_WART",
+          "INGREDIENT:NETHER_STALK",
           "EMPTY"
         ],
         [
-          "INGREDIENT:NETHER_WART",
+          "INGREDIENT:NETHER_STALK",
           "TARGET",
-          "INGREDIENT:FIRE"
+          "INGREDIENT:FLINT_AND_STEEL"
         ],
         [
           "EMPTY",
-          "INGREDIENT:FIRE",
+          "INGREDIENT:FLINT_AND_STEEL",
           "EMPTY"
         ]
       ],
@@ -2205,7 +2205,7 @@
       "rewardCopper": 5,
       "spreadingConditions": [
         {
-          "itemId": "COCOA_BEANS",
+          "itemId": "INK_SACK-3",
           "count": 2,
           "text": "2x Cocoa Beans"
         }
@@ -2219,10 +2219,10 @@
       "layout": [
         [
           "EMPTY",
-          "INGREDIENT:COCOA_BEANS"
+          "INGREDIENT:INK_SACK-3"
         ],
         [
-          "INGREDIENT:COCOA_BEANS",
+          "INGREDIENT:INK_SACK-3",
           "TARGET"
         ]
       ],
