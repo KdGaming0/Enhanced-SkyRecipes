@@ -290,15 +290,11 @@ public final class RecipeGenerator {
                     new SkyblockGardenMutationClientRecipe(recipeId, mutation, itemRegistry, wikiUrls);
             batch.recipes.add(recipe);
             batch.indexBuilder.addResult(mutation.id(), recipeId);
-            // Index ingredients
-            for (int row = 0; row < mutation.gridSize(); row++) {
-                for (int col = 0; col < mutation.gridSize(); col++) {
-                    if (mutation.isIngredient(row, col)) {
-                        String ingId = mutation.ingredientIdAt(row, col);
-                        if (!ingId.isEmpty()) {
-                            batch.indexBuilder.addIngredient(ingId, recipeId);
-                        }
-                    }
+            // Index logical requirements rather than display stacks. This also covers
+            // special transformations such as Turtlellini + Blastberry -> Shellfruit.
+            for (GardenMutation.SpreadingCondition condition : mutation.spreadingConditions()) {
+                for (String itemId : condition.itemIds()) {
+                    batch.indexBuilder.addIngredient(itemId, recipeId);
                 }
             }
         }

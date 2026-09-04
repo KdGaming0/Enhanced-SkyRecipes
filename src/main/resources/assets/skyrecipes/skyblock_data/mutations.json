@@ -1,2236 +1,1613 @@
 {
-  "version": 1,
-  "source": "skymutations.eu JS bundle (X array) + wiki screenshots for COMMON grids",
-  "note": "Grid layouts for COMMON mutations verified from wiki screenshots. All others derived from spreading_conditions and size fields.",
+  "schemaVersion": 2,
+  "sources": [
+    "https://docs.google.com/spreadsheets/d/1-uupZnFWLT0l-aPOxY-QGTMi1c3dLmZkUBC_Ho2-3Pc/edit?gid=970768199",
+    "https://skymutations.eu/",
+    "https://hypixel.net/threads/august-20-skyblock-patch-notes.6141710/"
+  ],
+  "audited": "2026-09-04",
+  "displayItems": {
+    "FIRE": {
+      "item": "minecraft:fire_charge",
+      "name": "Fire"
+    }
+  },
+  "effects": {
+    "XP_BOOST": {
+      "name": "XP Boost",
+      "description": "Increases Farming XP of adjacent crops by +20%",
+      "negative": false
+    },
+    "IMMUNITY": {
+      "name": "Immunity",
+      "description": "Provides Immunity to negative effects.",
+      "negative": false
+    },
+    "IMPROVED_WATER_RETAIN": {
+      "name": "Improved Water Retain",
+      "description": "Retains watering status of adjacent crops by +100%",
+      "negative": false
+    },
+    "IMPROVED_XP_BOOST": {
+      "name": "Improved XP Boost",
+      "description": "Increases Farming XP of adjacent crops by +30%",
+      "negative": false
+    },
+    "HARVEST_LOSS": {
+      "name": "Harvest Loss",
+      "description": "Decreases Yield by -20%",
+      "negative": true
+    },
+    "IMPROVED_HARVEST_BOOST": {
+      "name": "Improved Harvest Boost",
+      "description": "Increases Yield by +30%",
+      "negative": false
+    },
+    "BONUS_DROPS": {
+      "name": "Bonus Drops",
+      "description": "Harvested items additionally roll from an extra loot pool.",
+      "negative": false
+    },
+    "EFFECT_SPREAD": {
+      "name": "Effect Spread",
+      "description": "Spreads other buffs and debuffs on the current crop to adjacent crops.",
+      "negative": false
+    },
+    "WATER_DRAIN": {
+      "name": "Water Drain",
+      "description": "Reduces watering status of nearby crops by -30%",
+      "negative": true
+    },
+    "HARVEST_BOOST": {
+      "name": "Harvest Boost",
+      "description": "Increases Yield by +20%",
+      "negative": false
+    },
+    "WATER_RETAIN": {
+      "name": "Water Retain",
+      "description": "Retains watering status of adjacent crops by +50%",
+      "negative": false
+    },
+    "XP_LOSS": {
+      "name": "XP Loss",
+      "description": "Reduces Farming XP of adjacent crops by -20%",
+      "negative": true
+    }
+  },
   "mutations": {
     "PHANTOMLEAF": {
       "name": "Phantomleaf",
       "rarity": "LEGENDARY",
-      "gridSize": 3,
       "surface": "Soul Sand",
       "needsWater": false,
       "stages": 15,
       "costCoins": 3000000,
       "rewardCopper": 1500,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CHORUS_FRUIT",
+          "item": "CHORUS_FRUIT",
           "count": 4,
           "text": "4x Chorus Fruit"
         },
         {
-          "itemId": "SHELLFRUIT",
+          "item": "SHELLFRUIT",
           "count": 4,
           "text": "4x Shellfruit"
         }
       ],
       "effects": [
-        {
-          "name": "XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +20%"
-        },
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
+        "XP_BOOST",
+        "IMMUNITY"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "SHELLFRUIT",
+          "B": "CHORUS_FRUIT"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:SHELLFRUIT",
-          "INGREDIENT:CHORUS_FRUIT",
-          "INGREDIENT:SHELLFRUIT"
-        ],
-        [
-          "INGREDIENT:CHORUS_FRUIT",
-          "TARGET",
-          "INGREDIENT:CHORUS_FRUIT"
-        ],
-        [
-          "INGREDIENT:SHELLFRUIT",
-          "INGREDIENT:CHORUS_FRUIT",
-          "INGREDIENT:SHELLFRUIT"
-        ]
-      ],
-      "requiredFor": [],
+      },
       "specialMechanic": "When harvested, will hide disguised as another plant somewhere on your greenhouse. Must be found within 1 minute to successfully harvest."
     },
     "TIMESTALK": {
       "name": "Timestalk",
       "rarity": "LEGENDARY",
-      "gridSize": 3,
       "surface": "End Stone",
       "needsWater": true,
       "stages": 14,
       "costCoins": 19000000,
       "rewardCopper": 9500,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "STOPLIGHT_PETAL",
+          "item": "STOPLIGHT_PETAL",
           "count": 4,
           "text": "4x Stoplight Petal"
         },
         {
-          "itemId": "CHORUS_FRUIT",
+          "item": "CHORUS_FRUIT",
           "count": 2,
           "text": "2x Chorus Fruit"
         },
         {
-          "itemId": "SHELLFRUIT",
+          "item": "SHELLFRUIT",
           "count": 2,
           "text": "2x Shellfruit"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Improved XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +30%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "IMPROVED_WATER_RETAIN",
+        "IMPROVED_XP_BOOST",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "CBC"
+        ],
+        "legend": {
+          "A": "CHORUS_FRUIT",
+          "B": "STOPLIGHT_PETAL",
+          "C": "SHELLFRUIT"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHORUS_FRUIT",
-          "INGREDIENT:STOPLIGHT_PETAL",
-          "INGREDIENT:CHORUS_FRUIT"
-        ],
-        [
-          "INGREDIENT:STOPLIGHT_PETAL",
-          "TARGET",
-          "INGREDIENT:STOPLIGHT_PETAL"
-        ],
-        [
-          "INGREDIENT:SHELLFRUIT",
-          "INGREDIENT:STOPLIGHT_PETAL",
-          "INGREDIENT:SHELLFRUIT"
-        ]
-      ],
-      "requiredFor": [],
+      },
       "specialMechanic": "Grows in reverse, and spawns a Timestalk Clone of you when harvested"
     },
     "GODSEED": {
       "name": "Godseed",
       "rarity": "LEGENDARY",
-      "gridSize": 5,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 40,
       "costCoins": 1000000,
       "rewardCopper": 500,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SEEDS",
+          "item": "SEEDS",
           "count": 1,
           "text": "1x Wheat Seeds"
         },
         {
-          "itemId": "CARROT",
+          "item": "CARROT",
           "count": 1,
           "text": "1x Carrot"
         },
         {
-          "itemId": "POTATO",
+          "item": "POTATO",
           "count": 1,
           "text": "1x Potato"
         },
         {
-          "itemId": "PUMPKIN_SEEDS",
+          "item": "PUMPKIN_SEEDS",
           "count": 1,
           "text": "1x Pumpkin Seeds"
         },
         {
-          "itemId": "MELON_SEEDS",
+          "item": "MELON_SEEDS",
           "count": 1,
           "text": "1x Melon Seeds"
         },
         {
-          "itemId": "RED_MUSHROOM",
+          "item": "RED_MUSHROOM",
           "count": 1,
           "text": "1x Red Mushroom"
         },
         {
-          "itemId": "DOUBLE_PLANT",
+          "item": "DOUBLE_PLANT",
           "count": 1,
           "text": "1x Sunflower"
         },
         {
-          "itemId": "INK_SACK-3",
+          "item": "INK_SACK-3",
           "count": 1,
           "text": "1x Cocoa Beans"
         },
         {
-          "itemId": "CACTUS",
+          "item": "CACTUS",
           "count": 1,
           "text": "1x Cactus"
         },
         {
-          "itemId": "SUGAR_CANE",
+          "item": "SUGAR_CANE",
           "count": 1,
           "text": "1x Sugar Cane"
         },
         {
-          "itemId": "NETHER_STALK",
+          "item": "NETHER_STALK",
           "count": 1,
           "text": "1x Nether Wart"
         },
         {
-          "itemId": "WILD_ROSE",
+          "item": "WILD_ROSE",
           "count": 1,
           "text": "1x Wild Rose"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Improved XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +30%"
-        },
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
-        },
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
-        },
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
+        "IMPROVED_HARVEST_BOOST",
+        "IMPROVED_WATER_RETAIN",
+        "IMPROVED_XP_BOOST",
+        "IMMUNITY",
+        "BONUS_DROPS",
+        "EFFECT_SPREAD"
+      ],
+      "layout": {
+        "rows": [
+          ".ABC.",
+          "D@@@E",
+          "F@@@G",
+          "H@@@I",
+          ".JKL."
+        ],
+        "legend": {
+          "A": "MELON_SEEDS",
+          "B": "SEEDS",
+          "C": "RED_MUSHROOM",
+          "D": "DOUBLE_PLANT",
+          "E": "INK_SACK-3",
+          "F": "CARROT",
+          "G": "POTATO",
+          "H": "CACTUS",
+          "I": "SUGAR_CANE",
+          "J": "NETHER_STALK",
+          "K": "PUMPKIN_SEEDS",
+          "L": "WILD_ROSE"
         }
-      ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:MELON_SEEDS",
-          "INGREDIENT:SEEDS",
-          "INGREDIENT:RED_MUSHROOM",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:DOUBLE_PLANT",
-          "TARGET",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:INK_SACK-3"
-        ],
-        [
-          "INGREDIENT:CARROT",
-          "TARGET",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:POTATO"
-        ],
-        [
-          "INGREDIENT:CACTUS",
-          "TARGET",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:SUGAR_CANE"
-        ],
-        [
-          "EMPTY",
-          "INGREDIENT:NETHER_STALK",
-          "INGREDIENT:PUMPKIN_SEEDS",
-          "INGREDIENT:WILD_ROSE",
-          "EMPTY"
-        ]
-      ],
-      "requiredFor": [],
+      },
       "specialMechanic": null
     },
     "JERRYFLOWER": {
       "name": "Jerryflower",
       "rarity": "LEGENDARY",
-      "gridSize": 1,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 10,
       "costCoins": 20000,
       "rewardCopper": 10,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "FERTILIZED_JERRYSEED",
+          "item": "FERTILIZED_JERRYSEED",
           "count": 1,
           "text": "1x Fertilized Jerryseed"
         }
       ],
       "effects": [],
-      "layout": [
-        [
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [],
+      "layout": {
+        "rows": [
+          "@"
+        ],
+        "legend": {}
+      },
       "specialMechanic": "Obtain an Unfulfilled Jerryseed from the Jerry Visitor\nGive the Unfulfilled Jerryseed and a Mysterious Crop to Xalx in the Crystal Hollows to get an Unripe Jerryseed\nReforge the Unripe Jerryseed to Dirty and show it to Dirt Guy in the Dwarven Mines to get a Fertilized Jerryseed\nPlant the Fertilized Jerryseed in the Greenhouse and feed it 10x Move Jerrys when it reaches growth stage 5 to get a Jerryflower"
     },
     "DEVOURER": {
       "name": "Devourer",
       "rarity": "LEGENDARY",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 16,
       "costCoins": 10000000,
       "rewardCopper": 5000,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "PUFFERCLOUD",
+          "item": "PUFFERCLOUD",
           "count": 4,
           "text": "4x Puffercloud"
         },
         {
-          "itemId": "ZOMBUD",
+          "item": "ZOMBUD",
           "count": 4,
           "text": "4x Zombud"
         }
       ],
       "effects": [
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
-        },
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "Water Drain",
-          "description": "Reduces watering status of nearby crops by -30%"
+        "BONUS_DROPS",
+        "IMPROVED_HARVEST_BOOST",
+        "WATER_DRAIN"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "ZOMBUD",
+          "B": "PUFFERCLOUD"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:ZOMBUD",
-          "INGREDIENT:PUFFERCLOUD",
-          "INGREDIENT:ZOMBUD"
-        ],
-        [
-          "INGREDIENT:PUFFERCLOUD",
-          "TARGET",
-          "INGREDIENT:PUFFERCLOUD"
-        ],
-        [
-          "INGREDIENT:ZOMBUD",
-          "INGREDIENT:PUFFERCLOUD",
-          "INGREDIENT:ZOMBUD"
-        ]
-      ],
-      "requiredFor": [],
+      },
       "specialMechanic": "Spreads roots and overtakes other plants on your garden while it grows"
     },
     "GLASSCORN": {
       "name": "Glasscorn",
       "rarity": "LEGENDARY",
-      "gridSize": 4,
       "surface": "Sand",
       "needsWater": true,
       "stages": 9,
       "costCoins": 4000000,
       "rewardCopper": 2000,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "STARTLEVINE",
+          "item": "STARTLEVINE",
           "count": 6,
           "text": "6x Startlevine"
         },
         {
-          "itemId": "CHLORONITE",
+          "item": "CHLORONITE",
           "count": 6,
           "text": "6x Chloronite"
         }
       ],
       "effects": [
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
-        },
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "IMMUNITY",
+        "IMPROVED_WATER_RETAIN",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "ABBA",
+          "B@@B",
+          "B@@B",
+          "AAAA"
+        ],
+        "legend": {
+          "A": "CHLORONITE",
+          "B": "STARTLEVINE"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHLORONITE",
-          "INGREDIENT:STARTLEVINE",
-          "INGREDIENT:STARTLEVINE",
-          "INGREDIENT:CHLORONITE"
-        ],
-        [
-          "INGREDIENT:STARTLEVINE",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:STARTLEVINE"
-        ],
-        [
-          "INGREDIENT:STARTLEVINE",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:STARTLEVINE"
-        ],
-        [
-          "INGREDIENT:CHLORONITE",
-          "INGREDIENT:CHLORONITE",
-          "INGREDIENT:CHLORONITE",
-          "INGREDIENT:CHLORONITE"
-        ]
-      ],
-      "requiredFor": [],
+      },
       "specialMechanic": "Must be harvested on stage 7 or 8 of growth, otherwise will reset to stage 1"
     },
     "ALL_IN_ALOE": {
       "name": "All-in Aloe",
       "rarity": "LEGENDARY",
-      "gridSize": 4,
       "surface": "Sand",
       "needsWater": false,
       "stages": 27,
       "costCoins": 4600000,
       "rewardCopper": 2300,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "MAGIC_JELLYBEAN",
+          "item": "MAGIC_JELLYBEAN",
           "count": 6,
           "text": "6x Magic Jellybean"
         },
         {
-          "itemId": "PLANTBOY_ADVANCE",
+          "item": "PLANTBOY_ADVANCE",
           "count": 2,
           "text": "2x PlantBoy Advance"
         }
       ],
       "effects": [
-        {
-          "name": "Harvest Boost",
-          "description": "Increases Yield by +20%"
+        "HARVEST_BOOST"
+      ],
+      "layout": {
+        "rows": [
+          "AABB",
+          "A@BB",
+          "AAA."
+        ],
+        "legend": {
+          "A": "MAGIC_JELLYBEAN",
+          "B": "PLANTBOY_ADVANCE"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:MAGIC_JELLYBEAN",
-          "INGREDIENT:MAGIC_JELLYBEAN",
-          "INGREDIENT:PLANTBOY_ADVANCE",
-          "INGREDIENT:PLANTBOY_ADVANCE"
-        ],
-        [
-          "INGREDIENT:MAGIC_JELLYBEAN",
-          "TARGET",
-          "INGREDIENT:PLANTBOY_ADVANCE",
-          "INGREDIENT:PLANTBOY_ADVANCE"
-        ],
-        [
-          "INGREDIENT:MAGIC_JELLYBEAN",
-          "INGREDIENT:MAGIC_JELLYBEAN",
-          "INGREDIENT:MAGIC_JELLYBEAN",
-          "EMPTY"
-        ]
-      ],
-      "requiredFor": [],
+      },
       "specialMechanic": "Gives more All-in Aloe Fragments the longer it grows, but has an increasing chance to reset every time it grows"
     },
     "ZOMBUD": {
       "name": "Zombud",
       "rarity": "EPIC",
-      "gridSize": 3,
       "surface": "Soul Sand",
       "needsWater": false,
       "stages": 16,
       "costCoins": 1000000,
       "rewardCopper": 500,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "DEAD_PLANT",
+          "item": "DEAD_PLANT",
           "count": 4,
           "text": "4x Dead Plants"
         },
         {
-          "itemId": "CINDERSHADE",
+          "item": "CINDERSHADE",
           "count": 2,
           "text": "2x Cindershade"
         },
         {
-          "itemId": "FLESHTRAP",
+          "item": "FLESHTRAP",
           "count": 2,
           "text": "2x Fleshtrap"
         }
       ],
       "effects": [
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
-        },
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
+        "EFFECT_SPREAD",
+        "BONUS_DROPS"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "CBC"
+        ],
+        "legend": {
+          "A": "CINDERSHADE",
+          "B": "DEAD_PLANT",
+          "C": "FLESHTRAP"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CINDERSHADE",
-          "INGREDIENT:DEAD_PLANT",
-          "INGREDIENT:CINDERSHADE"
-        ],
-        [
-          "INGREDIENT:DEAD_PLANT",
-          "TARGET",
-          "INGREDIENT:DEAD_PLANT"
-        ],
-        [
-          "INGREDIENT:FLESHTRAP",
-          "INGREDIENT:DEAD_PLANT",
-          "INGREDIENT:FLESHTRAP"
-        ]
-      ],
-      "requiredFor": [
-        "DEVOURER"
-      ],
+      },
       "specialMechanic": "Converts nearby Dead Plants into Zombuddies when harvested, which then drop Zombuds"
     },
     "THUNDERLING": {
       "name": "Thunderling",
       "rarity": "EPIC",
-      "gridSize": 4,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 16,
       "costCoins": 800000,
       "rewardCopper": 400,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SOGGYBUD",
+          "item": "SOGGYBUD",
           "count": 5,
           "text": "5x Soggybud"
         },
         {
-          "itemId": "NOCTILUME",
+          "item": "NOCTILUME",
           "count": 3,
           "text": "3x Noctilume"
         }
       ],
       "effects": [
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
+        "EFFECT_SPREAD"
+      ],
+      "layout": {
+        "rows": [
+          "AAAA",
+          "AAAA",
+          ".B@B",
+          ".BBB"
+        ],
+        "legend": {
+          "A": "NOCTILUME",
+          "B": "SOGGYBUD"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME"
-        ],
-        [
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME"
-        ],
-        [
-          "EMPTY",
-          "INGREDIENT:SOGGYBUD",
-          "TARGET",
-          "INGREDIENT:SOGGYBUD"
-        ],
-        [
-          "EMPTY",
-          "INGREDIENT:SOGGYBUD",
-          "INGREDIENT:SOGGYBUD",
-          "INGREDIENT:SOGGYBUD"
-        ]
-      ],
-      "requiredFor": [
-        "PLANTBOY_ADVANCE"
-      ],
+      },
       "specialMechanic": "Must be discharged while it grows, otherwise it will explode."
     },
     "TURTLELLINI": {
       "name": "Turtlellini",
-      "rarity": "EPIC",
-      "gridSize": 3,
+      "rarity": "RARE",
       "surface": "Farmland",
       "needsWater": false,
       "stages": 0,
       "costCoins": 240000,
       "rewardCopper": 120,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SOGGYBUD",
+          "item": "SOGGYBUD",
           "count": 4,
           "text": "4x Soggybud"
         },
         {
-          "itemId": "CHOCONUT",
+          "item": "CHOCONUT",
           "count": 4,
           "text": "4x Choconut"
         }
       ],
       "effects": [
-        {
-          "name": "Water Retain",
-          "description": "Retains watering status of adjacent crops by +50%"
-        },
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
+        "WATER_RETAIN",
+        "IMMUNITY"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "CHOCONUT",
+          "B": "SOGGYBUD"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:SOGGYBUD",
-          "INGREDIENT:CHOCONUT"
-        ],
-        [
-          "INGREDIENT:SOGGYBUD",
-          "TARGET",
-          "INGREDIENT:SOGGYBUD"
-        ],
-        [
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:SOGGYBUD",
-          "INGREDIENT:CHOCONUT"
-        ]
-      ],
-      "requiredFor": [],
+      },
       "specialMechanic": null
     },
     "STARTLEVINE": {
       "name": "Startlevine",
       "rarity": "EPIC",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 12,
       "costCoins": 500000,
       "rewardCopper": 250,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "BLASTBERRY",
+          "item": "BLASTBERRY",
           "count": 4,
           "text": "4x Blastberry"
         },
         {
-          "itemId": "CHEESEBITE",
+          "item": "CHEESEBITE",
           "count": 4,
           "text": "4x Cheesebite"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Improved XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +30%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "IMPROVED_WATER_RETAIN",
+        "IMPROVED_XP_BOOST",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "CHEESEBITE",
+          "B": "BLASTBERRY"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHEESEBITE",
-          "INGREDIENT:BLASTBERRY",
-          "INGREDIENT:CHEESEBITE"
-        ],
-        [
-          "INGREDIENT:BLASTBERRY",
-          "TARGET",
-          "INGREDIENT:BLASTBERRY"
-        ],
-        [
-          "INGREDIENT:CHEESEBITE",
-          "INGREDIENT:BLASTBERRY",
-          "INGREDIENT:CHEESEBITE"
-        ]
-      ],
-      "requiredFor": [
-        "GLASSCORN"
-      ],
+      },
       "specialMechanic": "Wear Sorrow Armor in order to harvest it"
     },
     "STOPLIGHT_PETAL": {
       "name": "Stoplight Petal",
       "rarity": "EPIC",
-      "gridSize": 6,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 12,
       "costCoins": 4000000,
       "rewardCopper": 2000,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SNOOZLING",
+          "item": "SNOOZLING",
           "count": 4,
           "text": "4x Snoozling"
         },
         {
-          "itemId": "NOCTILUME",
+          "item": "NOCTILUME",
           "count": 4,
           "text": "4x Noctilume"
         }
       ],
       "effects": [
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
-        },
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "EFFECT_SPREAD",
+        "IMPROVED_WATER_RETAIN",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "..AA..",
+          "AAAA..",
+          "AA@BBB",
+          "BBBBBB",
+          "BBBBBB",
+          "BBB..."
+        ],
+        "legend": {
+          "A": "NOCTILUME",
+          "B": "SNOOZLING"
         }
-      ],
-      "layout": [
-        [
-          "EMPTY",
-          "EMPTY",
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "EMPTY",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "EMPTY",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:NOCTILUME",
-          "INGREDIENT:NOCTILUME",
-          "TARGET",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "EMPTY",
-          "EMPTY",
-          "EMPTY"
-        ]
-      ],
-      "requiredFor": [
-        "TIMESTALK"
-      ],
+      },
       "specialMechanic": "Repeatedly punch to harvest while it says \"GO\""
     },
     "PUFFERCLOUD": {
       "name": "Puffercloud",
       "rarity": "EPIC",
-      "gridSize": 5,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 14,
       "costCoins": 1000000,
       "rewardCopper": 500,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SNOOZLING",
+          "item": "SNOOZLING",
           "count": 2,
           "text": "2x Snoozling"
         },
         {
-          "itemId": "DO_NOT_EAT_SHROOM",
+          "item": "DO_NOT_EAT_SHROOM",
           "count": 6,
           "text": "6x Do-not-eat-shroom"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "Water Drain",
-          "description": "Reduces watering status of nearby crops by -30%"
+        "IMPROVED_HARVEST_BOOST",
+        "WATER_DRAIN"
+      ],
+      "layout": {
+        "rows": [
+          "AAA..",
+          "A@BBB",
+          "AABBB",
+          "..BBB"
+        ],
+        "legend": {
+          "A": "DO_NOT_EAT_SHROOM",
+          "B": "SNOOZLING"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:DO_NOT_EAT_SHROOM",
-          "INGREDIENT:DO_NOT_EAT_SHROOM",
-          "INGREDIENT:DO_NOT_EAT_SHROOM",
-          "EMPTY",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:DO_NOT_EAT_SHROOM",
-          "TARGET",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "INGREDIENT:DO_NOT_EAT_SHROOM",
-          "INGREDIENT:DO_NOT_EAT_SHROOM",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "EMPTY",
-          "EMPTY",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ]
-      ],
-      "requiredFor": [
-        "DEVOURER"
-      ],
+      },
       "specialMechanic": "Has a painful cloud of gas around it while it grows"
     },
     "SHELLFRUIT": {
       "name": "Shellfruit",
       "rarity": "EPIC",
-      "gridSize": 2,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 0,
       "costCoins": 500000,
       "rewardCopper": 250,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": null,
-          "count": 0,
+          "special": true,
+          "items": [
+            "TURTLELLINI",
+            "BLASTBERRY"
+          ],
           "text": "Explode adjacent Turtlellini with a Blastberry"
         }
       ],
       "effects": [
-        {
-          "name": "Water Retain",
-          "description": "Retains watering status of adjacent crops by +50%"
-        },
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
-        }
+        "WATER_RETAIN",
+        "IMMUNITY"
       ],
-      "layout": [
-        [
-          "INGREDIENT:BLASTBERRY"
+      "layout": {
+        "rows": [
+          "A",
+          "@"
         ],
-        [
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "PHANTOMLEAF",
-        "TIMESTALK"
-      ],
-      "specialMechanic": null
+        "legend": {
+          "A": "BLASTBERRY"
+        }
+      },
+      "specialMechanic": "Plant Turtlellini around a Blastberry. Exploding the Blastberry (Left-Click) transforms all adjacent Turtlellini (up to 8) into Shellfruit."
     },
     "CHORUS_FRUIT": {
       "name": "Chorus Fruit",
       "rarity": "EPIC",
-      "gridSize": 3,
       "surface": "End Stone",
       "needsWater": false,
       "stages": 12,
       "costCoins": 600000,
       "rewardCopper": 300,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CHLORONITE",
+          "item": "CHLORONITE",
           "count": 5,
           "text": "5x Chloronite"
         },
         {
-          "itemId": "MAGIC_JELLYBEAN",
+          "item": "MAGIC_JELLYBEAN",
           "count": 3,
           "text": "3x Magic Jellybean"
         }
       ],
       "effects": [
-        {
-          "name": "Improved XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +30%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "IMPROVED_XP_BOOST",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "AAB",
+          "A@A",
+          "BAB"
+        ],
+        "legend": {
+          "A": "CHLORONITE",
+          "B": "MAGIC_JELLYBEAN"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHLORONITE",
-          "INGREDIENT:CHLORONITE",
-          "INGREDIENT:MAGIC_JELLYBEAN"
-        ],
-        [
-          "INGREDIENT:CHLORONITE",
-          "TARGET",
-          "INGREDIENT:CHLORONITE"
-        ],
-        [
-          "INGREDIENT:MAGIC_JELLYBEAN",
-          "INGREDIENT:CHLORONITE",
-          "INGREDIENT:MAGIC_JELLYBEAN"
-        ]
-      ],
-      "requiredFor": [
-        "PHANTOMLEAF",
-        "TIMESTALK"
-      ],
+      },
       "specialMechanic": "Teleports around the plot as it grows"
     },
     "PLANTBOY_ADVANCE": {
       "name": "PlantBoy Advance",
       "rarity": "EPIC",
-      "gridSize": 6,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 12,
       "costCoins": 700000,
       "rewardCopper": 350,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SNOOZLING",
+          "item": "SNOOZLING",
           "count": 6,
           "text": "6x Snoozling"
         },
         {
-          "itemId": "THUNDERLING",
+          "item": "THUNDERLING",
           "count": 6,
           "text": "6x Thunderling"
         }
       ],
       "effects": [
-        {
-          "name": "Harvest Boost",
-          "description": "Increases Yield by +20%"
+        "HARVEST_BOOST"
+      ],
+      "layout": {
+        "rows": [
+          "AAA...",
+          "AAA...",
+          "AAAAAA",
+          "B@@AAA",
+          "B@@AAA",
+          "BBBB.."
+        ],
+        "legend": {
+          "A": "SNOOZLING",
+          "B": "THUNDERLING"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "EMPTY",
-          "EMPTY",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "EMPTY",
-          "EMPTY",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "INGREDIENT:THUNDERLING",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "INGREDIENT:THUNDERLING",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING",
-          "INGREDIENT:SNOOZLING"
-        ],
-        [
-          "INGREDIENT:THUNDERLING",
-          "INGREDIENT:THUNDERLING",
-          "INGREDIENT:THUNDERLING",
-          "INGREDIENT:THUNDERLING",
-          "EMPTY",
-          "EMPTY"
-        ]
-      ],
-      "requiredFor": [
-        "ALL_IN_ALOE"
-      ],
+      },
       "specialMechanic": "Requires you to obtain 8 apples in a game of snake in order to harvest it"
     },
     "SNOOZLING": {
       "name": "Snoozling",
       "rarity": "RARE",
-      "gridSize": 5,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 20,
       "costCoins": 600000,
       "rewardCopper": 300,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CREAMBLOOM",
+          "item": "CREAMBLOOM",
           "count": 4,
           "text": "4x Creambloom"
         },
         {
-          "itemId": "DUSTGRAIN",
+          "item": "DUSTGRAIN",
           "count": 3,
           "text": "3x Dustgrain"
         },
         {
-          "itemId": "WITHERBLOOM",
+          "item": "WITHERBLOOM",
           "count": 3,
           "text": "3x Witherbloom"
         },
         {
-          "itemId": "DUSKBLOOM",
+          "item": "DUSKBLOOM",
           "count": 3,
           "text": "3x Duskbloom"
         },
         {
-          "itemId": "THORNSHADE",
+          "item": "THORNSHADE",
           "count": 3,
           "text": "3x Thornshade"
         }
       ],
       "effects": [
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
+        "BONUS_DROPS"
+      ],
+      "layout": {
+        "rows": [
+          "ABCBD",
+          "B@@@E",
+          "C@@@C",
+          "E@@@E",
+          "DACAD"
+        ],
+        "legend": {
+          "A": "DUSKBLOOM",
+          "B": "DUSTGRAIN",
+          "C": "CREAMBLOOM",
+          "D": "THORNSHADE",
+          "E": "WITHERBLOOM"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:DUSKBLOOM",
-          "INGREDIENT:DUSTGRAIN",
-          "INGREDIENT:CREAMBLOOM",
-          "INGREDIENT:DUSTGRAIN",
-          "INGREDIENT:THORNSHADE"
-        ],
-        [
-          "INGREDIENT:DUSTGRAIN",
-          "TARGET",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:WITHERBLOOM"
-        ],
-        [
-          "INGREDIENT:CREAMBLOOM",
-          "TARGET",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:CREAMBLOOM"
-        ],
-        [
-          "INGREDIENT:WITHERBLOOM",
-          "TARGET",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:WITHERBLOOM"
-        ],
-        [
-          "INGREDIENT:THORNSHADE",
-          "INGREDIENT:DUSKBLOOM",
-          "INGREDIENT:CREAMBLOOM",
-          "INGREDIENT:DUSKBLOOM",
-          "INGREDIENT:THORNSHADE"
-        ]
-      ],
-      "requiredFor": [
-        "STOPLIGHT_PETAL",
-        "PUFFERCLOUD",
-        "PLANTBOY_ADVANCE"
-      ],
-      "specialMechanic": null
+      },
+      "specialMechanic": "Every 5 stages, wake the Snoozling or it will stop growing."
     },
     "SOGGYBUD": {
       "name": "Soggybud",
       "rarity": "RARE",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 10,
       "costCoins": 60000,
       "rewardCopper": 30,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "MELON_SEEDS",
+          "item": "MELON_SEEDS",
           "count": 2,
           "text": "2x Melon Seeds"
         },
         {
-          "itemId": "GLOOMGOURD",
+          "item": "GLOOMGOURD",
           "count": 2,
           "text": "2x Gloomgourd"
         }
       ],
       "effects": [
-        {
-          "name": "Water Retain",
-          "description": "Retains watering status of adjacent crops by +50%"
+        "WATER_RETAIN"
+      ],
+      "layout": {
+        "rows": [
+          ".A.",
+          "A@B",
+          ".B."
+        ],
+        "legend": {
+          "A": "MELON_SEEDS",
+          "B": "GLOOMGOURD"
         }
-      ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:MELON_SEEDS",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:MELON_SEEDS",
-          "TARGET",
-          "INGREDIENT:GLOOMGOURD"
-        ],
-        [
-          "EMPTY",
-          "INGREDIENT:GLOOMGOURD",
-          "EMPTY"
-        ]
-      ],
-      "requiredFor": [
-        "THUNDERLING",
-        "TURTLELLINI"
-      ],
+      },
       "specialMechanic": null
     },
     "MAGIC_JELLYBEAN": {
       "name": "Magic Jellybean",
       "rarity": "RARE",
-      "gridSize": 3,
       "surface": "Sand",
       "needsWater": true,
       "stages": 120,
       "costCoins": 160000,
       "rewardCopper": 80,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SUGAR_CANE",
+          "item": "SUGAR_CANE",
           "count": 5,
           "text": "5x Sugar Cane"
         },
         {
-          "itemId": "DUSKBLOOM",
+          "item": "DUSKBLOOM",
           "count": 3,
           "text": "3x Duskbloom"
         }
       ],
       "effects": [
-        {
-          "name": "Improved XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +30%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "IMPROVED_XP_BOOST",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "AAB",
+          "A@A",
+          "BAB"
+        ],
+        "legend": {
+          "A": "SUGAR_CANE",
+          "B": "DUSKBLOOM"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:SUGAR_CANE",
-          "INGREDIENT:SUGAR_CANE",
-          "INGREDIENT:DUSKBLOOM"
-        ],
-        [
-          "INGREDIENT:SUGAR_CANE",
-          "TARGET",
-          "INGREDIENT:SUGAR_CANE"
-        ],
-        [
-          "INGREDIENT:DUSKBLOOM",
-          "INGREDIENT:SUGAR_CANE",
-          "INGREDIENT:DUSKBLOOM"
-        ]
-      ],
-      "requiredFor": [
-        "ALL_IN_ALOE",
-        "CHORUS_FRUIT"
-      ],
-      "specialMechanic": null
+      },
+      "specialMechanic": "This crop can reach a height of 9 blocks."
     },
     "NOCTILUME": {
       "name": "Noctilume",
       "rarity": "RARE",
-      "gridSize": 4,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 4,
       "costCoins": 300000,
       "rewardCopper": 150,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "DUSKBLOOM",
+          "item": "DUSKBLOOM",
           "count": 6,
           "text": "6x Duskbloom"
         },
         {
-          "itemId": "LONELILY",
+          "item": "LONELILY",
           "count": 6,
           "text": "6x Lonelily"
         }
       ],
       "effects": [
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
-        },
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "EFFECT_SPREAD",
+        "IMPROVED_WATER_RETAIN",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "ABBA",
+          "B@@B",
+          "B@@B",
+          "AAAA"
+        ],
+        "legend": {
+          "A": "LONELILY",
+          "B": "DUSKBLOOM"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:LONELILY",
-          "INGREDIENT:DUSKBLOOM",
-          "INGREDIENT:DUSKBLOOM",
-          "INGREDIENT:LONELILY"
-        ],
-        [
-          "INGREDIENT:DUSKBLOOM",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:DUSKBLOOM"
-        ],
-        [
-          "INGREDIENT:DUSKBLOOM",
-          "TARGET",
-          "TARGET",
-          "INGREDIENT:DUSKBLOOM"
-        ],
-        [
-          "INGREDIENT:LONELILY",
-          "INGREDIENT:LONELILY",
-          "INGREDIENT:LONELILY",
-          "INGREDIENT:LONELILY"
-        ]
-      ],
-      "requiredFor": [
-        "THUNDERLING",
-        "STOPLIGHT_PETAL"
-      ],
+      },
       "specialMechanic": "Growth stages need alternating day and night"
     },
     "DO_NOT_EAT_SHROOM": {
       "name": "Do-not-eat-shroom",
       "rarity": "RARE",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 8,
       "costCoins": 240000,
       "rewardCopper": 120,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "VEILSHROOM",
+          "item": "VEILSHROOM",
           "count": 4,
           "text": "4x Veilshroom"
         },
         {
-          "itemId": "SCOURROOT",
+          "item": "SCOURROOT",
           "count": 4,
           "text": "4x Scourroot"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "Water Drain",
-          "description": "Reduces watering status of nearby crops by -30%"
+        "IMPROVED_HARVEST_BOOST",
+        "WATER_DRAIN"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "SCOURROOT",
+          "B": "VEILSHROOM"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:SCOURROOT",
-          "INGREDIENT:VEILSHROOM",
-          "INGREDIENT:SCOURROOT"
-        ],
-        [
-          "INGREDIENT:VEILSHROOM",
-          "TARGET",
-          "INGREDIENT:VEILSHROOM"
-        ],
-        [
-          "INGREDIENT:SCOURROOT",
-          "INGREDIENT:VEILSHROOM",
-          "INGREDIENT:SCOURROOT"
-        ]
-      ],
-      "requiredFor": [
-        "PUFFERCLOUD"
-      ],
+      },
       "specialMechanic": null
     },
     "FLESHTRAP": {
       "name": "Fleshtrap",
       "rarity": "RARE",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 14,
       "costCoins": 360000,
       "rewardCopper": 180,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CINDERSHADE",
+          "item": "CINDERSHADE",
           "count": 4,
           "text": "4x Cindershade"
         },
         {
-          "itemId": "LONELILY",
+          "item": "LONELILY",
           "count": 4,
           "text": "4x Lonelily"
         }
       ],
       "effects": [
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
+        "BONUS_DROPS"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "LONELILY",
+          "B": "CINDERSHADE"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:LONELILY",
-          "INGREDIENT:CINDERSHADE",
-          "INGREDIENT:LONELILY"
-        ],
-        [
-          "INGREDIENT:CINDERSHADE",
-          "TARGET",
-          "INGREDIENT:CINDERSHADE"
-        ],
-        [
-          "INGREDIENT:LONELILY",
-          "INGREDIENT:CINDERSHADE",
-          "INGREDIENT:LONELILY"
-        ]
-      ],
-      "requiredFor": [
-        "ZOMBUD"
-      ],
+      },
       "specialMechanic": "Needs to be fed Raw Meat when hungry\nEnchanted Items give a bonus"
     },
     "CHEESEBITE": {
       "name": "Cheesebite",
       "rarity": "RARE",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 10,
       "costCoins": 80000,
       "rewardCopper": 80,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CREAMBLOOM",
+          "item": "CREAMBLOOM",
           "count": 4,
           "text": "4x Creambloom"
         },
         {
-          "itemId": "FERMENTO",
+          "item": "FERMENTO",
           "count": 4,
           "text": "4x Fermento"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
+        "IMPROVED_WATER_RETAIN",
+        "HARVEST_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "FERMENTO",
+          "B": "CREAMBLOOM"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:FERMENTO",
-          "INGREDIENT:CREAMBLOOM",
-          "INGREDIENT:FERMENTO"
-        ],
-        [
-          "INGREDIENT:CREAMBLOOM",
-          "TARGET",
-          "INGREDIENT:CREAMBLOOM"
-        ],
-        [
-          "INGREDIENT:FERMENTO",
-          "INGREDIENT:CREAMBLOOM",
-          "INGREDIENT:FERMENTO"
-        ]
-      ],
-      "requiredFor": [
-        "STARTLEVINE"
-      ],
-      "specialMechanic": null
+      },
+      "specialMechanic": "A rat appears every 4 growth stages; kill it or the crop will stop growing."
     },
     "CHLORONITE": {
       "name": "Chloronite",
       "rarity": "RARE",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 10,
       "costCoins": 40000,
       "rewardCopper": 20,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "COALROOT",
+          "item": "COALROOT",
           "count": 6,
           "text": "6x Coalroot"
         },
         {
-          "itemId": "THORNSHADE",
+          "item": "THORNSHADE",
           "count": 2,
           "text": "2x Thornshade"
         }
       ],
       "effects": [
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
+        "IMMUNITY"
+      ],
+      "layout": {
+        "rows": [
+          "AAA",
+          "A@A",
+          "BAB"
+        ],
+        "legend": {
+          "A": "COALROOT",
+          "B": "THORNSHADE"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:COALROOT",
-          "INGREDIENT:COALROOT",
-          "INGREDIENT:COALROOT"
-        ],
-        [
-          "INGREDIENT:COALROOT",
-          "TARGET",
-          "INGREDIENT:COALROOT"
-        ],
-        [
-          "INGREDIENT:THORNSHADE",
-          "INGREDIENT:COALROOT",
-          "INGREDIENT:THORNSHADE"
-        ]
-      ],
-      "requiredFor": [
-        "GLASSCORN",
-        "CHORUS_FRUIT"
-      ],
+      },
       "specialMechanic": "Requires a pickaxe with Breaking Power 1 or higher to be harvested"
     },
     "BLASTBERRY": {
       "name": "Blastberry",
       "rarity": "RARE",
-      "gridSize": 3,
       "surface": "Sand",
       "needsWater": true,
       "stages": 6,
       "costCoins": 240000,
       "rewardCopper": 120,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CHOCOBERRY",
+          "item": "CHOCOBERRY",
           "count": 5,
           "text": "5x Chocoberry"
         },
         {
-          "itemId": "ASHWREATH",
+          "item": "ASHWREATH",
           "count": 3,
           "text": "3x Ashwreath"
         }
       ],
       "effects": [
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
-        },
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "XP Loss",
-          "description": "Reduces Farming XP of adjacent crops by -20%"
+        "IMMUNITY",
+        "IMPROVED_HARVEST_BOOST",
+        "XP_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "AAB",
+          "A@A",
+          "BAB"
+        ],
+        "legend": {
+          "A": "CHOCOBERRY",
+          "B": "ASHWREATH"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHOCOBERRY",
-          "INGREDIENT:CHOCOBERRY",
-          "INGREDIENT:ASHWREATH"
-        ],
-        [
-          "INGREDIENT:CHOCOBERRY",
-          "TARGET",
-          "INGREDIENT:CHOCOBERRY"
-        ],
-        [
-          "INGREDIENT:ASHWREATH",
-          "INGREDIENT:CHOCOBERRY",
-          "INGREDIENT:ASHWREATH"
-        ]
-      ],
-      "requiredFor": [
-        "STARTLEVINE"
-      ],
-      "specialMechanic": null
+      },
+      "specialMechanic": "Explodes when harvested and destroys adjacent mutations and crops."
     },
     "THORNSHADE": {
       "name": "Thornshade",
       "rarity": "UNCOMMON",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 8,
       "costCoins": 80000,
       "rewardCopper": 40,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "WILD_ROSE",
+          "item": "WILD_ROSE",
           "count": 4,
           "text": "4x Wild Rose"
         },
         {
-          "itemId": "VEILSHROOM",
+          "item": "VEILSHROOM",
           "count": 4,
           "text": "4x Veilshroom"
         }
       ],
       "effects": [
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
+        "EFFECT_SPREAD"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "VEILSHROOM",
+          "B": "WILD_ROSE"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:VEILSHROOM",
-          "INGREDIENT:WILD_ROSE",
-          "INGREDIENT:VEILSHROOM"
-        ],
-        [
-          "INGREDIENT:WILD_ROSE",
-          "TARGET",
-          "INGREDIENT:WILD_ROSE"
-        ],
-        [
-          "INGREDIENT:VEILSHROOM",
-          "INGREDIENT:WILD_ROSE",
-          "INGREDIENT:VEILSHROOM"
-        ]
-      ],
-      "requiredFor": [
-        "SNOOZLING",
-        "CHLORONITE"
-      ],
+      },
       "specialMechanic": null
     },
     "CREAMBLOOM": {
       "name": "Creambloom",
       "rarity": "UNCOMMON",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 6,
       "costCoins": 60000,
       "rewardCopper": 30,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CHOCONUT",
+          "item": "CHOCONUT",
           "count": 8,
           "text": "8x Choconut"
         }
       ],
       "effects": [
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
+        "IMMUNITY"
+      ],
+      "layout": {
+        "rows": [
+          "AAA",
+          "A@A",
+          "AAA"
+        ],
+        "legend": {
+          "A": "CHOCONUT"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:CHOCONUT"
-        ],
-        [
-          "INGREDIENT:CHOCONUT",
-          "TARGET",
-          "INGREDIENT:CHOCONUT"
-        ],
-        [
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:CHOCONUT"
-        ]
-      ],
-      "requiredFor": [
-        "SNOOZLING",
-        "CHEESEBITE"
-      ],
+      },
       "specialMechanic": null
     },
     "DUSKBLOOM": {
       "name": "Duskbloom",
       "rarity": "UNCOMMON",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 8,
       "costCoins": 80000,
       "rewardCopper": 40,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "MOONFLOWER",
+          "item": "MOONFLOWER",
           "count": 2,
           "text": "2x Moonflower"
         },
         {
-          "itemId": "SHADEVINE",
+          "item": "SHADEVINE",
           "count": 2,
           "text": "2x Shadevine"
         },
         {
-          "itemId": "DOUBLE_PLANT",
+          "item": "DOUBLE_PLANT",
           "count": 2,
           "text": "2x Sunflower"
         },
         {
-          "itemId": "DUSTGRAIN",
+          "item": "DUSTGRAIN",
           "count": 2,
           "text": "2x Dustgrain"
         }
       ],
       "effects": [
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
+        "BONUS_DROPS"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@C",
+          "DCD"
+        ],
+        "legend": {
+          "A": "DOUBLE_PLANT",
+          "B": "MOONFLOWER",
+          "C": "SHADEVINE",
+          "D": "DUSTGRAIN"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:DOUBLE_PLANT",
-          "INGREDIENT:MOONFLOWER",
-          "INGREDIENT:DOUBLE_PLANT"
-        ],
-        [
-          "INGREDIENT:MOONFLOWER",
-          "TARGET",
-          "INGREDIENT:SHADEVINE"
-        ],
-        [
-          "INGREDIENT:DUSTGRAIN",
-          "INGREDIENT:SHADEVINE",
-          "INGREDIENT:DUSTGRAIN"
-        ]
-      ],
-      "requiredFor": [
-        "SNOOZLING",
-        "MAGIC_JELLYBEAN",
-        "NOCTILUME"
-      ],
+      },
       "specialMechanic": null
     },
     "CINDERSHADE": {
       "name": "Cindershade",
       "rarity": "UNCOMMON",
-      "gridSize": 3,
       "surface": "Soul Sand",
       "needsWater": false,
       "stages": 8,
       "costCoins": 80000,
       "rewardCopper": 40,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "ASHWREATH",
+          "item": "ASHWREATH",
           "count": 4,
           "text": "4x Ashwreath"
         },
         {
-          "itemId": "WITHERBLOOM",
+          "item": "WITHERBLOOM",
           "count": 4,
           "text": "4x Witherbloom"
         }
       ],
       "effects": [
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
-        },
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "XP Loss",
-          "description": "Reduces Farming XP of adjacent crops by -20%"
+        "EFFECT_SPREAD",
+        "IMPROVED_HARVEST_BOOST",
+        "XP_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "ABA"
+        ],
+        "legend": {
+          "A": "WITHERBLOOM",
+          "B": "ASHWREATH"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:WITHERBLOOM",
-          "INGREDIENT:ASHWREATH",
-          "INGREDIENT:WITHERBLOOM"
-        ],
-        [
-          "INGREDIENT:ASHWREATH",
-          "TARGET",
-          "INGREDIENT:ASHWREATH"
-        ],
-        [
-          "INGREDIENT:WITHERBLOOM",
-          "INGREDIENT:ASHWREATH",
-          "INGREDIENT:WITHERBLOOM"
-        ]
-      ],
-      "requiredFor": [
-        "ZOMBUD",
-        "FLESHTRAP"
-      ],
+      },
       "specialMechanic": null
     },
     "COALROOT": {
       "name": "Coalroot",
       "rarity": "UNCOMMON",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 8,
       "costCoins": 80000,
       "rewardCopper": 40,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SCOURROOT",
+          "item": "SCOURROOT",
           "count": 3,
           "text": "3x Scourroot"
         },
         {
-          "itemId": "ASHWREATH",
+          "item": "ASHWREATH",
           "count": 5,
           "text": "5x Ashwreath"
         }
       ],
       "effects": [
-        {
-          "name": "XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +20%"
+        "XP_BOOST"
+      ],
+      "layout": {
+        "rows": [
+          "ABA",
+          "B@B",
+          "AAA"
+        ],
+        "legend": {
+          "A": "ASHWREATH",
+          "B": "SCOURROOT"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:ASHWREATH",
-          "INGREDIENT:SCOURROOT",
-          "INGREDIENT:ASHWREATH"
-        ],
-        [
-          "INGREDIENT:SCOURROOT",
-          "TARGET",
-          "INGREDIENT:SCOURROOT"
-        ],
-        [
-          "INGREDIENT:ASHWREATH",
-          "INGREDIENT:ASHWREATH",
-          "INGREDIENT:ASHWREATH"
-        ]
-      ],
-      "requiredFor": [
-        "CHLORONITE"
-      ],
+      },
       "specialMechanic": null
     },
     "CHOCOBERRY": {
       "name": "Chocoberry",
       "rarity": "UNCOMMON",
-      "gridSize": 3,
       "surface": "Farmland",
       "needsWater": true,
       "stages": 6,
       "costCoins": 60000,
       "rewardCopper": 30,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CHOCONUT",
+          "item": "CHOCONUT",
           "count": 6,
           "text": "6x Choconut"
         },
         {
-          "itemId": "GLOOMGOURD",
+          "item": "GLOOMGOURD",
           "count": 2,
           "text": "2x Gloomgourd"
         }
       ],
       "effects": [
-        {
-          "name": "Water Retain",
-          "description": "Retains watering status of adjacent crops by +50%"
+        "WATER_RETAIN"
+      ],
+      "layout": {
+        "rows": [
+          "AAA",
+          "A@A",
+          "BAB"
+        ],
+        "legend": {
+          "A": "CHOCONUT",
+          "B": "GLOOMGOURD"
         }
-      ],
-      "layout": [
-        [
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:CHOCONUT"
-        ],
-        [
-          "INGREDIENT:CHOCONUT",
-          "TARGET",
-          "INGREDIENT:CHOCONUT"
-        ],
-        [
-          "INGREDIENT:GLOOMGOURD",
-          "INGREDIENT:CHOCONUT",
-          "INGREDIENT:GLOOMGOURD"
-        ]
-      ],
-      "requiredFor": [
-        "BLASTBERRY"
-      ],
+      },
       "specialMechanic": null
     },
     "WITHERBLOOM": {
       "name": "Witherbloom",
       "rarity": "COMMON",
-      "gridSize": 3,
       "surface": "Soul Sand",
       "needsWater": false,
       "stages": 0,
       "costCoins": 40000,
       "rewardCopper": 20,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "DEAD_PLANT",
+          "item": "DEAD_PLANT",
           "count": 4,
           "text": "4x Dead Plants"
         }
       ],
       "effects": [
-        {
-          "name": "Effect Spread",
-          "description": "Spreads other buffs and debuffs on the current crop to adjacent crops."
+        "EFFECT_SPREAD"
+      ],
+      "layout": {
+        "rows": [
+          ".A.",
+          "A@A",
+          ".A."
+        ],
+        "legend": {
+          "A": "DEAD_PLANT"
         }
-      ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:DEAD_PLANT",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:DEAD_PLANT",
-          "TARGET",
-          "INGREDIENT:DEAD_PLANT"
-        ],
-        [
-          "EMPTY",
-          "INGREDIENT:DEAD_PLANT",
-          "EMPTY"
-        ]
-      ],
-      "requiredFor": [
-        "SNOOZLING",
-        "CINDERSHADE"
-      ],
+      },
       "specialMechanic": null
     },
     "SHADEVINE": {
       "name": "Shadevine",
       "rarity": "COMMON",
-      "gridSize": 2,
       "surface": "Farmland, Sand",
       "needsWater": false,
       "stages": 0,
       "costCoins": 10000,
       "rewardCopper": 5,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "CACTUS",
+          "item": "CACTUS",
           "count": 1,
           "text": "1x Cactus"
         },
         {
-          "itemId": "SUGAR_CANE",
+          "item": "SUGAR_CANE",
           "count": 1,
           "text": "1x Sugar Cane"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Water Retain",
-          "description": "Retains watering status of adjacent crops by +100%"
-        },
-        {
-          "name": "Improved XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +30%"
-        },
-        {
-          "name": "Harvest Loss",
-          "description": "Decreases Yield by -20%"
-        }
+        "IMPROVED_WATER_RETAIN",
+        "IMPROVED_XP_BOOST",
+        "HARVEST_LOSS"
       ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:CACTUS"
+      "layout": {
+        "rows": [
+          ".A",
+          "B@"
         ],
-        [
-          "INGREDIENT:SUGAR_CANE",
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "DUSKBLOOM"
-      ],
+        "legend": {
+          "A": "CACTUS",
+          "B": "SUGAR_CANE"
+        }
+      },
       "specialMechanic": "Drops nothing without additional yield boost"
     },
     "VEILSHROOM": {
       "name": "Veilshroom",
       "rarity": "COMMON",
-      "gridSize": 2,
       "surface": "Mycelium",
       "needsWater": false,
       "stages": 0,
       "costCoins": 10000,
       "rewardCopper": 5,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "RED_MUSHROOM",
+          "item": "RED_MUSHROOM",
           "count": 1,
           "text": "1x Red Mushroom"
         },
         {
-          "itemId": "BROWN_MUSHROOM",
+          "item": "BROWN_MUSHROOM",
           "count": 1,
           "text": "1x Brown Mushroom"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "Water Drain",
-          "description": "Reduces watering status of nearby crops by -30%"
-        }
+        "IMPROVED_HARVEST_BOOST",
+        "WATER_DRAIN"
       ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:RED_MUSHROOM"
+      "layout": {
+        "rows": [
+          ".A",
+          "B@"
         ],
-        [
-          "INGREDIENT:BROWN_MUSHROOM",
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "DO_NOT_EAT_SHROOM",
-        "THORNSHADE"
-      ],
+        "legend": {
+          "A": "RED_MUSHROOM",
+          "B": "BROWN_MUSHROOM"
+        }
+      },
       "specialMechanic": null
     },
     "LONELILY": {
       "name": "Lonelily",
       "rarity": "COMMON",
-      "gridSize": 1,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 0,
       "costCoins": 50000,
       "rewardCopper": 25,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": null,
-          "count": 0,
+          "special": true,
           "text": "0 adjacent crops"
         }
       ],
       "effects": [
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
-        }
+        "BONUS_DROPS"
       ],
-      "layout": [
-        [
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "NOCTILUME",
-        "FLESHTRAP"
-      ],
+      "layout": {
+        "rows": [
+          "@"
+        ],
+        "legend": {}
+      },
       "specialMechanic": "Appears randomly over time on empty farmland or dirt"
     },
     "SCOURROOT": {
       "name": "Scourroot",
       "rarity": "COMMON",
-      "gridSize": 2,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 0,
       "costCoins": 10000,
       "rewardCopper": 5,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "POTATO",
+          "item": "POTATO",
           "count": 1,
           "text": "1x Potato"
         },
         {
-          "itemId": "CARROT",
+          "item": "CARROT",
           "count": 1,
           "text": "1x Carrot"
         }
       ],
       "effects": [
-        {
-          "name": "XP Boost",
-          "description": "Increases Farming XP of adjacent crops by +20%"
-        },
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
-        }
+        "XP_BOOST",
+        "IMMUNITY"
       ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:POTATO"
+      "layout": {
+        "rows": [
+          ".A",
+          "B@"
         ],
-        [
-          "INGREDIENT:CARROT",
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "DO_NOT_EAT_SHROOM",
-        "COALROOT"
-      ],
+        "legend": {
+          "A": "POTATO",
+          "B": "CARROT"
+        }
+      },
       "specialMechanic": null
     },
     "DUSTGRAIN": {
       "name": "Dustgrain",
       "rarity": "COMMON",
-      "gridSize": 2,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 0,
       "costCoins": 10000,
       "rewardCopper": 5,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "SEEDS",
+          "item": "SEEDS",
           "count": 2,
           "text": "2x Wheat Seeds"
         }
       ],
       "effects": [
-        {
-          "name": "Harvest Boost",
-          "description": "Increases Yield by +20%"
-        }
+        "HARVEST_BOOST"
       ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:SEEDS"
+      "layout": {
+        "rows": [
+          ".A",
+          "A@"
         ],
-        [
-          "INGREDIENT:SEEDS",
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "SNOOZLING",
-        "DUSKBLOOM"
-      ],
+        "legend": {
+          "A": "SEEDS"
+        }
+      },
       "specialMechanic": null
     },
     "GLOOMGOURD": {
       "name": "Gloomgourd",
       "rarity": "COMMON",
-      "gridSize": 2,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 0,
       "costCoins": 10000,
       "rewardCopper": 5,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "PUMPKIN_SEEDS",
+          "item": "PUMPKIN_SEEDS",
           "count": 1,
           "text": "1x Pumpkin Seeds"
         },
         {
-          "itemId": "MELON_SEEDS",
+          "item": "MELON_SEEDS",
           "count": 1,
           "text": "1x Melon Seeds"
         }
       ],
       "effects": [
-        {
-          "name": "Water Retain",
-          "description": "Retains watering status of adjacent crops by +50%"
-        },
-        {
-          "name": "Bonus Drops",
-          "description": "Harvested items additionally roll from an extra loot pool."
-        }
+        "WATER_RETAIN",
+        "BONUS_DROPS"
       ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:PUMPKIN_SEEDS"
+      "layout": {
+        "rows": [
+          ".A",
+          "B@"
         ],
-        [
-          "INGREDIENT:MELON_SEEDS",
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "SOGGYBUD",
-        "CHOCOBERRY"
-      ],
+        "legend": {
+          "A": "PUMPKIN_SEEDS",
+          "B": "MELON_SEEDS"
+        }
+      },
       "specialMechanic": null
     },
     "ASHWREATH": {
       "name": "Ashwreath",
       "rarity": "COMMON",
-      "gridSize": 3,
       "surface": "Soul Sand",
       "needsWater": false,
       "stages": 0,
       "costCoins": 10000,
       "rewardCopper": 5,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "NETHER_STALK",
+          "item": "NETHER_STALK",
           "count": 2,
           "text": "2x Nether Wart"
         },
         {
-          "itemId": "FLINT_AND_STEEL",
+          "item": "FIRE",
           "count": 2,
           "text": "2x Fire"
         }
       ],
       "effects": [
-        {
-          "name": "Improved Harvest Boost",
-          "description": "Increases Yield by +30%"
-        },
-        {
-          "name": "XP Loss",
-          "description": "Reduces Farming XP of adjacent crops by -20%"
+        "IMPROVED_HARVEST_BOOST",
+        "XP_LOSS"
+      ],
+      "layout": {
+        "rows": [
+          ".A.",
+          "A@B",
+          ".B."
+        ],
+        "legend": {
+          "A": "NETHER_STALK",
+          "B": "FIRE"
         }
-      ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:NETHER_STALK",
-          "EMPTY"
-        ],
-        [
-          "INGREDIENT:NETHER_STALK",
-          "TARGET",
-          "INGREDIENT:FLINT_AND_STEEL"
-        ],
-        [
-          "EMPTY",
-          "INGREDIENT:FLINT_AND_STEEL",
-          "EMPTY"
-        ]
-      ],
-      "requiredFor": [
-        "BLASTBERRY",
-        "CINDERSHADE",
-        "COALROOT"
-      ],
+      },
       "specialMechanic": null
     },
     "CHOCONUT": {
       "name": "Choconut",
       "rarity": "COMMON",
-      "gridSize": 2,
       "surface": "Farmland",
       "needsWater": false,
       "stages": 0,
       "costCoins": 10000,
       "rewardCopper": 5,
-      "spreadingConditions": [
+      "requirements": [
         {
-          "itemId": "INK_SACK-3",
+          "item": "INK_SACK-3",
           "count": 2,
           "text": "2x Cocoa Beans"
         }
       ],
       "effects": [
-        {
-          "name": "Immunity",
-          "description": "Provides Immunity to negative effects."
-        }
+        "IMMUNITY"
       ],
-      "layout": [
-        [
-          "EMPTY",
-          "INGREDIENT:INK_SACK-3"
+      "layout": {
+        "rows": [
+          ".A",
+          "A@"
         ],
-        [
-          "INGREDIENT:INK_SACK-3",
-          "TARGET"
-        ]
-      ],
-      "requiredFor": [
-        "TURTLELLINI",
-        "CREAMBLOOM",
-        "CHOCOBERRY"
-      ],
+        "legend": {
+          "A": "INK_SACK-3"
+        }
+      },
       "specialMechanic": null
     }
   },

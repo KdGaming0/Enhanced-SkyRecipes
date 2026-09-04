@@ -3,6 +3,15 @@
 ## Compatibility
 - SkyRecipes now supports Reliable Recipe Viewer 8.10.0.
 
+## Improvements
+- Garden mutation recipes now use refreshed mutation details and include additional guidance for unusual growth and harvesting mechanics.
+
+## Fixes
+- Wheat Seeds, Sunflowers, Cocoa Beans, Nether Wart, and Fire now display correctly in mutation layouts.
+- Shellfruit is now correctly linked to both Turtlellini and Blastberry.
+
+Thanks to [Jeerachee](https://github.com/Jeerachee) for contributing the original mutation ingredient-ID fixes in PR #4.
+
 # 0.5.7
 
 ## Improvements

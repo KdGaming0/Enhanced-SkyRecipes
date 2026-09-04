@@ -8,13 +8,12 @@ import java.util.List;
  * @param id                  Mutation internal ID
  * @param name                Human-readable name
  * @param rarity              Item rarity string
- * @param gridSize            Layout dimension (1–6)
  * @param surface             Block type required (e.g. "Farmland")
  * @param needsWater          Whether water is required
  * @param stages              Growth stages
  * @param costCoins           Coin cost to spread
  * @param rewardCopper        Copper reward
- * @param layout              gridSize×gridSize array: "EMPTY", "TARGET", "INGREDIENT:ITEM_ID"
+ * @param layout              Rectangular layout of "EMPTY", "TARGET", and "INGREDIENT:ITEM_ID" cells
  * @param spreadingConditions Conditions for spreading
  * @param effects             Mutation effects
  * @param requiredFor         IDs that require this mutation as ingredient
@@ -24,7 +23,6 @@ public record GardenMutation(
         String id,
         String name,
         String rarity,
-        int gridSize,
         String surface,
         boolean needsWater,
         int stages,
@@ -41,6 +39,19 @@ public record GardenMutation(
         spreadingConditions = spreadingConditions != null ? List.copyOf(spreadingConditions) : List.of();
         effects = effects != null ? List.copyOf(effects) : List.of();
         requiredFor = requiredFor != null ? List.copyOf(requiredFor) : List.of();
+    }
+
+    public int gridWidth() {
+        return layout.isEmpty() ? 0 : layout.getFirst().size();
+    }
+
+    public int gridHeight() {
+        return layout.size();
+    }
+
+    public GardenMutation withRequiredFor(List<String> values) {
+        return new GardenMutation(id, name, rarity, surface, needsWater, stages, costCoins,
+                rewardCopper, layout, spreadingConditions, effects, values, specialMechanic);
     }
 
     /**
@@ -80,9 +91,12 @@ public record GardenMutation(
         return "";
     }
 
-    public record SpreadingCondition(String itemId, int count, String text) {
+    public record SpreadingCondition(List<String> itemIds, int count, String text) {
+        public SpreadingCondition {
+            itemIds = itemIds != null ? List.copyOf(itemIds) : List.of();
+        }
     }
 
-    public record Effect(String name, String description) {
+    public record Effect(String name, String description, boolean negative) {
     }
 }

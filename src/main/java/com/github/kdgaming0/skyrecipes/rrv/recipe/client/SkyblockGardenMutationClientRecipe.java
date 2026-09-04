@@ -10,7 +10,9 @@ import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutation;
 import com.github.kdgaming0.skyrecipes.core.model.garden.GardenMutationRegistry;
 import com.github.kdgaming0.skyrecipes.core.registry.ItemRegistry;
 import com.github.kdgaming0.skyrecipes.core.render.item.ItemStackBuilder;
+import com.github.kdgaming0.skyrecipes.core.util.SkyblockIdExtractor;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.AbstractSkyblockClientRecipe;
+import com.github.kdgaming0.skyrecipes.rrv.recipe.SkyblockIdAliases;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.type.SkyblockGardenMutationRecipeType;
 import com.github.kdgaming0.skyrecipes.rrv.recipe.util.RecipeUiHelper;
 import net.minecraft.client.Minecraft;
@@ -18,11 +20,14 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +50,7 @@ import java.util.*;
  *       bounding box rather than being centred on the first cell.</li>
  * </ul>
  */
-public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRecipe {
+public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRecipe implements SkyblockIdAliases {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SkyblockGardenMutationClientRecipe.class);
 
@@ -77,10 +82,6 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     private static final int DASH_ON = 2;
     private static final int DASH_OFF = 2;
     private static final int DASH_STROKE = 1;
-
-    private static final Set<String> NEGATIVE_EFFECTS = Set.of(
-            "Harvest Loss", "XP Loss", "Water Drain"
-    );
 
     private final GardenMutation mutation;
     private final ItemStack surfaceStack;
@@ -119,12 +120,13 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         List<SlotContent> ingredients = new ArrayList<>();
         List<SlotContent> results = new ArrayList<>();
 
-        int offset = (GRID_SIZE - mutation.gridSize()) / 2;
+        int rowOffset = (GRID_SIZE - mutation.gridHeight()) / 2;
+        int colOffset = (GRID_SIZE - mutation.gridWidth()) / 2;
 
-        for (int row = 0; row < mutation.gridSize(); row++) {
-            for (int col = 0; col < mutation.gridSize(); col++) {
-                int visRow = row + offset;
-                int visCol = col + offset;
+        for (int row = 0; row < mutation.gridHeight(); row++) {
+            for (int col = 0; col < mutation.gridWidth(); col++) {
+                int visRow = row + rowOffset;
+                int visCol = col + colOffset;
                 int slotId = 1 + visRow * GRID_SIZE + visCol;
 
                 ItemStack stack = resolveStack(mutation, row, col, itemRegistry);
@@ -160,7 +162,24 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
 
         return itemRegistry.getByInternalName(internalName)
                 .map(item -> ItemStackBuilder.build(item, 1))
-                .orElse(ItemStack.EMPTY);
+                .orElseGet(() -> resolveDisplayStack(internalName));
+    }
+
+    private static ItemStack resolveDisplayStack(String logicalId) {
+        GardenMutationRegistry.DisplayItem display = GardenMutationRegistry.getDisplayItem(logicalId);
+        if (display == null) return ItemStack.EMPTY;
+
+        Identifier itemId = Identifier.tryParse(display.itemId());
+        if (itemId == null) return ItemStack.EMPTY;
+        return BuiltInRegistries.ITEM.getOptional(itemId).map(item -> {
+            ItemStack stack = new ItemStack(item);
+            stack.set(DataComponents.CUSTOM_NAME, Component.literal(display.name()));
+            CustomData.update(DataComponents.CUSTOM_DATA, stack, tag -> {
+                tag.putString("id", logicalId);
+                tag.putString(SkyblockIdExtractor.INTERNAL_NAME_KEY, logicalId);
+            });
+            return stack;
+        }).orElse(ItemStack.EMPTY);
     }
 
     private static ItemStack resolveWaterIconStack(GardenMutation mutation, ItemRegistry itemRegistry) {
@@ -259,15 +278,16 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
 
     @Nullable
     private static SolidBorder computeBaseItemBorder(GardenMutation mutation) {
-        int offset = (GRID_SIZE - mutation.gridSize()) / 2;
+        int rowOffset = (GRID_SIZE - mutation.gridHeight()) / 2;
+        int colOffset = (GRID_SIZE - mutation.gridWidth()) / 2;
         int minR = GRID_SIZE, minC = GRID_SIZE;
         int maxR = -1, maxC = -1;
         boolean hasTarget = false;
 
-        for (int r = 0; r < mutation.gridSize(); r++) {
-            for (int c = 0; c < mutation.gridSize(); c++) {
+        for (int r = 0; r < mutation.gridHeight(); r++) {
+            for (int c = 0; c < mutation.gridWidth(); c++) {
                 if (mutation.isTarget(r, c)) {
-                    int vr = r + offset, vc = c + offset;
+                    int vr = r + rowOffset, vc = c + colOffset;
                     minR = Math.min(minR, vr);
                     minC = Math.min(minC, vc);
                     maxR = Math.max(maxR, vr);
@@ -293,16 +313,17 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     private static List<DashedBorder> computeMultiBlockBorders(GardenMutation mutation) {
         List<DashedBorder> borders = new ArrayList<>();
         boolean[][] covered = new boolean[GRID_SIZE][GRID_SIZE];
-        int offset = (GRID_SIZE - mutation.gridSize()) / 2;
+        int rowOffset = (GRID_SIZE - mutation.gridHeight()) / 2;
+        int colOffset = (GRID_SIZE - mutation.gridWidth()) / 2;
 
         // ── Target multi-block ────────────────────────────────────────────────────
         GardenMutationRegistry.CropSize targetCs = GardenMutationRegistry.getCropSize(mutation.id());
         if (targetCs != null && (targetCs.width() > 1 || targetCs.height() > 1)) {
             int minR = GRID_SIZE, minC = GRID_SIZE, maxR = -1, maxC = -1;
-            for (int r = 0; r < mutation.gridSize(); r++) {
-                for (int c = 0; c < mutation.gridSize(); c++) {
+            for (int r = 0; r < mutation.gridHeight(); r++) {
+                for (int c = 0; c < mutation.gridWidth(); c++) {
                     if (mutation.isTarget(r, c)) {
-                        int vr = r + offset, vc = c + offset;
+                        int vr = r + rowOffset, vc = c + colOffset;
                         minR = Math.min(minR, vr);
                         minC = Math.min(minC, vc);
                         maxR = Math.max(maxR, vr);
@@ -317,11 +338,11 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
         }
 
         // ── Ingredient multi-blocks ───────────────────────────────────────────────
-        for (int r = 0; r < mutation.gridSize(); r++) {
-            for (int c = 0; c < mutation.gridSize(); c++) {
+        for (int r = 0; r < mutation.gridHeight(); r++) {
+            for (int c = 0; c < mutation.gridWidth(); c++) {
                 if (!mutation.isIngredient(r, c)) continue;
 
-                int top = r + offset, left = c + offset;
+                int top = r + rowOffset, left = c + colOffset;
                 if (isCovered(covered, top, left)) continue;
 
                 String ingId = mutation.ingredientIdAt(r, c);
@@ -362,6 +383,14 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
     @Override
     public List<SlotContent> getResults() {
         return resultList;
+    }
+
+    @Override
+    public Collection<String> ingredientAliases() {
+        return mutation.spreadingConditions().stream()
+                .flatMap(condition -> condition.itemIds().stream())
+                .distinct()
+                .toList();
     }
 
     @Override
@@ -482,8 +511,7 @@ public class SkyblockGardenMutationClientRecipe extends AbstractSkyblockClientRe
             lines.add(Component.literal("§f§lEffects"));
             lines.add(Component.literal("§8§m─────────────"));
             for (GardenMutation.Effect effect : mutation.effects()) {
-                boolean negative = NEGATIVE_EFFECTS.contains(effect.name());
-                String arrow = negative ? "§c▼ " : "§a▲ ";
+                String arrow = effect.negative() ? "§c▼ " : "§a▲ ";
                 lines.add(Component.literal("  " + arrow + "§f" + effect.name()));
                 lines.add(Component.literal("  §7  " + effect.description()));
             }
