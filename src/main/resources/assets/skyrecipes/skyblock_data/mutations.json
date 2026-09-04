@@ -456,7 +456,7 @@
       "rewardCopper": 500,
       "spreadingConditions": [
         {
-          "itemId": "DEAD_PLANTS",
+          "itemId": "DEAD_PLANT",
           "count": 4,
           "text": "4x Dead Plants"
         },
@@ -484,17 +484,17 @@
       "layout": [
         [
           "INGREDIENT:CINDERSHADE",
-          "INGREDIENT:DEAD_PLANTS",
+          "INGREDIENT:DEAD_PLANT",
           "INGREDIENT:CINDERSHADE"
         ],
         [
-          "INGREDIENT:DEAD_PLANTS",
+          "INGREDIENT:DEAD_PLANT",
           "TARGET",
-          "INGREDIENT:DEAD_PLANTS"
+          "INGREDIENT:DEAD_PLANT"
         ],
         [
           "INGREDIENT:FLESHTRAP",
-          "INGREDIENT:DEAD_PLANTS",
+          "INGREDIENT:DEAD_PLANT",
           "INGREDIENT:FLESHTRAP"
         ]
       ],
@@ -1843,7 +1843,7 @@
       "rewardCopper": 20,
       "spreadingConditions": [
         {
-          "itemId": "DEAD_PLANTS",
+          "itemId": "DEAD_PLANT",
           "count": 4,
           "text": "4x Dead Plants"
         }
@@ -1857,17 +1857,17 @@
       "layout": [
         [
           "EMPTY",
-          "INGREDIENT:DEAD_PLANTS",
+          "INGREDIENT:DEAD_PLANT",
           "EMPTY"
         ],
         [
-          "INGREDIENT:DEAD_PLANTS",
+          "INGREDIENT:DEAD_PLANT",
           "TARGET",
-          "INGREDIENT:DEAD_PLANTS"
+          "INGREDIENT:DEAD_PLANT"
         ],
         [
           "EMPTY",
-          "INGREDIENT:DEAD_PLANTS",
+          "INGREDIENT:DEAD_PLANT",
           "EMPTY"
         ]
       ],
