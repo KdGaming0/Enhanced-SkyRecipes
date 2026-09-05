@@ -11,6 +11,9 @@ import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.resources.Identifier;
 
 import java.util.function.Supplier;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Keeps an RRV {@link BlockingGuiComponent} synchronized with a screen
@@ -20,7 +23,7 @@ import java.util.function.Supplier;
  * <p>Skyblocker's helper widgets and overlays can change position, size, and
  * visibility after initialization, so the rectangle is re-synced from a
  * per-screen tick event and only pushed to RRV when it actually changed.
- * Changes force a full overlay re-layout via
+ * Changes are batched once per screen tick into a full overlay re-layout via
  * {@link OverlayManager#updateOverlaysAndWidgets}, because
  * {@code setExclusionArea} alone only queues a lighter widget update that does
  * not re-wrap the item list mid-screen.</p>
@@ -31,6 +34,22 @@ import java.util.function.Supplier;
 public final class WidgetBlockingSync {
 
     private static boolean broken = false;
+    private static final Map<Screen, Map<Identifier, WidgetBlockingSync>> SCREENS = new WeakHashMap<>();
+
+    static {
+        // Fabric replaces per-screen events on every init/resize. Drop old registrations
+        // and regions before the new widgets install their single shared tick callback.
+        ScreenEvents.BEFORE_INIT.register((client, screen, width, height) -> clearScreen(screen));
+    }
+
+    private static void clearScreen(Screen screen) {
+        Map<Identifier, WidgetBlockingSync> regions = SCREENS.remove(screen);
+        if (regions == null) return;
+        for (Identifier id : regions.keySet()) {
+            OverlayManager.INSTANCE.removeExclusionArea(id, false);
+        }
+        regions.clear();
+    }
 
     private final AbstractWidget widget;
     private final Supplier<Rect2i> boundsSupplier;
@@ -72,46 +91,64 @@ public final class WidgetBlockingSync {
     }
 
     private static void install(Screen screen, WidgetBlockingSync sync) {
-        ScreenEvents.afterTick(screen).register(_ -> sync.sync());
-        ScreenEvents.remove(screen).register(_ ->
-                OverlayManager.INSTANCE.removeExclusionArea(sync.id, true)
-        );
+        Map<Identifier, WidgetBlockingSync> entries = SCREENS.get(screen);
+        if (entries == null) {
+            entries = new LinkedHashMap<>();
+            SCREENS.put(screen, entries);
+            Map<Identifier, WidgetBlockingSync> regions = entries;
+            ScreenEvents.afterTick(screen).register(_ -> {
+                boolean changed = false;
+                for (WidgetBlockingSync region : regions.values()) changed |= region.sync();
+                if (changed) OverlayManager.INSTANCE.updateOverlaysAndWidgets(true);
+            });
+            ScreenEvents.remove(screen).register(_ -> {
+                // The incoming screen will rebuild its overlays. Do not launch searches
+                // for the screen being torn down, once per removed region.
+                clearScreen(screen);
+            });
+        }
+        // Screen init can recreate widgets on resize. Replace their old tick observers.
+        WidgetBlockingSync previous = entries.put(sync.id, sync);
+        if (previous != null) {
+            sync.blockingSet = previous.blockingSet;
+            sync.lastX = previous.lastX;
+            sync.lastY = previous.lastY;
+            sync.lastWidth = previous.lastWidth;
+            sync.lastHeight = previous.lastHeight;
+        }
     }
 
-    private void sync() {
-        if (broken) return;
+    private boolean sync() {
+        if (broken) return false;
         try {
             if (widget != null) {
                 if (!widget.visible) {
-                    clearBlocking();
-                    return;
+                    return clearBlocking();
                 }
-                syncBounds(widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight());
-                return;
+                return syncBounds(widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight());
             }
 
             Rect2i bounds = boundsSupplier.get();
             if (bounds == null) {
-                clearBlocking();
-                return;
+                return clearBlocking();
             }
-            syncBounds(bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight());
+            return syncBounds(bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight());
         } catch (Throwable t) {
             broken = true;
             SkyRecipes.LOGGER.warn(
                     "Skyblocker widget blocking integration disabled (Skyblocker API changed?)", t);
+            return false;
         }
     }
 
-    private void syncBounds(int x, int y, int width, int height) {
+    private boolean syncBounds(int x, int y, int width, int height) {
         if (width <= 0 || height <= 0) {
-            clearBlocking();
-            return;
+            return clearBlocking();
         }
         if (blockingSet
                 && x == lastX && y == lastY
                 && width == lastWidth && height == lastHeight) {
-            return;
+            return false;
         }
         lastX = x;
         lastY = y;
@@ -119,13 +156,14 @@ public final class WidgetBlockingSync {
         lastHeight = height;
         OverlayManager.INSTANCE.setExclusionArea(new BlockingGuiComponent(
                 id, lastX, lastY, lastWidth, lastHeight));
-        OverlayManager.INSTANCE.updateOverlaysAndWidgets(true);
         blockingSet = true;
+        return true;
     }
 
-    private void clearBlocking() {
-        if (!blockingSet) return;
-        OverlayManager.INSTANCE.removeExclusionArea(id, true);
+    private boolean clearBlocking() {
+        if (!blockingSet) return false;
+        OverlayManager.INSTANCE.removeExclusionArea(id, false);
         blockingSet = false;
+        return true;
     }
 }

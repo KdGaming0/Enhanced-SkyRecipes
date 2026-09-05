@@ -1,3 +1,9 @@
+# 0.5.9
+
+## Fixes
+- Fixed crashes when opening Skyblocker's Accessory Bag helper or rapidly refreshing item searches.
+- Rapid search and helper layout changes now avoid redundant work and keep the latest search results visible.
+
 # 0.5.8
 
 ## Compatibility

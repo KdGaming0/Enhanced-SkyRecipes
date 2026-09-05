@@ -68,11 +68,14 @@ public final class ItemExclusionCache {
     }
 
     @Nullable
-    public static Boolean get(ItemStack stack) {
-        return VERDICTS.get(stack);
+    public static Boolean get(@Nullable ItemStack stack) {
+        return stack == null ? null : VERDICTS.get(stack);
     }
 
-    public static void put(ItemStack stack, boolean excluded) {
-        VERDICTS.put(stack, excluded);
+    public static void put(@Nullable ItemStack stack, boolean excluded) {
+        // RRV excludes null stacks; they must never become keys in the memo.
+        if (stack != null) {
+            VERDICTS.put(stack, excluded);
+        }
     }
 }

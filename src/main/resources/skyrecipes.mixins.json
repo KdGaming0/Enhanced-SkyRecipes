@@ -35,6 +35,8 @@
     "rrv.SidePanelOverlayMixin",
     "rrv.SidePanelOverlayWidthMixin",
     "rrv.fix.ItemSlotGroupCacheMixin",
+    "rrv.fix.ItemViewSearchThreadingMixin",
+    "rrv.fix.ItemViewSlotThreadingMixin",
     "rrv.fix.OverlayManagerExclusionThreadingMixin",
     "rrv.fix.RrvScreenNullItemGuardMixin",
     "skyocean.RecipeViewScreenKeybindMixin",

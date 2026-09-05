@@ -58,6 +58,10 @@ public class ItemViewExclusionCacheMixin {
     )
     private static void skyrecipes$serveCachedVerdict(ItemStack stack,
                                                       CallbackInfoReturnable<Boolean> cir) {
+        // Preserve RRV's own null exclusion without consulting the cache.
+        if (stack == null) {
+            return;
+        }
         if (!ItemExclusionCache.checkSignature(skyrecipes$exclusionSignature())) {
             return;
         }
