@@ -1,7 +1,11 @@
 package com.github.kdgaming0.skyrecipes.rrv.overlay;
 
 import cc.cassian.rrv.common.overlay.BlockingGuiComponent;
+import cc.cassian.rrv.common.overlay.AbstractRrvOverlay.InventoryPositionInfo;
 import cc.cassian.rrv.common.overlay.OverlayManager;
+import cc.cassian.rrv.common.overlay.itemlist.AbstractRrvItemListOverlay;
+import cc.cassian.rrv.common.overlay.itemlist.panel.SidePanelOverlay;
+import cc.cassian.rrv.common.overlay.itemlist.view.ItemViewOverlay;
 import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.Minecraft;
@@ -22,13 +26,11 @@ import java.util.WeakHashMap;
  *
  * <p>Skyblocker's helper widgets and overlays can change position, size, and
  * visibility after initialization, so the rectangle is re-synced from a
- * per-screen tick event and only pushed to RRV when it actually changed.
- * Changes are batched once per screen tick into a full overlay re-layout via
- * {@link OverlayManager#updateOverlaysAndWidgets}, because
- * {@code setExclusionArea} alone only queues a lighter widget update that does
- * not re-wrap the item list mid-screen.</p>
+ * render hook immediately before RRV lays out/draws its overlays. Only changed
+ * bounds are pushed. On an existing screen, re-wrap the current items without
+ * recreating widgets or restarting searches; a new screen uses RRV's normal layout.</p>
  *
- * <p>The tick handler self-disables on any throw, so a Skyblocker or RRV API
+ * <p>The bounds reader self-disables on any throw, so a Skyblocker or RRV API
  * change degrades this feature silently instead of crashing the screen.</p>
  */
 public final class WidgetBlockingSync {
@@ -38,7 +40,7 @@ public final class WidgetBlockingSync {
 
     static {
         // Fabric replaces per-screen events on every init/resize. Drop old registrations
-        // and regions before the new widgets install their single shared tick callback.
+        // and regions before the new widgets register their bounds suppliers.
         ScreenEvents.BEFORE_INIT.register((client, screen, width, height) -> clearScreen(screen));
     }
 
@@ -71,8 +73,7 @@ public final class WidgetBlockingSync {
 
     /**
      * Installs the sync on the screen currently being initialized. The
-     * blocking rectangle is removed when the screen closes; Fabric drops the
-     * tick handler with the screen instance.
+     * blocking rectangle is removed when the screen closes.
      */
     public static void install(AbstractWidget widget, Identifier id) {
         if (broken) return;
@@ -95,19 +96,13 @@ public final class WidgetBlockingSync {
         if (entries == null) {
             entries = new LinkedHashMap<>();
             SCREENS.put(screen, entries);
-            Map<Identifier, WidgetBlockingSync> regions = entries;
-            ScreenEvents.afterTick(screen).register(_ -> {
-                boolean changed = false;
-                for (WidgetBlockingSync region : regions.values()) changed |= region.sync();
-                if (changed) OverlayManager.INSTANCE.updateOverlaysAndWidgets(true);
-            });
             ScreenEvents.remove(screen).register(_ -> {
                 // The incoming screen will rebuild its overlays. Do not launch searches
                 // for the screen being torn down, once per removed region.
                 clearScreen(screen);
             });
         }
-        // Screen init can recreate widgets on resize. Replace their old tick observers.
+        // A replacement widget with identical bounds needs no new layout.
         WidgetBlockingSync previous = entries.put(sync.id, sync);
         if (previous != null) {
             sync.blockingSet = previous.blockingSet;
@@ -116,6 +111,22 @@ public final class WidgetBlockingSync {
             sync.lastWidth = previous.lastWidth;
             sync.lastHeight = previous.lastHeight;
         }
+    }
+
+    /** Called after screen widgets have their final bounds, before RRV's screen-change check. */
+    public static void beforeOverlay(InventoryPositionInfo info) {
+        Map<Identifier, WidgetBlockingSync> regions = SCREENS.get(info.screen());
+        if (regions == null) return;
+        boolean changed = false;
+        for (WidgetBlockingSync region : regions.values()) changed |= region.sync();
+        if (!changed || !info.matches(OverlayManager.INSTANCE.currentInfo())) return;
+        rewrap(ItemViewOverlay.INSTANCE, info);
+        rewrap(SidePanelOverlay.INSTANCE, info);
+    }
+
+    private static void rewrap(AbstractRrvItemListOverlay overlay, InventoryPositionInfo info) {
+        overlay.updateEffectiveDimensions(info);
+        overlay.updateSlots();
     }
 
     private boolean sync() {

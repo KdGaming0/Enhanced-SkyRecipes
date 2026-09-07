@@ -1,3 +1,10 @@
+# 0.5.10
+
+## Fixes
+- Fixed the search bar staying on “RRV is indexing items” after loading finishes.
+- Fixed the side panel flashing or briefly overlapping Skyblocker's Accessory Bag helper when changing pages.
+- Fixed storage-overlay item blocking disappearing after resizing the window.
+
 # 0.5.9
 
 ## Fixes

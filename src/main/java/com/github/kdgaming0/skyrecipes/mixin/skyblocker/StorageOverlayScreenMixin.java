@@ -31,12 +31,9 @@ public class StorageOverlayScreenMixin {
     @Unique
     private static boolean skyrecipes$broken = false;
 
-    @Unique
-    private boolean skyrecipes$blockingInstalled = false;
-
     @Inject(method = "init", at = @At("TAIL"), require = 0, remap = false)
     private void skyrecipes$onInit(CallbackInfo ci) {
-        if (skyrecipes$broken || skyrecipes$blockingInstalled) return;
+        if (skyrecipes$broken) return;
         try {
             Class<?> targetClass = ((Object) this).getClass();
             Method mainExclusionZone = targetClass.getMethod("getMainExclusionZone");
@@ -51,7 +48,6 @@ public class StorageOverlayScreenMixin {
                     () -> skyrecipes$invokeZone(mainExclusionZone));
             WidgetBlockingSync.install(screen, SKYRECIPES$STORAGE_BUTTONS_ID,
                     () -> skyrecipes$invokeZone(buttonsExclusionZone));
-            skyrecipes$blockingInstalled = true;
         } catch (Throwable t) {
             skyrecipes$disable(t);
         }
