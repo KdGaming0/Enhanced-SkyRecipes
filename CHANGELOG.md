@@ -1,3 +1,8 @@
+# 0.5.11
+
+## Fixes
+- Fixed a startup crash with Reliable Recipe Viewer 8.10.4
+
 # 0.5.10
 
 ## Fixes

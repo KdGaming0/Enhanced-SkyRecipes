@@ -7,7 +7,6 @@ import com.github.kdgaming0.skyrecipes.SkyRecipes;
 import com.github.kdgaming0.skyrecipes.core.util.LatestTaskRunner;
 import com.github.kdgaming0.skyrecipes.core.util.SkyRecipesExecutors;
 import com.github.kdgaming0.skyrecipes.rrv.overlay.ItemViewSearch;
-import net.minecraft.TracingExecutor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
@@ -29,9 +28,10 @@ public abstract class ItemViewSearchThreadingMixin extends AbstractRrvItemListOv
 
     protected ItemViewSearchThreadingMixin() { super(-1, -1, -1, -1); }
 
+    // RRV 8.10.4 routes dispatch through its configurable executor helper.
     @Redirect(method = "updateQuery", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/TracingExecutor;execute(Ljava/lang/Runnable;)V"))
-    private void skyrecipes$submitSearch(TracingExecutor executor, Runnable original, String query) {
+            target = "Lcc/cassian/rrv/common/recipe/util/RrvUtil;execute(Ljava/lang/Runnable;)V"))
+    private void skyrecipes$submitSearch(Runnable original, String query) {
         // The original method increments this before dispatch; our search leaves the last
         // complete UI usable while working and never mutates the slot lists from a worker.
         slotUpdaters--;
