@@ -111,7 +111,9 @@ public final class SkyblockIdExtractor {
             case "ENCHANTED_BOOK" -> enchantedBookViewRecipeId(internalName);
             case "PET", "RUNE", "POTION" -> tieredBaseViewRecipeId(internalName);
             case "ATTRIBUTE_SHARD" -> shardIdFromDisplayName(stack);
-            default -> internalName.contains(";") ? null : internalName;
+            // Lookup normalization must not change the server's command argument.
+            default -> internalName.contains(";") ? null
+                    : baseId.indexOf(':') >= 0 ? baseId : internalName;
         };
     }
 
@@ -210,7 +212,8 @@ public final class SkyblockIdExtractor {
      * report a shared base id.
      *
      * <p>Resolved in three steps: the {@link #INTERNAL_NAME_KEY} written by our own stack
-     * builder, then a plain {@code id} that is already an internal name, then — for live
+     * builder, then a plain {@code id} with legacy numeric variants normalized to NEU's
+     * hyphen form ({@code INK_SACK:4} → {@code INK_SACK-4}), then — for live
      * Hypixel stacks, which carry no key of ours — reconstruction from the side fields.</p>
      *
      * @return the internal name (e.g. {@code "ASPECT_OF_THE_END"}, {@code "ENDER_DRAGON;4"}),
@@ -243,31 +246,36 @@ public final class SkyblockIdExtractor {
             // Read-only view of the backing tag; copyTag() would deep-copy the
             // whole NBT tree on every slot every frame.
             CompoundTag tag = ((CustomDataAccessor) (Object) data).skyrecipes$getTag();
-
-            // Authoritative for our own stacks, and exact even where reconstruction is not.
-            String own = tag.getStringOr(INTERNAL_NAME_KEY, "");
-            if (!own.isEmpty()) {
-                return own;
-            }
-
-            // Some NEU nbttags nest these fields under ExtraAttributes; our builder and the
-            // live Hypixel server both flatten them to the top level. Support both.
-            CompoundTag source = tag.getCompound("ExtraAttributes").orElse(tag);
-            String id = rawBaseId(tag);
-            if (id == null) {
-                return null;
-            }
-            if (!isSharedBaseId(id)) {
-                return id;
-            }
-            String reconstructed = reconstructInternalName(id, source);
-            return reconstructed != null ? reconstructed : id;
+            return extractFromTag(tag);
         } catch (Exception e) {
             LOGGER.debug("Failed to extract SkyBlock ID from stack", e);
         }
 
         return null;
     }
+
+    @Nullable
+    static String extractFromTag(CompoundTag tag) {
+        // Authoritative for our own stacks, even where reconstruction is not exact.
+        String own = tag.getStringOr(INTERNAL_NAME_KEY, "");
+        if (!own.isEmpty()) {
+            return own;
+        }
+
+        CompoundTag source = tag.getCompound("ExtraAttributes").orElse(tag);
+        String id = rawBaseId(tag);
+        if (id == null) {
+            return null;
+        }
+        if (!isSharedBaseId(id)) {
+            return LEGACY_VARIANT_ID.matcher(id).matches() ? id.replace(':', '-') : id;
+        }
+        String reconstructed = reconstructInternalName(id, source);
+        return reconstructed != null ? reconstructed : id;
+    }
+
+    // Only legacy SkyBlock numeric variants, never namespaced or expanded family IDs.
+    private static final Pattern LEGACY_VARIANT_ID = Pattern.compile("[A-Z0-9_]+:[0-9]+");
 
     /**
      * Base ids the Hypixel server reuses across a whole family of items, where the

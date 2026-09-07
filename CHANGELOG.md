@@ -2,6 +2,7 @@
 
 ## Fixes
 - Fixed a startup crash with Reliable Recipe Viewer 8.10.4
+- Fixed recipe and usage lookups from the inventory for items like Lapis Lazuli, Cocoa Beans, and other legacy item variants.
 
 # 0.5.10
 
