@@ -59,10 +59,12 @@
   "skyrecipes.midnightconfig.rrvSearchBarWidth.tooltip": "Minimum width for the search bar when wide mode is enabled.",
 
   "skyrecipes.midnightconfig.rrvItemListWidthPercent": "Item List Width",
-  "skyrecipes.midnightconfig.rrvItemListWidthPercent.tooltip": "Shrinks the RRV item-list overlay width as a percentage.",
+  "skyrecipes.midnightconfig.rrvItemListWidthPercent.tooltip": "Sets the RRV item-list overlay width as a percentage of the available space beside the inventory.",
 
   "skyrecipes.midnightconfig.rrvSidePanelWidthPercent": "Side Panel Width",
-  "skyrecipes.midnightconfig.rrvSidePanelWidthPercent.tooltip": "Shrinks the RRV side-panel overlay width as a percentage.",
+  "skyrecipes.midnightconfig.rrvSidePanelWidthPercent.tooltip": "Sets the RRV side-panel overlay width as a percentage of the available space beside the inventory.",
+
+  "skyrecipes.rrv.max_width_controlled_by_skyrecipes": "SkyRecipes uses percentage-based overlay widths. Configure them in SkyRecipes Settings.",
 
   "skyrecipes.midnightconfig.dataRefreshIntervalMinutes": "Data Refresh Interval",
   "skyrecipes.midnightconfig.dataRefreshIntervalMinutes.tooltip": "How often to check for updated NEU repository data (in minutes).",

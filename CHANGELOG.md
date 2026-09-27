@@ -1,3 +1,8 @@
+# 0.5.12
+
+## Compatibility
+- SkyRecipes now supports Reliable Recipe Viewer 8.10.9 while retaining percentage-based widths for the item list and side panel.
+
 # 0.5.11
 
 ## Fixes
