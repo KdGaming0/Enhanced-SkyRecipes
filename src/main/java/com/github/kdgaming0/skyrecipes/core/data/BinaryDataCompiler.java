@@ -44,7 +44,7 @@ public class BinaryDataCompiler {
             "https://codeload.github.com/NotEnoughUpdates/NotEnoughUpdates-REPO/zip/refs/heads/master";
 
     private static final byte[] MAGIC = new byte[]{'S', 'K', 'Y', '2'};
-    private static final int SCHEMA_VERSION = 12;
+    static final int SCHEMA_VERSION = 13;
     private static final int HEADER_SIZE = 96;
     private static final int SECTION_COUNT = 3; // items, constants, metadata
     /**
@@ -538,8 +538,28 @@ public class BinaryDataCompiler {
                 return null;
             }
 
+            // Crafting recipes are migrating from the single "recipe" object into the
+            // "recipes" list; accept both, preferring the list when an item carries both.
+            List<NeuRecipe> otherRecipes = null;
+            JsonElement recipesElem = obj.get("recipes");
+            if (recipesElem != null && recipesElem.isJsonArray()) {
+                otherRecipes = new ArrayList<>();
+                for (JsonElement re : recipesElem.getAsJsonArray()) {
+                    if (!re.isJsonObject()) continue;
+                    NeuRecipe parsed = parseRecipe(re.getAsJsonObject());
+                    if (parsed != null) {
+                        otherRecipes.add(parsed);
+                    }
+                }
+                if (otherRecipes.isEmpty()) {
+                    otherRecipes = null;
+                }
+            }
+            boolean hasListedCrafting = otherRecipes != null
+                    && otherRecipes.stream().anyMatch(r -> r instanceof NeuRecipe.CraftingRecipe);
+
             NeuRecipe.CraftingRecipe crafting = null;
-            JsonObject recipeObj = JsonUtil.getObject(obj, "recipe");
+            JsonObject recipeObj = hasListedCrafting ? null : JsonUtil.getObject(obj, "recipe");
             if (recipeObj != null) {
                 Map<String, String> grid = new LinkedHashMap<>();
                 int outputCount = JsonUtil.getInt(obj, "count", 1);
@@ -565,22 +585,6 @@ public class BinaryDataCompiler {
                 );
             }
 
-            List<NeuRecipe> otherRecipes = null;
-            JsonElement recipesElem = obj.get("recipes");
-            if (recipesElem != null && recipesElem.isJsonArray()) {
-                otherRecipes = new ArrayList<>();
-                for (JsonElement re : recipesElem.getAsJsonArray()) {
-                    if (!re.isJsonObject()) continue;
-                    NeuRecipe parsed = parseRecipe(re.getAsJsonObject());
-                    if (parsed != null) {
-                        otherRecipes.add(parsed);
-                    }
-                }
-                if (otherRecipes.isEmpty()) {
-                    otherRecipes = null;
-                }
-            }
-
             String island = JsonUtil.getString(obj, "island");
             int x = JsonUtil.getInt(obj, "x", 0);
             int y = JsonUtil.getInt(obj, "y", 0);
@@ -593,7 +597,6 @@ public class BinaryDataCompiler {
                     JsonUtil.getString(obj, "nbttag"),
                     JsonUtil.getStringList(obj, "lore"),
                     JsonUtil.getInt(obj, "damage", 0),
-                    JsonUtil.getString(obj, "clickcommand"),
                     JsonUtil.getString(obj, "crafttext"),
                     JsonUtil.getString(obj, "infoType"),
                     JsonUtil.getStringList(obj, "info"),
@@ -1041,7 +1044,7 @@ public class BinaryDataCompiler {
                 resolved.add(item);
             } else {
                 resolved.add(new NeuItem(item.internalName(), item.itemId(), r.displayName(),
-                        item.nbtTag(), r.lore(), item.damage(), item.clickCommand(), item.craftText(),
+                        item.nbtTag(), r.lore(), item.damage(), item.craftText(),
                         item.infoType(), item.info(), item.recipe(), item.recipes(), item.slayerReq(),
                         item.vanilla(), item.island(), item.x(), item.y(), item.z()));
             }

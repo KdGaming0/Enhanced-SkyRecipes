@@ -13,12 +13,11 @@ import java.util.List;
  * @param nbtTag       Raw SNBT string
  * @param lore         Lore lines with § color codes
  * @param damage       Damage/metadata value
- * @param clickCommand "viewrecipe" or empty
  * @param craftText    Human-readable requirement text
  * @param infoType     "WIKI_URL" or empty
  * @param info         Wiki URLs
- * @param recipe       3x3 crafting recipe (nullable)
- * @param recipes      Non-crafting recipes (nullable)
+ * @param recipe       Legacy single 3x3 crafting recipe (nullable); migrating into {@code recipes}
+ * @param recipes      Typed recipes, including crafting once migrated (nullable)
  * @param slayerReq    Slayer requirement e.g. "SPIDER_5" (nullable)
  * @param vanilla      True for vanilla Minecraft items
  */
@@ -29,7 +28,6 @@ public record NeuItem(
         String nbtTag,
         List<String> lore,
         int damage,
-        String clickCommand,
         String craftText,
         String infoType,
         List<String> info,
@@ -47,12 +45,5 @@ public record NeuItem(
      */
     public boolean hasRecipes() {
         return recipe != null || (recipes != null && !recipes.isEmpty());
-    }
-
-    /**
-     * Returns true if this item should show a recipe view when R is pressed.
-     */
-    public boolean hasViewRecipe() {
-        return "viewrecipe".equals(clickCommand);
     }
 }

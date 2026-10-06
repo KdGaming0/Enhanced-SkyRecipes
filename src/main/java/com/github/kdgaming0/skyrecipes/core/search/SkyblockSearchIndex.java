@@ -1313,6 +1313,7 @@ public final class SkyblockSearchIndex {
         hasCraftingRecipe[itemIndex] = neuItem.recipe() != null;
         if (neuItem.recipes() != null) {
             for (NeuRecipe r : neuItem.recipes()) {
+                if (r instanceof NeuRecipe.CraftingRecipe) hasCraftingRecipe[itemIndex] = true;
                 if (r instanceof NeuRecipe.ForgeRecipe) hasForgeRecipe[itemIndex] = true;
                 if (r instanceof NeuRecipe.NpcShopRecipe) hasNpcShop[itemIndex] = true;
             }
@@ -1496,12 +1497,10 @@ public final class SkyblockSearchIndex {
             addToken(flagIndex, "bazaar", itemIndex);
             if (itemTokens != null) itemTokens.add("bazaar");
         }
-        if (neuItem.recipe() != null) {
-            addToken(flagIndex, "craftable", itemIndex);
-            if (itemTokens != null) itemTokens.add("craftable");
-        }
+        boolean craftable = neuItem.recipe() != null;
         if (neuItem.recipes() != null) {
             for (NeuRecipe r : neuItem.recipes()) {
+                if (r instanceof NeuRecipe.CraftingRecipe) craftable = true;
                 if (r instanceof NeuRecipe.ForgeRecipe) {
                     addToken(flagIndex, "forgeable", itemIndex);
                     if (itemTokens != null) itemTokens.add("forgeable");
@@ -1511,6 +1510,10 @@ public final class SkyblockSearchIndex {
                     if (itemTokens != null) itemTokens.add("npc");
                 }
             }
+        }
+        if (craftable) {
+            addToken(flagIndex, "craftable", itemIndex);
+            if (itemTokens != null) itemTokens.add("craftable");
         }
     }
 

@@ -90,6 +90,7 @@ SkyRecipes supports structured queries beyond plain keywords:
 | **Catacombs req** | `cata>=5` | Requires Catacombs 5+ |
 | **Boolean flags** | `dungeon`, `rift`, `soulbound`, `bazaar`, `craftable`, `forgeable`, `npc`, `vanilla`, `pet`, `accessory` | Filter by property |
 | **Exact phrase** | `"mining speed"` | The words must appear **together on one line** of the name or lore |
+| **Either/or** | `speed|fortune` | Matches items containing any of the `|`-separated terms (no spaces, no slashes needed) |
 | **Regex** | `/mining.*fortune/` | Full regular expression, case-insensitive, matched one line at a time |
 
 Combine filters freely: `rarity:legendary damage>200 dungeon sword` finds legendary dungeon swords with more than 200 damage.
@@ -101,6 +102,8 @@ Plain keywords are matched independently and can land **anywhere** in an item's 
 Wrap words in **double quotes** to require them as a contiguous phrase on a single line:
 - `reforge stone "mining speed"` — reforge stones whose effect text actually reads "mining speed"
 - `"reforge stone" "mining speed"` — same result, with both parts required as phrases
+
+For a quick either/or search, separate terms with `|` — `speed|fortune` finds items mentioning speed **or** fortune. Terms are matched as plain text and can't contain spaces; use a regex for anything fancier.
 
 For full power, put a **regular expression** between slashes. It's case-insensitive and matched one line at a time (like `grep`), so it never bridges two lore lines:
 - `/mining (speed|fortune)/` — lines mentioning mining speed **or** mining fortune

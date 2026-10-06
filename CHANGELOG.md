@@ -1,3 +1,12 @@
+# 0.5.13
+
+## Improvements
+- Search now supports quick either/or searches: type `speed|fortune` to find items matching either term, no `/( )/` needed.
+
+## Fixes
+- Fixed the `craftable` search filter and crafting sort missing items whose recipes use NEU's newer recipe format.
+- Prepared for NEU's upcoming recipe data changes so crafting recipes keep working before and after the switch.
+
 # 0.5.12
 
 ## Compatibility

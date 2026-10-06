@@ -285,7 +285,27 @@ public final class SearchQueryParser {
                 continue;
             }
 
-            // 5. Keyword
+            // 5. Bare alternation: "a|b" -> case-insensitive literal (?:a|b), same clause type
+            // as /regex/. Empty parts are dropped so a half-typed "a|" still filters on "a".
+            if (token.indexOf('|') >= 0) {
+                String altSource = caseSource.substring(start, i);
+                StringBuilder alt = new StringBuilder("(?:");
+                int added = 0;
+                for (String part : altSource.split("\\|")) {
+                    if (part.isEmpty()) continue;
+                    if (added++ > 0) alt.append('|');
+                    alt.append(Pattern.quote(part));
+                }
+                if (added > 0) {
+                    alt.append(')');
+                    if (regexes == null) regexes = new ArrayList<>(2);
+                    regexes.add(new SearchQuery.RegexClause(
+                            Pattern.compile(alt.toString(), Pattern.CASE_INSENSITIVE), altSource));
+                }
+                continue;
+            }
+
+            // 6. Keyword
             for (String part : splitOnNonAlphanumeric(token)) {
                 if (part.length() > 1 || (part.length() == 1 && Character.isDigit(part.charAt(0)))) {
                     if (keywords == null) keywords = new ArrayList<>(4);

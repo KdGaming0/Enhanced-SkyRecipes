@@ -29,7 +29,7 @@ public final class ItemCodec {
     public static void packItems(MessagePacker packer, List<NeuItem> items) throws IOException {
         packer.packArrayHeader(items.size());
         for (NeuItem item : items) {
-            packer.packMapHeader(18);
+            packer.packMapHeader(17);
             packer.packString("internalName");
             packer.packString(item.internalName());
             packer.packString("itemId");
@@ -44,8 +44,6 @@ public final class ItemCodec {
 
             packer.packString("damage");
             packer.packInt(item.damage());
-            packer.packString("clickCommand");
-            packer.packString(item.clickCommand());
             packer.packString("craftText");
             packer.packString(item.craftText());
             packer.packString("infoType");
@@ -104,7 +102,6 @@ public final class ItemCodec {
             String nbtTag = "";
             List<String> lore = Collections.emptyList();
             int damage = 0;
-            String clickCommand = "";
             String craftText = "";
             String infoType = "";
             List<String> info = Collections.emptyList();
@@ -124,7 +121,6 @@ public final class ItemCodec {
                     case "nbtTag" -> nbtTag = unpacker.unpackString();
                     case "lore" -> lore = CodecUtil.unpackStringList(unpacker);
                     case "damage" -> damage = unpacker.unpackInt();
-                    case "clickCommand" -> clickCommand = unpacker.unpackString();
                     case "craftText" -> craftText = unpacker.unpackString();
                     case "infoType" -> infoType = unpacker.unpackString();
                     case "info" -> info = CodecUtil.unpackStringList(unpacker);
@@ -144,7 +140,7 @@ public final class ItemCodec {
                 }
             }
             items.add(new NeuItem(internalName, itemId, displayName, nbtTag, lore, damage,
-                    clickCommand, craftText, infoType, info, recipe, recipes, slayerReq, vanilla,
+                    craftText, infoType, info, recipe, recipes, slayerReq, vanilla,
                     island, x, y, z));
         }
         return items;
