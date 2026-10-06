@@ -15,6 +15,7 @@
     "overlay.CategoryButtonMixin",
     "overlay.EditBoxCalculatorRenderMixin",
     "overlay.ItemFiltersMixin",
+    "overlay.ItemListStrataMixin",
     "overlay.ItemSlotTagAccessMixin",
     "overlay.ItemViewExclusionCacheMixin",
     "overlay.ItemViewOverlayMixin",

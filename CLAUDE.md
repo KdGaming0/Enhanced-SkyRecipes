@@ -53,101 +53,66 @@ NEU repo JSON → `BinaryDataCompiler` → binary cache (MessagePack, mmap'd) �
 
 Requires four coordinated pieces: a parser/generator in `core/recipe/`, an `AbstractSkyblockRecipeType` subclass in `rrv/recipe/type/`, an `AbstractSkyblockClientRecipe` subclass (widget) in `rrv/recipe/client/`, and registration in `rrv/plugin/SkyRecipesPlugin`/`SkyRecipesClientPlugin`. `vv_rrv_docs/` (vendored RRV docs) has the upstream tutorial for the RRV-plugin side of this (`docs/mods/client-recipes.mdx`, `client-recipe-type.mdx`, `finalizing-your-plugins.mdx`).
 
+
+### Non-obvious contracts
+
+- **No plain classes in the mixin package**: a non-mixin helper under `com.github.kdgaming0.skyrecipes.mixin.*` compiles fine but fails at runtime ("Mixin transformation of ... failed") once an injected handler references it. Put helpers called from handlers under `rrv/` (e.g. `rrv/overlay/`) and make them public. Compile success proves nothing here; check `run/logs/latest.log` for the mod's "integration disabled" warnings when a mixin feature does nothing.
+- **Mojang mappings, no remap**: the mod ships against Mojang names with no intermediary and no refmap, so `remap = false` is correct even for `@At(target = ...)` strings naming Minecraft methods. Injectors use `require = 0`, so a mis-targeted one is a silent no-op, not a startup error. Verify every new target against the bytecode.
+- **Skyblocker nested jars are off the compile classpath**: `modCompileOnly` Skyblocker gives `de.hysky.skyblocker.*` only, not its JiJ'd libs (e.g. `io.github.moulberry.repo.*`). Guard without naming those types (MixinExtras `@WrapMethod` + `try/catch`, or a Skyblocker signature that only uses vanilla types).
+- **Data loads asynchronously**: anything touching `ItemRegistry`/`ConstantsRegistry` must tolerate a not-yet-ready state; use `SkyRecipes.isDataReady()` / `addDataReadyListener`.
+
 ## graphify
 
-This project has a knowledge graph at `graphify-out/` with god nodes, community structure, and cross-file relationships.
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when `graphify-out/graph.json` exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than `GRAPH_REPORT.md` or raw grep output.
-- If `graphify-out/wiki/index.md` exists, use it for broad navigation instead of raw source browsing.
-- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review or when query/path/explain do not surface enough context.
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
-# Development Workflow
+## Verifying APIs
+
+Your training data may predate MC 26.x and the current versions of RRV and Skyblocker. Don't rely on memory for Minecraft, Fabric or third-party class names, signatures, mapping names or injection targets. Verify them against the actual bytecode or source (`javap` on the Loom Minecraft jar or the dependency jar in `~/.gradle/caches`). For compat work, check the version I actually run, not just the `modCompileOnly` pin.
+
+RRV has a real sources jar under the `cc.cassian.rrv` Gradle coordinate (version from `deps.rrv_version` in `stonecutter.properties.toml`). Read that instead of decompiling, and ignore the stale older copy under `maven.modrinth`.
+
+# Workflow
+
+Investigate → plan → get approval → implement → validate → document. Follow the `work-on-problem` skill; this file adds only the project specifics.
+
+## When to keep going and when to stop
+
+- **Before approval**: stop after the plan and wait. No code before I approve. If a requirement is unclear, ask instead of assuming.
+- **After approval**: when a step doesn't need my input, keep going. Put status notes in the same message as your next action. Don't stop just to report progress or offer to continue.
+- **Stop and ask** when you can't continue without me, when the approved plan turns out to be wrong or would change existing behavior, or before anything destructive: deleting files or data outside the plan, any `git push` or history rewrite, or writing anywhere outside this repository. Reading outside the repo (e.g. launcher profiles to find the mod jars I run) is fine.
+- If an investigation splits into independent tasks, suggest parallel sub-agents only when it clearly speeds things up or improves quality.
+
+For work with many steps, keep a checklist in `TASKS.md`, tick items as you finish them, and add anything new you find. Delete it once the task is documented.
+
+## Validate
+
+Run `./gradlew build` before considering the work complete and report the real result. It is the only automated gate (there is no test suite).
+
+Most UI/recipe behavior can only be verified in game. When it is, describe what to test, how to reproduce it, and the expected result, then wait for me to report back before documenting.
+
+## Reporting
+
+End every run with these headings, omitting any that are empty:
+
+- **Needs from you**: decisions, approvals, in-game tests to run
+- **Changed**: each file touched and what the change does, in plain language
+- **Found**: findings, surprises, and anything you couldn't confirm (say where you looked)
 
 ## Documentation
 
-- `CLAUDE.md`: Project architecture and design overview.
-- `IMPLEMENTATION_LOG.md`: Record of implementation decisions and reasoning. Keep entries concise (maximum 500 lines total).
+After testing has passed:
 
-## Workflow
+- Add a concise entry to `IMPLEMENTATION_LOG.md`: what changed, why, and notable decisions. Keep the entry short.
+- Run `graphify update .`.
+- If the work fixes a bug or adds a user-visible feature, bump `mod.version` and add a short, non-technical entry to `CHANGELOG.md` for end users, with no implementation details or internal terms.
+- Update this file only if a convention or contract changed.
 
-### 1. Investigate First
+## Principles
 
-Before writing any code, investigate the requested feature or reported issue.
-
-- If any requirement is unclear, **stop and ask for clarification** before proceeding. Do not make assumptions. It is better to clarify early than to implement the wrong solution.
-- Explain your findings briefly after the investigation.
-- If the investigation naturally splits into independent tasks (for example, tracing a rendering bug, auditing mixin order, and checking overlay lifecycle), suggest running parallel sub-agents, with one agent handling each independent task. Only suggest this when it provides a meaningful speed or quality improvement.
-
-### 2. Present a Plan
-
-After completing the investigation:
-
-- Present a short implementation plan or specification.
-- Explain how you intend to solve the problem.
-- Wait for explicit approval before writing any code.
-
-### 3. Implement
-
-Once approval has been given:
-
-- Implement the planned changes.
-- Keep the implementation focused on the approved scope.
-- Avoid unrelated refactoring unless it is required to complete the task safely.
-
-### 4. Validate
-
-Before considering the work complete:
-
-- Run all relevant tests.
-- Run:
-
-```bash
-./gradlew build
-```
-
-to ensure the project builds successfully and all automated checks pass.
-
-If manual in-game testing is required, clearly describe:
-
-- what should be tested
-- how to reproduce it
-- what the expected result is
-
-Wait for the user to complete manual testing and report back with the results before finalizing the task.
-
-### 5. Documentation
-
-After all testing has passed:
-
-- Add a concise entry to `IMPLEMENTATION_LOG.md` describing:
-    - what changed
-    - why the change was made
-    - any notable implementation decisions
-
-- Run:
-
-```bash
-graphify update .
-```
-
-to keep the project graph up to date.
-
-- If the work fixes a bug or introduces a user-visible feature, update `CHANGELOG.md` with a short, non-technical description suitable for end users. Avoid implementation details and internal terminology.
-
-## General Principles
-
-- Investigate before implementing.
-- Ask for clarification instead of assuming.
-- Do not write code before approval.
-- Validate all changes before considering the task complete.
-- Keep documentation up to date with every completed change.
-
-### Scope Control
-
-Only modify files that are necessary for the requested change. Avoid unrelated formatting changes, refactoring, or file reorganizations unless explicitly requested or required to complete the task safely.
-
-### Preserve Existing Behavior
-
-Unless the request explicitly changes existing functionality, preserve current behavior. If a proposed implementation requires changing existing behavior or introduces trade-offs, explain them in the implementation plan and wait for approval.
+- **Scope**: only modify files needed for the requested change. No unrelated formatting, refactoring or reorganization unless asked or required to complete the task safely.
+- **Preserve behavior**: unless the request explicitly changes it, keep existing behavior. If a change or trade-off is needed, raise it in the plan and wait for approval.

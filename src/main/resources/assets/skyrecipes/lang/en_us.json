@@ -51,6 +51,8 @@
 
   "skyrecipes.midnightconfig.blockKeybindsWhileTyping": "Block Keybinds While Typing",
   "skyrecipes.midnightconfig.blockKeybindsWhileTyping.tooltip": "Stops other mods' inventory keybinds from firing while you are typing in an RRV search box. Escape and Tab still work as normal.",
+  "skyrecipes.midnightconfig.optimizeItemListRendering": "Optimize Item List Rendering",
+  "skyrecipes.midnightconfig.optimizeItemListRendering.tooltip": "Draws the RRV item list in several layers per frame, which raises FPS a lot when the list is large. Turn this off if the item list looks wrong or another mod draws over it incorrectly.",
 
   "skyrecipes.midnightconfig.rememberSearchBetweenMenus": "Remember Search Between Menus",
   "skyrecipes.midnightconfig.rememberSearchBetweenMenus.tooltip": "Keep the last item search or active calculation when menus are closed. When disabled, the next menu opens with a blank search bar.",

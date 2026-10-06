@@ -78,17 +78,29 @@ public final class SkyblockRecipeCache {
         // comparator would re-extract NBT ids O(n log n) times per bucket and
         // once more per bucket the recipe appears in — precompute each exactly
         // once instead, reusing the same per-rebuild id cache.
-        Map<ReliableClientRecipe, Integer> tiers = new IdentityHashMap<>(recipes.size() * 2);
+        // The id string is precomputed too: Identifier.toString() allocates, and the
+        // comparator would otherwise build two of them per comparison.
+        record SortKey(int tier, String id) {}
+        Map<ReliableClientRecipe, SortKey> keys = new IdentityHashMap<>(recipes.size() * 2);
         for (ReliableClientRecipe recipe : recipes) {
-            tiers.put(recipe, computeResultTier(recipe, idCache));
+            keys.put(recipe, new SortKey(computeResultTier(recipe, idCache), recipe.getId().toString()));
         }
         Comparator<ReliableClientRecipe> comparator = (a, b) -> {
-            int tierA = tiers.getOrDefault(a, 0);
-            int tierB = tiers.getOrDefault(b, 0);
-            if (tierA != tierB) {
-                return Integer.compare(tierA, tierB);
+            SortKey keyA = keys.get(a);
+            SortKey keyB = keys.get(b);
+            if (keyA == null || keyB == null) {
+                // Not part of this rebuild: fall back to the original per-call computation.
+                int tierA = keyA == null ? 0 : keyA.tier();
+                int tierB = keyB == null ? 0 : keyB.tier();
+                if (tierA != tierB) {
+                    return Integer.compare(tierA, tierB);
+                }
+                return a.getId().toString().compareTo(b.getId().toString());
             }
-            return a.getId().toString().compareTo(b.getId().toString());
+            if (keyA.tier() != keyB.tier()) {
+                return Integer.compare(keyA.tier(), keyB.tier());
+            }
+            return keyA.id().compareTo(keyB.id());
         };
 
         byIngredientId = byIngredient.entrySet().parallelStream()

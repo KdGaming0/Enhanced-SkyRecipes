@@ -48,6 +48,13 @@ public final class StatParser {
     /**
      * Finds the given word/phrase as a whole-word match in text.
      */
+    private static boolean containsDigit(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isDigit(text.charAt(i))) return true;
+        }
+        return false;
+    }
+
     private static int indexOfWord(String text, String phrase) {
         int pos = text.indexOf(phrase);
         while (pos >= 0) {
@@ -192,6 +199,8 @@ public final class StatParser {
         if (clean.indexOf(':') >= 0) return List.of();
         // Quick reject: no + or - sign means no stat value
         if (clean.indexOf('+') < 0 && clean.indexOf('-') < 0) return List.of();
+        // A stat value needs a digit before the stat name; without one nothing can match.
+        if (!containsDigit(clean)) return List.of();
 
         String lower = clean.toLowerCase();
         List<ParsedStat> result = new ArrayList<>(2);

@@ -79,6 +79,9 @@ public class SkyRecipesConfig extends MidnightConfig {
     public static boolean blockKeybindsWhileTyping = true;
 
     @Entry(category = "rrv")
+    public static boolean optimizeItemListRendering = true;
+
+    @Entry(category = "rrv")
     public static boolean rememberSearchBetweenMenus = true;
 
     @Entry(category = "rrv", isSlider = true, min = 100, max = 300, precision = 1)

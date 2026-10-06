@@ -1,6 +1,9 @@
 # 0.5.13
 
 ## Improvements
+- Much smoother frame rate while the item list is open, especially on large pages.
+- Slightly faster startup.
+- New "Optimize Item List Rendering" setting (on by default) in case the item list ever looks bugged, disable this setting.
 - Search now supports quick either/or searches: type `speed|fortune` to find items matching either term, no `/( )/` needed.
 
 ## Fixes
